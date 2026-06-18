@@ -5,6 +5,10 @@ It is inspired by the older Pascal
 [UCDT](https://github.com/russlank/UCDT) project, but the new design uses a
 target-neutral core and emits modern generated code.
 
+[![Latest Release](https://img.shields.io/github/v/release/russlank/lang-forge?display_name=tag&sort=semver)](https://github.com/russlank/lang-forge/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-%23FFDD00.svg?&style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/russlank)
+
 Current implementation status:
 
 - combined `.lf` specification parsing;

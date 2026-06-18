@@ -1,0 +1,20 @@
+services:
+  lang-forge:
+    image: "${LANG_FORGE_IMAGE:-lang-forge:dev}"
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: "${VERSION:-dev}"
+        COMMIT: "${COMMIT:-unknown}"
+        BUILD_DATE: "${BUILD_DATE:-unknown}"
+        BRANCH: "${BRANCH:-unknown}"
+        GIT_SHA: "${GIT_SHA:-unknown}"
+        GIT_BRANCH: "${GIT_BRANCH:-unknown}"
+        REPO_URL: "${REPO_URL:-unknown}"
+        REPO_TYPE: git
+        CI: "${CI:-false}"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:ro
+    command: ["validate", "--spec", "examples/calc/calc.lf"]

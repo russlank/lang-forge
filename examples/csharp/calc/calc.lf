@@ -1,0 +1,34 @@
+%target csharp
+%package LangForge.Examples.Calc.Generated
+%semantic csharp mode reducer
+%token Number Plus Minus Mul Div LParen RParen
+%start S
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+NUMBER => token(Number);
+"+"    => token(Plus);
+"-"    => token(Minus);
+"*"    => token(Mul);
+"/"    => token(Div);
+"("    => token(LParen);
+")"    => token(RParen);
+[1-32]+ => skip;
+
+%% parser
+S : Expr {csharp: start}
+  ;
+Expr : Expr Plus Term {csharp: add}
+  | Expr Minus Term {csharp: subtract}
+  | Term {csharp: pass}
+  ;
+Term : Term Mul Factor {csharp: multiply}
+  | Term Div Factor {csharp: divide}
+  | Factor {csharp: pass}
+  ;
+Factor : Number {csharp: number}
+  | LParen Expr RParen {csharp: group}
+  | Minus Factor {csharp: negate}
+  ;

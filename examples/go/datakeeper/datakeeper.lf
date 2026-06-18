@@ -1,0 +1,107 @@
+%target go
+%package dksgenerated
+%semantic go mode reducer
+%start Program
+%token Parameters Begin End Replace SQLRun AddObject RemoveObject RunObjectsJob Ident Number String Assign Comma Semi LParen RParen
+
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+HASH_STRING = "#{" ( [1-34] | [36-124] | [126-127] | "#" ( [1-124] | [126-127] ) )* "#}";
+QUOTED_STRING = \" ( [1-33] | [35-91] | [93-127] | \\ [1-127] )* \";
+LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
+BLOCK_COMMENT = "/" \* ( [1-41] | [43-127] )* \* "/";
+
+"parameters"   => token(Parameters);
+"begin"        => token(Begin);
+"end"          => token(End);
+"replace"      => token(Replace);
+"sqlrun"       => token(SQLRun);
+"addobject"    => token(AddObject);
+"removeobject" => token(RemoveObject);
+"runobjectsjob" => token(RunObjectsJob);
+"="            => token(Assign);
+","            => token(Comma);
+";"            => token(Semi);
+"("            => token(LParen);
+")"            => token(RParen);
+HASH_STRING    => token(String);
+QUOTED_STRING  => token(String);
+NUMBER         => token(Number);
+IDENT          => token(Ident);
+LINE_COMMENT   => skip;
+BLOCK_COMMENT  => skip;
+[1-32]+        => skip;
+
+%% parser
+Program : ParametersList CommandBlock
+            {go: program.withParameters}
+        | CommandBlock
+            {go: program.noParameters}
+        ;
+
+ParametersList : Parameters ParametersDecl Semi
+                   {go: parameters.list}
+               ;
+ParametersDecl : Ident ParametersTail
+                   {go: parameters.decl}
+               ;
+ParametersTail : Comma Ident ParametersTail
+                   {go: parameters.tail.more}
+               | %empty
+                   {go: parameters.tail.empty}
+               ;
+
+CommandBlock : Begin Statements End
+                 {go: commandBlock}
+             ;
+Statements : Statement StatementTail
+               {go: statements}
+           ;
+StatementTail : Semi Statement StatementTail
+                  {go: statements.tail.more}
+              | Semi
+                  {go: statements.tail.empty}
+              | %empty
+                  {go: statements.tail.empty}
+              ;
+
+Statement : AssignStatement
+              {go: statement.pass}
+          | ReplaceStatement
+              {go: statement.pass}
+          | RunSQLStatement
+              {go: statement.pass}
+          | AddObjectStatement
+              {go: statement.pass}
+          | RemoveObjectStatement
+              {go: statement.pass}
+          | RunObjectsJobStatement
+              {go: statement.pass}
+          ;
+
+AssignStatement : Ident Assign Value
+                    {go: assign}
+                ;
+ReplaceStatement : Replace LParen Ident Comma Value Comma Value RParen
+                     {go: replace}
+                 ;
+RunSQLStatement : SQLRun LParen Value Comma Value RParen
+                    {go: sqlrun}
+                ;
+AddObjectStatement : AddObject LParen Value Comma Value RParen
+                       {go: addObject}
+                   ;
+RemoveObjectStatement : RemoveObject LParen Value Comma Value RParen
+                          {go: removeObject}
+                      ;
+RunObjectsJobStatement : RunObjectsJob LParen Value Comma Value Comma Value RParen
+                           {go: runObjectsJob}
+                       ;
+Value : String
+          {go: value.string}
+      | Number
+          {go: value.number}
+      | Ident
+          {go: value.ident}
+      ;

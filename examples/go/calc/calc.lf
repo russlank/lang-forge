@@ -1,0 +1,43 @@
+%target go
+%package calc
+%semantic go mode reducer
+%semantic go import calcsem "github.com/russlank/lang-forge/examples/go/calc/semantics"
+%start S
+%token Number Plus Minus Mul Div LParen RParen
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+ ("." DIGIT+)?;
+
+NUMBER     => token(Number);
+"+"        => token(Plus);
+"-"        => token(Minus);
+"*"        => token(Mul);
+"/"        => token(Div);
+"("        => token(LParen);
+")"        => token(RParen);
+[1-32]+    => skip;
+
+%% parser
+S : Expr {go: start} ;
+Expr : Expr Plus Term
+         {go: add}
+     | Expr Minus Term
+         {go: subtract}
+     | Term
+         {go: pass}
+     ;
+Term : Term Mul Factor
+         {go: multiply}
+     | Term Div Factor
+         {go: divide}
+     | Factor
+         {go: pass}
+     ;
+Factor : Number
+           {go: number}
+       | LParen Expr RParen
+           {go: group}
+       | Minus Factor
+           {go: negate}
+       ;

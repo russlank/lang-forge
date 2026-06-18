@@ -1,0 +1,8 @@
+{
+  "go.goroot": "/usr/local/go",
+  "go.toolsManagement.autoUpdate": false,
+  "editor.formatOnSave": true,
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "makefile.configureOnOpen": false
+}

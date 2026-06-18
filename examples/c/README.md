@@ -1,0 +1,39 @@
+# C Examples
+
+The C examples use `lang-forge generate --target c` and write conventional
+generated files into each example's `generated/` directory:
+
+- `tokens.h`
+- `scanner.h` and `scanner.c`
+- `parser.h` and `parser.c`
+
+Each example keeps handwritten reducer and demo code in `main.c`. The generated
+scanner/parser API is reentrant and does not use global mutable parse state; the
+examples keep semantic memory in per-parse arena structs so application code can
+run multiple parsers independently.
+
+GCC is the verified compiler in the current workspace. Any C11-capable compiler
+should work through the `CC` override. The DRAW example links the math library
+with `LDLIBS=-lm` by default.
+
+Run one example:
+
+```sh
+make -C examples/c/calc run
+make -C examples/c/datakeeper run
+make -C examples/c/draw run
+make -C examples/c/vehicle-report run
+```
+
+Run generated-code checks:
+
+```sh
+make -C examples/c/calc test
+make -C examples/c/datakeeper test
+make -C examples/c/draw test
+make -C examples/c/vehicle-report test
+```
+
+If `cc`, `gcc`, or another C compiler is not available through `CC`, the C
+Makefiles print a skip message after validation/generation. Set `CC=clang` or
+another compiler name when needed.

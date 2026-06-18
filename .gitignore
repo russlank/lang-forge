@@ -1,0 +1,43 @@
+# Build outputs
+/dist/
+/bin/
+.tags
+
+# Test/coverage outputs
+*.test
+*.out
+coverage.txt
+
+# Local environment / operator files
+.env
+.env.local
+*.local.json
+/jobs/*.local.json
+/sql/post-restore.local/
+/secrets/
+
+# Backup payloads must never be committed
+*.bak
+*.BAK
+*.bak.download
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor noise
+*.swp
+.idea/
+
+# VS Code: commit shared workspace settings, ignore user-local
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+examples/**/generated/
+examples/**/Generated/
+examples/**/dist/
+examples/**/bin/
+examples/**/obj/

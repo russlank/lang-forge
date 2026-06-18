@@ -1,0 +1,175 @@
+variables:
+  - &go_image 'golang:1.26.4-alpine'
+  - &alpine_image 'alpine:3.20'
+
+steps:
+  fmt:
+    image: *go_image
+    commands:
+      - |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not gofmt-formatted:"
+          echo "$unformatted"
+          echo "Run: make fmt"
+          exit 1
+        fi
+    when:
+      - event: [push, tag, pull_request]
+
+  vet:
+    image: *go_image
+    commands:
+      - go vet ./...
+    when:
+      - event: [push, tag, pull_request]
+
+  test:
+    image: *go_image
+    environment:
+      CGO_ENABLED: '1'
+    commands:
+      - apk add --no-cache gcc musl-dev make
+      - make GO=go test-race
+      - make GO=go examples-test
+    when:
+      - event: [push, tag, pull_request]
+
+  vuln:
+    image: *go_image
+    commands:
+      - apk add --no-cache make
+      - make GO=go vulncheck
+    failure: ignore
+    when:
+      - event: [push, tag, pull_request]
+
+  build:
+    image: *go_image
+    commands:
+      - apk add --no-cache make git
+      - VERSION="${CI_COMMIT_TAG:-dev}"
+      - COMMIT="${CI_COMMIT_SHA:-unknown}"
+      - DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      - BRANCH="${CI_COMMIT_BRANCH:-unknown}"
+      - make GO=go VERSION="$VERSION" COMMIT="$COMMIT" DATE="$DATE" BRANCH="$BRANCH" dist
+    when:
+      - event: [push, tag, pull_request]
+
+  build-image-tags:
+    image: *alpine_image
+    depends_on:
+      - build
+    commands:
+      - ./scripts/build-image-tags.sh .tags dist/IMAGE_RELEASE_REF.txt
+      - echo "Generated image tags:" && cat .tags
+      - echo "Release image references:" && cat dist/IMAGE_RELEASE_REF.txt
+    when:
+      - event: tag
+        ref: refs/tags/v*
+
+  build-and-push:
+    image: woodpeckerci/plugin-docker-buildx
+    depends_on:
+      - build-image-tags
+    settings:
+      registry: registry.digixoil.se
+      repo: registry.digixoil.se/${CI_REPO}
+      dockerfile: Dockerfile
+      context: .
+      tags_file: .tags
+      platforms: linux/amd64,linux/arm64
+      build_args:
+        VERSION: ${CI_COMMIT_TAG:-dev}
+        COMMIT: ${CI_COMMIT_SHA:-unknown}
+        BUILD_DATE: ${CI_PIPELINE_CREATED:-unknown}
+        BRANCH: ${CI_COMMIT_BRANCH:-unknown}
+        GIT_SHA: ${CI_COMMIT_SHA:-unknown}
+        GIT_BRANCH: ${CI_COMMIT_BRANCH:-unknown}
+        REPO_URL: ${CI_REPO_CLONE_URL:-unknown}
+        REPO_TYPE: git
+        CI: "true"
+      username:
+        from_secret: digixoil_registry_username
+      password:
+        from_secret: digixoil_registry_password
+    when:
+      - event: tag
+        ref: refs/tags/v*
+
+  release:
+    image: *alpine_image
+    depends_on:
+      - build
+      - build-and-push
+    environment:
+      GITEA_API_KEY:
+        from_secret: gitea_api_key
+    commands:
+      - apk add --no-cache curl jq
+      - |
+        set -eu
+
+        GITEA_BASE="${CI_FORGE_URL:-https://git.digixoil.se}"
+        REPO="${CI_REPO:-digixoil/lang-forge}"
+        TAG="${CI_COMMIT_TAG}"
+        TAG_NO_V="${TAG#v}"
+        if [ -z "$TAG_NO_V" ]; then TAG_NO_V="$TAG"; fi
+        IMAGE_REPO="registry.digixoil.se/${REPO}"
+
+        IMAGE_REF="${IMAGE_REPO}:${TAG_NO_V}"
+        if [ -s dist/IMAGE_RELEASE_REF.txt ]; then
+          IMAGE_REF=$(head -n1 dist/IMAGE_RELEASE_REF.txt)
+        fi
+
+        RELEASE_BODY=$(printf 'Release %s\n\nContainer image:\n- `%s`\n\nPull example:\n```bash\ndocker pull %s\n```\n' "$TAG" "$IMAGE_REF" "$IMAGE_REF")
+        PRERELEASE=$(echo "$TAG" | grep -q '-' && echo 'true' || echo 'false')
+
+        EXISTING=$(curl -sf \
+          -H "Authorization: token $GITEA_API_KEY" \
+          "$GITEA_BASE/api/v1/repos/$REPO/releases/tags/$TAG" 2>/dev/null || echo '{}')
+        RELEASE_ID=$(printf '%s' "$EXISTING" | jq -r '.id // empty')
+
+        if [ -z "$RELEASE_ID" ]; then
+          RESPONSE=$(curl -sf \
+            -X POST \
+            -H "Authorization: token $GITEA_API_KEY" \
+            -H "Content-Type: application/json" \
+            "$GITEA_BASE/api/v1/repos/$REPO/releases" \
+            -d "$(jq -cn \
+              --arg tag "$TAG" \
+              --arg name "$TAG" \
+              --arg body "$RELEASE_BODY" \
+              --argjson pre "$PRERELEASE" \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: $pre}')")
+          RELEASE_ID=$(printf '%s' "$RESPONSE" | jq -r '.id // empty')
+        else
+          curl -sf \
+            -X PATCH \
+            -H "Authorization: token $GITEA_API_KEY" \
+            -H "Content-Type: application/json" \
+            "$GITEA_BASE/api/v1/repos/$REPO/releases/$RELEASE_ID" \
+            -d "$(jq -cn \
+              --arg body "$RELEASE_BODY" \
+              '{body: $body}')" \
+            > /dev/null
+        fi
+
+        for FILE in \
+          dist/lang-forge-linux-amd64 \
+          dist/lang-forge-linux-arm64 \
+          dist/lang-forge-darwin-arm64 \
+          dist/lang-forge-darwin-amd64 \
+          dist/lang-forge-windows-amd64.exe \
+          dist/SHA256SUMS; do
+          NAME=$(basename "$FILE")
+          curl -sf \
+            -X POST \
+            -H "Authorization: token $GITEA_API_KEY" \
+            -F "attachment=@$FILE;filename=$NAME" \
+            "$GITEA_BASE/api/v1/repos/$REPO/releases/$RELEASE_ID/assets" \
+            > /dev/null
+        done
+    when:
+      - event: tag
+        ref: refs/tags/v*

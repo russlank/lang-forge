@@ -1,0 +1,65 @@
+canvas 960,640;
+background #101820;
+stroke #F2AA4C;
+fill none;
+width 2;
+
+cx = 480;
+cy = 320;
+pi = 3.14159265;
+
+ray = (
+  x = cos(i) * r;
+  y = sin(i) * r;
+  stroke #FFDD88;
+  width 1 + r / 120;
+  line cx,cy,cx+x,cy+y;
+  fill #F2AA4C;
+  circle cx+x,cy+y,2 + r / 55;
+);
+
+burst = (
+  i = 0;
+  r = 44;
+  repdraw 90 (
+    draw ray;
+    i = i + (2 * pi) / 90;
+    r = r + 3.2;
+  );
+);
+
+waveDot = (
+  y = cy + sin(t) * amp + cos(t / 2) * 35;
+  hueStep = hueStep + 1;
+  fill #7BDFF2;
+  stroke #7BDFF2;
+  circle x,y,3;
+  x = x + 8;
+  t = t + pi / 18;
+);
+
+waves = (
+  x = 60;
+  t = 0;
+  amp = 84;
+  hueStep = 0;
+  repdraw 105 waveDot;
+);
+
+frame = (
+  fill none;
+  stroke #F2AA4C;
+  width 5;
+  box 28,28,904,584;
+  width 1;
+  stroke #8FCB9B;
+  box 44,44,872,552;
+);
+
+draw frame;
+draw burst;
+draw waves;
+
+fill #E84855;
+stroke #E84855;
+circle cx,cy,18;

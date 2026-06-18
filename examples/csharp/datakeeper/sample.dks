@@ -1,0 +1,18 @@
+// DataKeeper scripting LangForge sample.
+parameters InstanceGuid, ParentGuid, ObjectName, JobsTag;
+
+begin
+    scriptText = #{
+select '#OBJECT_NAME' as [object_name];
+print 'configured by LangForge mock compiler';
+#};
+    replace(scriptText, #{#OBJECT_NAME#}, ObjectName);
+    sqlrun(InstanceGuid, scriptText);
+
+    objectXml = #{<object name="#OBJECT_NAME" source="lang-forge-demo" />#};
+    replace(objectXml, #{#OBJECT_NAME#}, ObjectName);
+    addobject(ParentGuid, objectXml);
+
+    runobjectsjob(ParentGuid, ObjectName, JobsTag);
+    removeobject(ParentGuid, ObjectName);
+end

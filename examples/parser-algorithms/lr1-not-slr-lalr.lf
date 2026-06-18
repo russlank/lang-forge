@@ -1,0 +1,19 @@
+%type lalr
+%token ID Star Eq
+%start S
+
+%% lexer
+"id" => token(ID);
+"*"  => token(Star);
+"="  => token(Eq);
+[1-32]+ => skip;
+
+%% parser
+S : L Eq R
+  | R
+  ;
+L : Star R
+  | ID
+  ;
+R : L
+  ;

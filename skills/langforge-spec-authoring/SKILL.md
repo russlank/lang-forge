@@ -1,0 +1,69 @@
+---
+name: langforge-spec-authoring
+description: Create, edit, validate, or migrate LangForge grammar specifications. Use when working with `.lf` files, legacy `.l`/`.y` Lex/Yacc inputs, lexer rules, parser productions, `%token`/`%start`/`%type` directives, parser conflicts, regex validation errors, or grammar examples that should be accepted by `lang-forge validate`, `inspect`, or `generate`.
+---
+
+# LangForge Spec Authoring
+
+## Overview
+
+Author LangForge specifications as source-of-truth compiler inputs. Keep lexer
+and parser changes small, validate early, and explain grammar choices when they
+affect ambiguity, token priority, legacy import behavior, or scanner encoding.
+
+## Workflow
+
+1. Read the relevant existing spec and nearby tests/examples before editing.
+2. Load `references/spec-patterns.md` when writing non-trivial lexer/parser
+   syntax, migrating legacy `.l`/`.y`, or debugging validation errors.
+3. Prefer combined `.lf` specs for new examples and tools.
+4. Remember the current scanner defaults to checked UTF-8 for in-process and
+   generated Go output. Additional source encodings and C#/C runtime contracts
+   are still future work.
+5. Encode precedence through grammar structure because precedence declarations
+   are not implemented yet. Use target-tagged parser actions as reducer hooks
+   by default; add `%semantic <target> import` for handwritten semantic
+   dependencies and `%semantic go mode inline` only for intentional
+   target-specific generated Go snippets.
+6. Validate with the source runner first:
+
+```sh
+/usr/local/go/bin/go run ./cmd/lang-forge validate --spec path/to/spec.lf
+```
+
+7. Inspect table shape when a grammar change is surprising:
+
+```sh
+/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format text
+/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format json
+```
+
+8. If generating Go output, write it to the example/tool-local generated
+   directory and keep generated output out of committed source unless the task
+   explicitly asks for a golden fixture.
+
+## Rules Of Thumb
+
+- Order lexer rules from most specific to least specific; longest match wins
+  first, then rule priority.
+- Reject or rewrite rules that can match empty input.
+- Keep token names and nonterminal names disjoint.
+- Use `%type lalr` only when being explicit; LALR(1) is already the default.
+- Use `%type canonical` for conflict diagnosis when LALR merging is suspected.
+- Use split `.l`/`.y` inputs only for source-only fixtures or import
+  experiments; UCDT is inspiration, not a compatibility target.
+
+## Validation
+
+For a spec-only change, run at least:
+
+```sh
+/usr/local/go/bin/go run ./cmd/lang-forge validate --spec path/to/spec.lf
+/usr/local/go/bin/go test -count=1 ./...
+```
+
+For a migration fixture, run:
+
+```sh
+/usr/local/go/bin/go run ./cmd/lang-forge validate --lex path/to/file.l --yacc path/to/file.y
+```

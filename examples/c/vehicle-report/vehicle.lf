@@ -1,0 +1,91 @@
+%target c
+%package vehicle_report
+%semantic c mode reducer
+%start Program
+%token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
+
+%% lexer
+DIGIT = [0-9];
+LETTER = [A-Za-z];
+IDENT = [A-Za-z_] ( [A-Za-z0-9_] | "-" )*;
+NUMBER = DIGIT+;
+LICENSE_STRING = \" DIGIT+ "-" ( [A-Za-z0-9_] | "-" )+ \";
+DATE_STRING = \" [0-3] DIGIT "-" [0-1] DIGIT "-" DIGIT DIGIT DIGIT DIGIT \";
+STRING = \" ( [1-33] | [35-91] | [93-127] )* \";
+LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
+
+"car"          => token(Car);
+"model"        => token(Model);
+"license"      => token(License);
+"distance"     => token(Distance);
+"features"     => token(Features);
+"repairs"      => token(Repairs);
+"reparations"  => token(Repairs);
+"date"         => token(Date);
+"description"  => token(Description);
+"="            => token(Assign);
+","            => token(Comma);
+"{"            => token(LBrace);
+"}"            => token(RBrace);
+"("            => token(LParen);
+")"            => token(RParen);
+DATE_STRING    => token(DateString);
+LICENSE_STRING => token(LicenseString);
+STRING         => token(String);
+NUMBER         => token(Number);
+IDENT          => token(Ident);
+LINE_COMMENT   => skip;
+[1-32]+        => skip;
+
+%% parser
+Program : Car Assign LBrace VehicleInfo RBrace
+            {c: vehicle}
+        ;
+
+VehicleInfo : ModelField Comma LicenseField Comma DistanceField Comma FeaturesField Comma RepairsField
+                {c: info}
+            ;
+
+ModelField : Model Assign String
+               {c: field_model}
+           ;
+LicenseField : License Assign LicenseString
+                 {c: field_license}
+             ;
+DistanceField : Distance Assign Number
+                  {c: field_distance}
+              ;
+
+FeaturesField : Features Assign LBrace FeatureItems RBrace
+                  {c: field_features}
+              ;
+FeatureItems : Feature FeatureTail
+                 {c: feature_items}
+             | %empty
+                 {c: feature_empty}
+             ;
+FeatureTail : Comma Feature FeatureTail
+                {c: feature_tail_more}
+            | %empty
+                {c: feature_tail_empty}
+            ;
+Feature : Ident Assign String
+            {c: feature}
+        ;
+
+RepairsField : Repairs Assign LBrace RepairItems RBrace
+                 {c: field_repairs}
+             ;
+RepairItems : Repair RepairTail
+                {c: repair_items}
+            | %empty
+                {c: repair_empty}
+            ;
+RepairTail : Comma Repair RepairTail
+               {c: repair_tail_more}
+           | %empty
+               {c: repair_tail_empty}
+           ;
+Repair : LParen Date Assign DateString Comma Description Assign String RParen
+           {c: repair}
+       ;

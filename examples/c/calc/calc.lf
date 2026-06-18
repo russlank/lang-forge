@@ -1,0 +1,42 @@
+%target c
+%package calc
+%semantic c mode reducer
+%start S
+%token Number Plus Minus Mul Div LParen RParen
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+ ("." DIGIT+)?;
+
+NUMBER     => token(Number);
+"+"        => token(Plus);
+"-"        => token(Minus);
+"*"        => token(Mul);
+"/"        => token(Div);
+"("        => token(LParen);
+")"        => token(RParen);
+[1-32]+    => skip;
+
+%% parser
+S : Expr {c: start} ;
+Expr : Expr Plus Term
+         {c: add}
+     | Expr Minus Term
+         {c: subtract}
+     | Term
+         {c: pass}
+     ;
+Term : Term Mul Factor
+         {c: multiply}
+     | Term Div Factor
+         {c: divide}
+     | Factor
+         {c: pass}
+     ;
+Factor : Number
+           {c: number}
+       | LParen Expr RParen
+           {c: group}
+       | Minus Factor
+           {c: negate}
+       ;

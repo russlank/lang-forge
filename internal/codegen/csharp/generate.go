@@ -1,0 +1,615 @@
+package csharp
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/russlank/lang-forge/internal/diagnostics"
+	"github.com/russlank/lang-forge/internal/lex"
+	"github.com/russlank/lang-forge/internal/parse"
+	"github.com/russlank/lang-forge/internal/spec"
+	"github.com/russlank/lang-forge/internal/version"
+)
+
+// Input contains all validated artifacts required by the C# backend.
+type Input struct {
+	Spec       *spec.Spec
+	DFA        *lex.DFA
+	Grammar    *parse.Grammar
+	ParseTable *parse.Table
+}
+
+// Summary is the machine-readable table dump written next to generated code.
+type Summary struct {
+	Spec       *spec.Spec     `json:"spec"`
+	Lexer      *lex.DFA       `json:"lexer"`
+	Grammar    *parse.Grammar `json:"grammar"`
+	ParseTable *parse.Table   `json:"parseTable"`
+}
+
+// Manifest records high-level C# generation metadata.
+type Manifest struct {
+	Tool         string            `json:"tool"`
+	Version      string            `json:"version"`
+	Commit       string            `json:"commit"`
+	BuildDate    string            `json:"buildDate,omitempty"`
+	Branch       string            `json:"branch,omitempty"`
+	Source       string            `json:"source"`
+	Target       string            `json:"target"`
+	Namespace    string            `json:"namespace"`
+	Scanner      lex.ScannerConfig `json:"scanner"`
+	Semantics    spec.SemanticSpec `json:"semantics,omitempty"`
+	Actions      []SemanticAction  `json:"semanticActions,omitempty"`
+	Tokens       []string          `json:"tokens"`
+	LexerStates  int               `json:"lexerStates"`
+	ParserStates int               `json:"parserStates"`
+	GrammarRules int               `json:"grammarRules"`
+}
+
+// SemanticAction records one target action label in generated metadata.
+type SemanticAction struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Constant string `json:"csharpConstant,omitempty"`
+}
+
+// Generate writes the C# scanner, parser, manifest, and table dump.
+func Generate(input Input, outDir string) error {
+	if input.Spec == nil || input.DFA == nil || input.Grammar == nil || input.ParseTable == nil {
+		return errors.New("csharp codegen input is incomplete")
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
+	namespace, err := csharpNamespace(input.Spec.Package, filepath.Base(outDir))
+	if err != nil {
+		return err
+	}
+	tokens := tokenNames(input)
+	tokenIDs := tokenIdentifiers(tokens)
+	actions := semanticActions(input.ParseTable.Rules, "csharp")
+	manifest := Manifest{
+		Tool:         version.Name,
+		Version:      version.Version,
+		Commit:       version.Commit,
+		BuildDate:    version.BuildDate,
+		Branch:       version.Branch,
+		Source:       input.Spec.SourceFile,
+		Target:       "csharp",
+		Namespace:    namespace,
+		Scanner:      input.DFA.Scanner,
+		Semantics:    input.Spec.Semantics,
+		Actions:      actions,
+		Tokens:       tokens,
+		LexerStates:  len(input.DFA.States),
+		ParserStates: len(input.ParseTable.States),
+		GrammarRules: len(input.Grammar.Rules),
+	}
+	if err := writeJSON(filepath.Join(outDir, "langforge.manifest.json"), manifest); err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(outDir, "langforge.tables.json"), Summary{Spec: input.Spec, Lexer: input.DFA, Grammar: input.Grammar, ParseTable: input.ParseTable}); err != nil {
+		return err
+	}
+	if err := removeLegacyGeneratedFiles(outDir); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(outDir, "Tokens.g.cs"), renderTokens(namespace, input.Spec.SourceFile, tokens, tokenIDs)); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(outDir, "Scanner.g.cs"), renderScanner(namespace, input.Spec.SourceFile, input.DFA, tokens, tokenIDs)); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(outDir, "Parser.g.cs"), renderParser(namespace, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeLegacyGeneratedFiles(outDir string) error {
+	for _, name := range []string{"Tokens.cs", "Scanner.cs", "Parser.cs"} {
+		err := os.Remove(filepath.Join(outDir, name))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func tokenNames(input Input) []string {
+	seen := map[string]bool{}
+	for _, tok := range input.Spec.TokenNames() {
+		seen[tok] = true
+	}
+	for _, rule := range input.DFA.Rules {
+		if rule.Token != "" && !rule.Skip && rule.Channel == "" {
+			seen[rule.Token] = true
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for tok := range seen {
+		out = append(out, tok)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func tokenIdentifiers(tokens []string) map[string]string {
+	used := map[string]int{"EOF": 1, "Error": 1}
+	out := map[string]string{}
+	for _, token := range tokens {
+		name := exportedIdentifierSuffix(token)
+		if name == "" {
+			name = "Token"
+		}
+		out[token] = uniqueIdentifier(name, used)
+	}
+	return out
+}
+
+func renderTokens(namespace string, source string, tokens []string, tokenIDs map[string]string) string {
+	var b strings.Builder
+	b.WriteString(generatedHeader(namespace, source))
+	b.WriteString("/// <summary>Identifies one terminal emitted by the scanner.</summary>\n")
+	b.WriteString("public enum Token\n{\n")
+	b.WriteString("    /// <summary>Parser end-of-input.</summary>\n")
+	b.WriteString("    EOF = 0,\n")
+	b.WriteString("    /// <summary>Unknown token value.</summary>\n")
+	b.WriteString("    Error = 1,\n")
+	value := 2
+	for _, token := range tokens {
+		b.WriteString(fmt.Sprintf("    %s = %d,\n", tokenIDs[token], value))
+		value++
+	}
+	b.WriteString("}\n\n")
+	b.WriteString("/// <summary>Token helper methods.</summary>\n")
+	b.WriteString("public static class TokenExtensions\n{\n")
+	b.WriteString("    /// <summary>Returns the grammar terminal name for a token.</summary>\n")
+	b.WriteString("    public static string GrammarName(this Token token) => token switch\n    {\n")
+	b.WriteString("        Token.EOF => \"EOF\",\n")
+	b.WriteString("        Token.Error => \"ERROR\",\n")
+	for _, token := range tokens {
+		b.WriteString(fmt.Sprintf("        Token.%s => %s,\n", tokenIDs[token], csharpString(token)))
+	}
+	b.WriteString("        _ => \"UNKNOWN\",\n")
+	b.WriteString("    };\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []string, tokenIDs map[string]string) string {
+	tokenSet := map[string]bool{}
+	for _, token := range tokens {
+		tokenSet[token] = true
+	}
+	var b strings.Builder
+	b.WriteString(generatedHeader(namespace, source))
+	b.WriteString("using System;\n")
+	b.WriteString("using System.Buffers;\n")
+	b.WriteString("using System.Collections.Generic;\n")
+	b.WriteString("using System.Text;\n\n")
+	b.WriteString("/// <summary>One scanner result with UTF-16 offsets and Unicode scalar positions.</summary>\n")
+	b.WriteString("public readonly record struct Lexeme(Token Token, string Text, string Channel, int Start, int End, int StartLine, int StartColumn, int EndLine, int EndColumn);\n\n")
+	b.WriteString("/// <summary>Incrementally tokenizes an input string.</summary>\n")
+	b.WriteString("/// <remarks>Scanner methods are thread-safe. Concurrent calls to Next share one serialized input cursor.</remarks>\n")
+	b.WriteString("public sealed class Scanner\n{\n")
+	b.WriteString("    private readonly object _gate = new();\n")
+	b.WriteString("    private readonly string _input;\n")
+	b.WriteString("    private int _pos;\n")
+	b.WriteString("    private int _line = 1;\n")
+	b.WriteString("    private int _column = 1;\n")
+	b.WriteString("    private bool _includeHidden;\n\n")
+	b.WriteString("    public Scanner(string input)\n    {\n        _input = input ?? throw new ArgumentNullException(nameof(input));\n    }\n\n")
+	b.WriteString("    /// <summary>Controls whether channel tokens are returned.</summary>\n")
+	b.WriteString("    public void IncludeHidden(bool include)\n    {\n        lock (_gate) { _includeHidden = include; }\n    }\n\n")
+	b.WriteString("    /// <summary>Returns every visible token in input.</summary>\n")
+	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(string input) => new Scanner(input).All();\n\n")
+	b.WriteString("    /// <summary>Returns all tokens until end-of-input.</summary>\n")
+	b.WriteString("    public IReadOnlyList<Lexeme> All()\n    {\n        var output = new List<Lexeme>();\n        while (Next(out var lexeme))\n        {\n            output.Add(lexeme);\n        }\n        return output;\n    }\n\n")
+	b.WriteString("    /// <summary>Returns the next visible token, or false at end-of-input.</summary>\n")
+	b.WriteString("    public bool Next(out Lexeme lexeme)\n    {\n        lock (_gate)\n        {\n            while (_pos < _input.Length)\n            {\n                int start = _pos;\n                int startLine = _line;\n                int startColumn = _column;\n                var match = MatchAt(_input, _pos);\n                if (match.Rule <= 0)\n                {\n                    throw new InvalidOperationException($\"no lexical rule matched offset {_pos} near '{Preview(_input, _pos)}'\");\n                }\n                if (match.End == _pos)\n                {\n                    throw new InvalidOperationException($\"lexer rule {match.Rule} matched empty input at offset {_pos}\");\n                }\n                var action = RuleActions[match.Rule];\n                var endPosition = AdvancePosition(_input, _pos, match.End, _line, _column);\n                lexeme = new Lexeme(action.Token, _input.Substring(start, match.End - start), action.Channel, start, match.End, startLine, startColumn, endPosition.Line, endPosition.Column);\n                _pos = match.End;\n                _line = endPosition.Line;\n                _column = endPosition.Column;\n                if (action.Skip) { continue; }\n                if (action.Channel.Length != 0 && !_includeHidden) { continue; }\n                return true;\n            }\n            lexeme = new Lexeme(Token.EOF, string.Empty, string.Empty, _pos, _pos, _line, _column, _line, _column);\n            return false;\n        }\n    }\n\n")
+	b.WriteString("    private readonly record struct ScannerTransition(int Lo, int Hi, int Target);\n")
+	b.WriteString("    private readonly record struct ScannerState(int Accept, ScannerTransition[] Transitions);\n")
+	b.WriteString("    private readonly record struct RuleAction(Token Token, bool Skip, string Channel);\n")
+	b.WriteString("    private readonly record struct MatchResult(int Rule, int End);\n")
+	b.WriteString("    private readonly record struct DecodedRune(int Value, int Length);\n")
+	b.WriteString("    private readonly record struct Position(int Line, int Column);\n\n")
+	b.WriteString("    private static readonly ScannerState[] ScannerStates = new ScannerState[]\n    {\n")
+	for _, st := range dfa.States {
+		b.WriteString(fmt.Sprintf("        new ScannerState(%d, new ScannerTransition[] {", st.AcceptRule))
+		for _, tr := range st.Transitions {
+			for _, rr := range tr.Set.Normalize() {
+				b.WriteString(fmt.Sprintf(" new ScannerTransition(%d, %d, %d),", rr.Lo, rr.Hi, tr.Target))
+			}
+		}
+		b.WriteString(" }),\n")
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    private static readonly Dictionary<int, RuleAction> RuleActions = new Dictionary<int, RuleAction>\n    {\n")
+	for _, rule := range dfa.Rules {
+		token := "Token.Error"
+		if tokenSet[rule.Token] {
+			token = "Token." + tokenIDs[rule.Token]
+		}
+		if comment := sourceComment(rule.Span); comment != "" {
+			b.WriteString("        " + comment + "\n")
+		}
+		b.WriteString(fmt.Sprintf("        [%d] = new RuleAction(%s, %t, %s),\n", rule.Index, token, rule.Skip, csharpString(rule.Channel)))
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    private static MatchResult MatchAt(string input, int start)\n    {\n        int stateID = 0;\n        int bestRule = ScannerStates[stateID].Accept;\n        int bestEnd = start;\n        for (int pos = start; pos < input.Length;)\n        {\n            var decoded = DecodeScannerRune(input, pos);\n            int next = -1;\n            foreach (var transition in ScannerStates[stateID].Transitions)\n            {\n                if (decoded.Value >= transition.Lo && decoded.Value <= transition.Hi)\n                {\n                    next = transition.Target;\n                    break;\n                }\n            }\n            if (next < 0) { break; }\n            pos += decoded.Length;\n            stateID = next;\n            if (ScannerStates[stateID].Accept > 0)\n            {\n                bestRule = ScannerStates[stateID].Accept;\n                bestEnd = pos;\n            }\n        }\n        return new MatchResult(bestRule, bestEnd);\n    }\n\n")
+	b.WriteString("    private static DecodedRune DecodeScannerRune(string input, int pos)\n    {\n        var status = Rune.DecodeFromUtf16(input.AsSpan(pos), out var rune, out int consumed);\n        if (status != OperationStatus.Done)\n        {\n            throw new InvalidOperationException($\"invalid UTF-16 scalar at offset {pos}\");\n        }\n        return new DecodedRune(rune.Value, consumed);\n    }\n\n")
+	b.WriteString("    private static Position AdvancePosition(string input, int start, int end, int line, int column)\n    {\n        for (int pos = start; pos < end;)\n        {\n            var rune = DecodeScannerRune(input, pos);\n            pos += rune.Length;\n            if (rune.Value == '\\n')\n            {\n                line++;\n                column = 1;\n            }\n            else\n            {\n                column++;\n            }\n        }\n        return new Position(line, column);\n    }\n\n")
+	b.WriteString("    private static string Preview(string input, int pos)\n    {\n        int end = Math.Min(input.Length, pos + 16);\n        return input.Substring(pos, end - pos);\n    }\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderParser(namespace string, source string, project *spec.Spec, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction) string {
+	var b strings.Builder
+	b.WriteString(generatedHeader(namespace, source))
+	b.WriteString("using System;\n")
+	b.WriteString("using System.Collections.Generic;\n")
+	b.WriteString("using System.Linq;\n\n")
+	semantics := spec.SemanticSpec{}
+	if project != nil {
+		semantics = project.Semantics
+	}
+	actionIDs := semanticActionIDs(actions)
+	b.WriteString("/// <summary>Identifies one generated semantic reduction hook.</summary>\n")
+	b.WriteString("public enum SemanticAction\n{\n")
+	b.WriteString("    None = 0,\n")
+	for _, action := range actions {
+		b.WriteString(fmt.Sprintf("    %s = %d,\n", action.Constant, action.ID))
+	}
+	b.WriteString("}\n\n")
+	b.WriteString("/// <summary>Generated parser runtime.</summary>\n")
+	b.WriteString("/// <remarks>Parser instances are safe for concurrent Parse and ParseValue calls when the installed reducer is also safe.</remarks>\n")
+	b.WriteString("public sealed class Parser\n{\n")
+	b.WriteString("    private readonly IReducer? _reducer;\n\n")
+	b.WriteString("    public Parser(IReducer? reducer = null)\n    {\n        _reducer = reducer;\n    }\n\n")
+	b.WriteString("    public static void Parse(IReadOnlyList<Lexeme> input) => new Parser().ParseInput(input);\n")
+	b.WriteString("    public static object? ParseValue(IReadOnlyList<Lexeme> input) => new Parser().ParseValueInput(input);\n")
+	b.WriteString("    public static object? ParseWithReducer(IReadOnlyList<Lexeme> input, IReducer reducer) => new Parser(reducer).ParseValueInput(input);\n\n")
+	b.WriteString("    public void ParseInput(IReadOnlyList<Lexeme> input) => ParseValueInput(input);\n\n")
+	b.WriteString("    public object? ParseValueInput(IReadOnlyList<Lexeme> input)\n    {\n        if (input is null) { throw new ArgumentNullException(nameof(input)); }\n        var states = new List<int> { 0 };\n        var values = new List<object?>();\n        int pos = 0;\n        while (true)\n        {\n            string lookahead = ParserLookahead(input, pos);\n            if (!ParserActions.TryGetValue(states[^1], out var bySymbol) || !bySymbol.TryGetValue(lookahead, out var action))\n            {\n                throw new InvalidOperationException($\"parse error in state {states[^1]} on {lookahead}\");\n            }\n            switch (action.Kind)\n            {\n                case \"shift\":\n                    if (pos >= input.Count) { throw new InvalidOperationException($\"shift past end of input in state {states[^1]}\"); }\n                    states.Add(action.State);\n                    values.Add(input[pos]);\n                    pos++;\n                    break;\n                case \"reduce\":\n                    var rule = ParserRules[action.Rule];\n                    if (states.Count < rule.Size + 1) { throw new InvalidOperationException($\"parser stack underflow reducing rule {action.Rule}\"); }\n                    if (values.Count < rule.Size) { throw new InvalidOperationException($\"semantic value stack underflow reducing rule {action.Rule}\"); }\n                    var rhs = values.Skip(values.Count - rule.Size).Take(rule.Size).ToArray();\n                    values.RemoveRange(values.Count - rule.Size, rule.Size);\n                    object? result = Reduce(action.Rule, rule, rhs);\n                    states.RemoveRange(states.Count - rule.Size, rule.Size);\n                    if (!ParserGotos.TryGetValue(states[^1], out var gotoBySymbol) || !gotoBySymbol.TryGetValue(rule.LHS, out int gotoState))\n                    {\n                        throw new InvalidOperationException($\"missing goto from state {states[^1]} on {rule.LHS}\");\n                    }\n                    states.Add(gotoState);\n                    values.Add(result);\n                    break;\n                case \"accept\":\n                    return values.Count == 0 ? null : values[^1];\n                default:\n                    throw new InvalidOperationException($\"invalid parser action '{action.Kind}'\");\n            }\n        }\n    }\n\n")
+	b.WriteString("    private object? Reduce(int ruleID, ParserRule rule, object?[] values)\n    {\n        var ctx = new Reduction(ruleID, rule.LHS, rule.RHS, rule.Action, SemanticActions.SemanticActionName(rule.Action), values);\n        if (_reducer is not null && rule.Action != SemanticAction.None)\n        {\n            return _reducer.Reduce(ctx);\n        }\n        return DefaultReduce(values);\n    }\n\n")
+	b.WriteString("    private static object? DefaultReduce(IReadOnlyList<object?> values)\n    {\n        return values.Count switch\n        {\n            0 => null,\n            1 => values[0],\n            _ => values.ToArray(),\n        };\n    }\n\n")
+	b.WriteString("    private static string ParserLookahead(IReadOnlyList<Lexeme> input, int pos)\n    {\n        if (pos >= input.Count) { return \"$\"; }\n        if (input[pos].Token == Token.EOF)\n        {\n            if (pos != input.Count - 1) { throw new InvalidOperationException($\"token after EOF at input index {pos + 1}\"); }\n            return \"$\";\n        }\n        return TerminalName(input[pos].Token);\n    }\n\n")
+	b.WriteString("    private static string TerminalName(Token token) => token switch\n    {\n        Token.EOF => \"$\",\n")
+	for _, token := range tokens {
+		b.WriteString(fmt.Sprintf("        Token.%s => %s,\n", tokenIDs[token], csharpString(token)))
+	}
+	b.WriteString("        _ => \"ERROR\",\n    };\n\n")
+	b.WriteString("    private readonly record struct ParserAction(string Kind, int State, int Rule);\n")
+	b.WriteString("    private readonly record struct ParserRule(string LHS, string[] RHS, int Size, SemanticAction Action);\n\n")
+	renderParserTables(&b, table, actionIDs)
+	b.WriteString("}\n\n")
+	renderSemanticSupport(&b, actions, semantics)
+	return b.String()
+}
+
+func renderParserTables(b *strings.Builder, table *parse.Table, actionIDs map[string]string) {
+	b.WriteString("    private static readonly Dictionary<int, Dictionary<string, ParserAction>> ParserActions = new Dictionary<int, Dictionary<string, ParserAction>>\n    {\n")
+	for _, state := range sortedActionStates(table.Actions) {
+		b.WriteString(fmt.Sprintf("        [%d] = new Dictionary<string, ParserAction>\n        {\n", state))
+		for _, sym := range sortedActionSymbols(table.Actions[state]) {
+			action := table.Actions[state][sym]
+			b.WriteString(fmt.Sprintf("            [%s] = new ParserAction(%s, %d, %d),\n", csharpString(sym), csharpString(string(action.Kind)), action.State, action.Rule))
+		}
+		b.WriteString("        },\n")
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    private static readonly Dictionary<int, Dictionary<string, int>> ParserGotos = new Dictionary<int, Dictionary<string, int>>\n    {\n")
+	for _, state := range sortedGotoStates(table.Gotos) {
+		b.WriteString(fmt.Sprintf("        [%d] = new Dictionary<string, int>\n        {\n", state))
+		for _, sym := range sortedGotoSymbols(table.Gotos[state]) {
+			b.WriteString(fmt.Sprintf("            [%s] = %d,\n", csharpString(sym), table.Gotos[state][sym]))
+		}
+		b.WriteString("        },\n")
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    private static readonly Dictionary<int, ParserRule> ParserRules = new Dictionary<int, ParserRule>\n    {\n")
+	for _, rule := range table.Rules {
+		if comment := sourceComment(rule.Span); comment != "" {
+			b.WriteString("        " + comment + "\n")
+		}
+		action := semanticActionExpr(rule.Actions["csharp"], actionIDs)
+		b.WriteString(fmt.Sprintf("        [%d] = new ParserRule(%s, %s, %d, %s),\n", rule.ID, csharpString(rule.LHS), renderStringArray(rule.RHS), len(rule.RHS), action))
+	}
+	b.WriteString("    };\n")
+}
+
+func renderSemanticSupport(b *strings.Builder, actions []SemanticAction, semantics spec.SemanticSpec) {
+	b.WriteString("/// <summary>Describes one grammar rule reduction.</summary>\n")
+	b.WriteString("public sealed record Reduction(int Rule, string LHS, IReadOnlyList<string> RHS, SemanticAction ActionID, string Action, IReadOnlyList<object?> Values);\n\n")
+	b.WriteString("/// <summary>Receives target-tagged action hooks during parser reductions.</summary>\n")
+	b.WriteString("public interface IReducer\n{\n    object? Reduce(Reduction ctx);\n}\n\n")
+	b.WriteString("/// <summary>Adapts a function to the generated reducer interface.</summary>\n")
+	b.WriteString("public sealed class ReducerFunc : IReducer\n{\n    private readonly Func<Reduction, object?> _handler;\n    public ReducerFunc(Func<Reduction, object?> handler) => _handler = handler ?? throw new ArgumentNullException(nameof(handler));\n    public object? Reduce(Reduction ctx) => _handler(ctx);\n}\n\n")
+	b.WriteString("/// <summary>Dispatches reductions by generated semantic action ID.</summary>\n")
+	b.WriteString("public sealed class ReducerMap : Dictionary<SemanticAction, Func<Reduction, object?>>, IReducer\n{\n    public object? Reduce(Reduction ctx)\n    {\n        if (!TryGetValue(ctx.ActionID, out var handler))\n        {\n            throw new InvalidOperationException($\"no reducer registered for action {ctx.ActionID}\");\n        }\n        return handler(ctx);\n    }\n}\n\n")
+	b.WriteString("/// <summary>Semantic metadata helpers for generated action IDs.</summary>\n")
+	b.WriteString("public static class SemanticActions\n{\n")
+	b.WriteString("    private static readonly string[] Names = new string[]\n    {\n        \"\",\n")
+	for _, action := range actions {
+		b.WriteString("        " + csharpString(action.Name) + ",\n")
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    private static readonly Dictionary<string, SemanticAction> ByName = new Dictionary<string, SemanticAction>\n    {\n")
+	for _, action := range actions {
+		b.WriteString(fmt.Sprintf("        [%s] = SemanticAction.%s,\n", csharpString(action.Name), action.Constant))
+	}
+	b.WriteString("    };\n\n")
+	b.WriteString("    public static string SemanticActionName(SemanticAction action) => (int)action >= 0 && (int)action < Names.Length ? Names[(int)action] : \"UNKNOWN\";\n")
+	b.WriteString("    public static bool TryLookupSemanticAction(string name, out SemanticAction action) => ByName.TryGetValue(name, out action);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("/// <summary>Records how generated parser action text is handled.</summary>\n")
+	b.WriteString("public static class SemanticMetadata\n{\n")
+	b.WriteString("    public const string Mode = " + csharpString(string(semantics.ModeFor("csharp"))) + ";\n")
+	b.WriteString("}\n")
+}
+
+func semanticActions(rules []parse.Rule, target string) []SemanticAction {
+	seen := map[string]bool{}
+	usedConstants := map[string]int{"None": 1}
+	var out []SemanticAction
+	for _, rule := range rules {
+		name := strings.TrimSpace(rule.Actions[target])
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		id := len(out) + 1
+		out = append(out, SemanticAction{
+			ID:       id,
+			Name:     name,
+			Constant: uniqueIdentifier(exportedIdentifierSuffix(name), usedConstants),
+		})
+	}
+	return out
+}
+
+func semanticActionIDs(actions []SemanticAction) map[string]string {
+	out := map[string]string{}
+	for _, action := range actions {
+		out[action.Name] = "SemanticAction." + action.Constant
+	}
+	return out
+}
+
+func semanticActionExpr(name string, ids map[string]string) string {
+	constant, ok := ids[strings.TrimSpace(name)]
+	if !ok {
+		return "SemanticAction.None"
+	}
+	return constant
+}
+
+func exportedIdentifierSuffix(name string) string {
+	var b strings.Builder
+	upperNext := true
+	for _, r := range name {
+		if isASCIIAlpha(r) || isASCIIDigit(r) {
+			if upperNext && isASCIIAlpha(r) {
+				r = toASCIIUpper(r)
+			}
+			b.WriteRune(r)
+			upperNext = false
+			continue
+		}
+		upperNext = true
+	}
+	return b.String()
+}
+
+func uniqueIdentifier(base string, used map[string]int) string {
+	if base == "" {
+		base = "Action"
+	}
+	if isASCIIDigit(rune(base[0])) {
+		base = "N" + base
+	}
+	if used[base] == 0 {
+		used[base] = 1
+		return base
+	}
+	for i := 2; ; i++ {
+		candidate := fmt.Sprintf("%s%d", base, i)
+		if used[candidate] == 0 {
+			used[candidate] = 1
+			return candidate
+		}
+	}
+}
+
+func csharpNamespace(specPackage string, outDirBase string) (string, error) {
+	if specPackage != "" {
+		if !isValidCSharpNamespace(specPackage) {
+			return "", fmt.Errorf("invalid C# namespace %q", specPackage)
+		}
+		return specPackage, nil
+	}
+	part := sanitizeIdentifier(outDirBase)
+	if part == "" {
+		part = "Generated"
+	}
+	return "LangForge.Generated." + part, nil
+}
+
+func sanitizeIdentifier(value string) string {
+	var b strings.Builder
+	upperNext := true
+	for _, r := range value {
+		if isASCIIAlpha(r) || isASCIIDigit(r) {
+			if b.Len() == 0 && isASCIIDigit(r) {
+				continue
+			}
+			if upperNext && isASCIIAlpha(r) {
+				r = toASCIIUpper(r)
+			}
+			b.WriteRune(r)
+			upperNext = false
+			continue
+		}
+		upperNext = true
+	}
+	return b.String()
+}
+
+func isValidCSharpNamespace(namespace string) bool {
+	if namespace == "" {
+		return false
+	}
+	for _, part := range strings.Split(namespace, ".") {
+		if !isValidCSharpIdentifier(part) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidCSharpIdentifier(identifier string) bool {
+	if identifier == "" {
+		return false
+	}
+	for i, r := range identifier {
+		if i == 0 {
+			if !(r == '_' || isASCIIAlpha(r)) {
+				return false
+			}
+			continue
+		}
+		if !(r == '_' || isASCIIAlpha(r) || isASCIIDigit(r)) {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIAlpha(r rune) bool {
+	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')
+}
+
+func isASCIIDigit(r rune) bool {
+	return r >= '0' && r <= '9'
+}
+
+func toASCIIUpper(r rune) rune {
+	if r >= 'a' && r <= 'z' {
+		return r - ('a' - 'A')
+	}
+	return r
+}
+
+func generatedHeader(namespace string, source string) string {
+	var b strings.Builder
+	b.WriteString("// <auto-generated />\n")
+	b.WriteString("// Code generated by lang-forge; DO NOT EDIT.\n")
+	if source != "" {
+		b.WriteString("// Source: " + source + "\n")
+	}
+	b.WriteString("#nullable enable\n\n")
+	b.WriteString("namespace " + namespace + ";\n\n")
+	return b.String()
+}
+
+func sourceComment(span diagnostics.Span) string {
+	ref := sourceRef(span)
+	if ref == "" {
+		return ""
+	}
+	return "// Source: " + ref
+}
+
+func sourceRef(span diagnostics.Span) string {
+	if span.File == "" || span.Start.Line <= 0 {
+		return ""
+	}
+	column := span.Start.Column
+	if column <= 0 {
+		column = 1
+	}
+	return fmt.Sprintf("%s:%d:%d", sanitizeSourceFile(span.File), span.Start.Line, column)
+}
+
+func sanitizeSourceFile(filename string) string {
+	filename = strings.ReplaceAll(filename, "\r", "_")
+	filename = strings.ReplaceAll(filename, "\n", "_")
+	return filename
+}
+
+func renderStringArray(values []string) string {
+	if len(values) == 0 {
+		return "Array.Empty<string>()"
+	}
+	var b strings.Builder
+	b.WriteString("new string[] {")
+	for _, value := range values {
+		b.WriteString(" " + csharpString(value) + ",")
+	}
+	b.WriteString(" }")
+	return b.String()
+}
+
+func csharpString(value string) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "\"\""
+	}
+	return string(data)
+}
+
+func writeJSON(path string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(path, data, 0o644)
+}
+
+func writeFile(path string, source string) error {
+	return os.WriteFile(path, []byte(source), 0o644)
+}
+
+func sortedActionStates(in map[int]map[string]parse.Action) []int {
+	out := make([]int, 0, len(in))
+	for state := range in {
+		out = append(out, state)
+	}
+	sort.Ints(out)
+	return out
+}
+
+func sortedActionSymbols(in map[string]parse.Action) []string {
+	out := make([]string, 0, len(in))
+	for sym := range in {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sortedGotoStates(in map[int]map[string]int) []int {
+	out := make([]int, 0, len(in))
+	for state := range in {
+		out = append(out, state)
+	}
+	sort.Ints(out)
+	return out
+}
+
+func sortedGotoSymbols(in map[string]int) []string {
+	out := make([]string, 0, len(in))
+	for sym := range in {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
+	return out
+}

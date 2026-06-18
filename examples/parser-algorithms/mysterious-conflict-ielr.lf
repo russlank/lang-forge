@@ -1,0 +1,26 @@
+%type ielr
+%token ID Colon Comma
+%start Def
+
+%% lexer
+"id" => token(ID);
+":"  => token(Colon);
+","  => token(Comma);
+[1-32]+ => skip;
+
+%% parser
+Def : ParamSpec ReturnSpec Comma
+  ;
+ParamSpec : Type
+  | NameList Colon Type
+  ;
+ReturnSpec : Type
+  | Name Colon Type
+  ;
+Type : ID
+  ;
+Name : ID
+  ;
+NameList : Name
+  | Name Comma NameList
+  ;

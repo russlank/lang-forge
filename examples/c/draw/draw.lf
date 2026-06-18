@@ -1,0 +1,182 @@
+%target c
+%package draw
+%semantic c mode reducer
+%start Program
+%token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
+
+%% lexer
+DIGIT = [0-9];
+HEX = [0-9A-Fa-f];
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = DIGIT+ ( "." DIGIT+ )?;
+COLOR = "#" HEX HEX HEX HEX HEX HEX;
+LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
+BLOCK_COMMENT = "/" \* ( [1-41] | [43-127] )* \* "/";
+
+"canvas"     => token(Canvas);
+"background" => token(Background);
+"stroke"     => token(Stroke);
+"fill"       => token(Fill);
+"none"       => token(None);
+"width"      => token(Width);
+"draw"       => token(Draw);
+"repdraw"    => token(RepDraw);
+"circle"     => token(Circle);
+"line"       => token(Line);
+"box"        => token(Box);
+"point"      => token(Point);
+"sin"        => token(Func);
+"cos"        => token(Func);
+"tan"        => token(Func);
+"ln"         => token(Func);
+"sqrt"       => token(Func);
+"sqr"        => token(Func);
+"exp"        => token(Func);
+"="          => token(Assign);
+"+"          => token(Plus);
+"-"          => token(Minus);
+"*"          => token(Star);
+"/"          => token(Slash);
+"("          => token(LParen);
+")"          => token(RParen);
+","          => token(Comma);
+";"          => token(Semi);
+COLOR        => token(Color);
+NUMBER       => token(Number);
+IDENT        => token(Ident);
+LINE_COMMENT => skip;
+BLOCK_COMMENT => skip;
+[1-32]+      => skip;
+
+%% parser
+Program : Statements
+            {c: program}
+        ;
+
+Statements : Statement StatementTail
+               {c: statements}
+           ;
+StatementTail : Semi Statement StatementTail
+                  {c: statement_tail.more}
+              | Semi
+                  {c: statement_tail.empty}
+              | %empty
+                  {c: statement_tail.empty}
+              ;
+
+Statement : CanvasStatement
+              {c: pass}
+          | BackgroundStatement
+              {c: pass}
+          | StyleStatement
+              {c: pass}
+          | DefinitionStatement
+              {c: pass}
+          | DrawStatement
+              {c: pass}
+          | Primitive
+              {c: pass}
+          ;
+
+CanvasStatement : Canvas Expr Comma Expr
+                    {c: canvas}
+                ;
+BackgroundStatement : Background ColorValue
+                        {c: background}
+                    ;
+StyleStatement : Stroke ColorValue
+                   {c: stroke}
+               | Fill ColorValue
+                   {c: fill}
+               | Fill None
+                   {c: fill.none}
+               | Width Expr
+                   {c: width}
+               ;
+DefinitionStatement : Ident Assign Expr
+                        {c: assign}
+                    | Ident Assign FigureBlock
+                        {c: define_figure}
+                    ;
+DrawStatement : Draw FigureReference
+                  {c: draw}
+              | RepDraw Expr FigureReference
+                  {c: repdraw}
+              ;
+FigureReference : Ident
+                    {c: figure_ref.named}
+                | FigureBlock
+                    {c: figure_ref.inline}
+                ;
+
+FigureBlock : LParen Figures RParen
+                {c: figureBlock}
+            ;
+Figures : Figure FigureTail
+            {c: figures}
+        ;
+FigureTail : Semi Figure FigureTail
+               {c: figure_tail.more}
+           | Semi
+               {c: figure_tail.empty}
+           | %empty
+               {c: figure_tail.empty}
+           ;
+
+Figure : StyleStatement
+           {c: pass}
+       | DefinitionStatement
+           {c: pass}
+       | DrawStatement
+           {c: pass}
+       | Primitive
+           {c: pass}
+       ;
+Primitive : Point Expr Comma Expr
+              {c: primitive.point}
+          | Line Expr Comma Expr Comma Expr Comma Expr
+              {c: primitive.line}
+          | Box Expr Comma Expr Comma Expr Comma Expr
+              {c: primitive.box}
+          | Circle Expr Comma Expr Comma Expr
+              {c: primitive.circle}
+          ;
+
+ColorValue : Color
+               {c: color}
+           ;
+
+Expr : Term ExprTail
+         {c: expr}
+     ;
+ExprTail : Plus Term ExprTail
+             {c: expr_tail.add}
+         | Minus Term ExprTail
+             {c: expr_tail.subtract}
+         | %empty
+             {c: expr_tail.empty}
+         ;
+Term : Unary TermTail
+         {c: term}
+     ;
+TermTail : Star Unary TermTail
+             {c: term_tail.multiply}
+         | Slash Unary TermTail
+             {c: term_tail.divide}
+         | %empty
+             {c: term_tail.empty}
+         ;
+Unary : Minus Unary
+          {c: unary.negate}
+      | Primary
+          {c: pass}
+      ;
+Primary : Number
+            {c: number}
+        | Ident
+            {c: variable}
+        | Func LParen Expr RParen
+            {c: call}
+        | LParen Expr RParen
+            {c: group}
+        ;

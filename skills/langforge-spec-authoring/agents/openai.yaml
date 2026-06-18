@@ -1,0 +1,4 @@
+interface:
+  display_name: "LangForge Spec Authoring"
+  short_description: "Write and migrate LangForge grammars"
+  default_prompt: "Use $langforge-spec-authoring to draft, validate, or migrate a LangForge .lf grammar and explain the lexer/parser choices."

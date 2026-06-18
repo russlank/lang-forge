@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "lang-forge version",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/lang-forge",
+      "args": ["version"]
+    },
+    {
+      "name": "lang-forge validate sample",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/lang-forge",
+      "args": ["validate", "--spec", "${workspaceFolder}/examples/calc/calc.lf"]
+    }
+  ]
+}
+

@@ -225,6 +225,33 @@ reentrant and suitable for threaded programs. If a program shares the same
 scanner struct between threads, the caller must synchronize access to that
 struct.
 
+## Generate C++ Output
+
+```sh
+./dist/lang-forge generate \
+  --spec examples/cpp/calc/calc.lf \
+  --target cpp \
+  --out examples/cpp/calc/generated
+```
+
+Then verify the example project:
+
+```sh
+make -C examples/cpp/calc test
+```
+
+For C++ generation, `%package` is a namespace such as
+`LangForge::Examples::Calc::Generated`. Generated C++ output uses conventional
+filenames: `tokens.hpp`, `scanner.hpp`, `scanner.cpp`, `parser.hpp`, and
+`parser.cpp`.
+
+The generated C++ scanner stores a `std::string_view` into caller-owned input,
+so the source string must stay alive while lexemes are used. Scanner cursor
+methods are protected by a mutex for shared scanner use, and parser calls use
+local stacks so they are reentrant. Semantic labels such as `{cpp: add}` become
+`SemanticAction::Add` values and can be connected to handwritten code with the
+generated `ReducerMap`.
+
 ## Run Example Projects
 
 The example projects regenerate their target-specific scanner/parser code
@@ -243,6 +270,7 @@ make -C examples/c/calc run
 make -C examples/c/datakeeper run
 make -C examples/c/draw run
 make -C examples/c/vehicle-report run
+make -C examples/cpp/calc run
 ```
 
 The examples write runnable binaries and report logs under their local `dist`
@@ -256,6 +284,12 @@ found. To select a compiler explicitly:
 
 ```sh
 make -C examples/c/calc CC=clang test
+```
+
+The C++ Makefile follows the same pattern. To select a compiler explicitly:
+
+```sh
+make -C examples/cpp/calc CXX=clang++ test
 ```
 
 The generated-dependent Go files are compiled with the build tag
@@ -296,7 +330,7 @@ LF_DOCKER="docker run --rm -u $(id -u):$(id -g) -v $(pwd):/workspace -w /workspa
 make LANG_FORGE="$LF_DOCKER" run
 ```
 
-The same override works for the Go, C#, and C example families. See
+The same override works for the Go, C#, C, and C++ example families. See
 [Invocation And Layout Patterns](invocation-and-layouts.md) for reusable
 Makefile templates and multi-parser project organization.
 

@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-build-release-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `Local build targets, CI pipelines, release artifacts, Docker image, and licensing`
 
@@ -15,7 +15,8 @@ Core build targets require Go `1.26.4` or a compatible newer Go toolchain,
 `make`, and a POSIX-like shell. The full CI target also requires GCC or another
 C11 compiler because `make test-race` uses CGO and the C examples compile
 generated C output. The C# examples require the .NET `10.0` SDK because the
-projects target `net10.0`.
+projects target `net10.0`. The C++ examples require a C++17 compiler such as
+`g++` or `clang++`.
 
 See [Requirements](requirements.md) for the complete local and CI toolchain
 matrix.

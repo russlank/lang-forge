@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-examples-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `Examples and fixture guide for LangForge`
 
@@ -42,7 +42,9 @@ For the reusable Makefile and Docker patterns, read
 The Go examples need Go and `make`. The C# examples need the .NET `10.0` SDK
 because their projects target `net10.0`. The C examples need GCC or another
 C11-capable compiler for build/run targets; set `CC=clang` or another compiler
-when needed. The full matrix is in [Requirements](requirements.md).
+when needed. The C++ examples need `g++`, `clang++`, or another C++17-capable
+compiler; set `CXX=clang++` or another compiler when needed. The full matrix is
+in [Requirements](requirements.md).
 
 ## Calc Combined Spec
 
@@ -135,6 +137,36 @@ The C# DRAW example writes `dist/sample-csharp.png` and a render report. It is
 the C# mirror of the Go DRAW PNG workflow, with handwritten C# AST and PNG code
 outside `Generated/`.
 
+## C++ Example
+
+The first C++ example lives under:
+
+- [examples/cpp/calc/calc.lf](../examples/cpp/calc/calc.lf)
+
+It uses `%target cpp`, a C++ namespace package, and `{cpp: ...}` action labels:
+
+```text
+Expr : Expr Plus Term {cpp: add}
+```
+
+Run it:
+
+```sh
+make -C examples/cpp/calc run
+```
+
+Test it:
+
+```sh
+make -C examples/cpp/calc test
+```
+
+The handwritten [examples/cpp/calc/main.cpp](../examples/cpp/calc/main.cpp)
+uses generated `SemanticAction` enum values and `ReducerMap` instead of a long
+reduction `switch`. That mirrors the preferred C++ backend style from
+ADR-0014: generated tables stay static and deterministic, while handwritten
+semantics are ordinary C++ functions and lambdas keyed by action IDs.
+
 ## C Mirror Examples
 
 C examples live under:
@@ -172,6 +204,11 @@ run steps are skipped with a clear message if `CC` is unavailable. When a C
 compiler is present, the examples compile the generated sources together with
 handwritten `main.c` reducers and the shared
 [examples/c/common](../examples/c/common) helper module.
+
+The handwritten C examples include `generated/parser.h` directly instead of
+relying on the Makefile include path to find `parser.h`. The generated header
+is still the single source of truth for parser/scanner types; the explicit path
+just makes IDE code navigation work after `make -C examples/c/... generate`.
 
 The C DRAW example writes an actual PNG file through a handwritten C AST and
 interpreter. It mirrors the Go/C# DRAW flow while using a tiny local RGB/PNG

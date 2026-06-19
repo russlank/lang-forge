@@ -1,0 +1,42 @@
+%target cpp
+%package LangForge::Examples::Calc::Generated
+%semantic cpp mode reducer
+%start S
+%token Number Plus Minus Mul Div LParen RParen
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+ ("." DIGIT+)?;
+
+NUMBER     => token(Number);
+"+"        => token(Plus);
+"-"        => token(Minus);
+"*"        => token(Mul);
+"/"        => token(Div);
+"("        => token(LParen);
+")"        => token(RParen);
+[1-32]+    => skip;
+
+%% parser
+S : Expr {cpp: start} ;
+Expr : Expr Plus Term
+         {cpp: add}
+     | Expr Minus Term
+         {cpp: subtract}
+     | Term
+         {cpp: pass}
+     ;
+Term : Term Mul Factor
+         {cpp: multiply}
+     | Term Div Factor
+         {cpp: divide}
+     | Factor
+         {cpp: pass}
+     ;
+Factor : Number
+           {cpp: number}
+       | LParen Expr RParen
+           {cpp: group}
+       | Minus Factor
+           {cpp: negate}
+       ;

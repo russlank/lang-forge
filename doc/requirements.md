@@ -2,12 +2,12 @@
 
 Document id: `lang-forge-requirements-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `Toolchain requirements for building LangForge and running examples`
 
 LangForge itself is a Go command-line tool. The runnable examples also exercise
-generated Go, C#, and C output, so the full example suite needs the target
+generated Go, C#, C, and C++ output, so the full example suite needs the target
 language toolchains listed below.
 
 ## Core Tooling
@@ -34,7 +34,8 @@ example tests. It therefore needs:
 
 - the core Go/Make/shell tooling;
 - a C compiler for Go's race detector and C examples;
-- the .NET `10.0` SDK for C# examples.
+- the .NET `10.0` SDK for C# examples;
+- a C++17 compiler for C++ examples.
 
 Use these checks to confirm the expected tools are available:
 
@@ -42,6 +43,7 @@ Use these checks to confirm the expected tools are available:
 go version
 dotnet --version
 gcc --version
+g++ --version
 make --version
 ```
 
@@ -81,6 +83,27 @@ or linker options.
 The C example Makefiles still validate and generate when no C compiler is
 available. Build and run steps print a skip message if `CC` cannot be found.
 
+## C++ Examples
+
+The C++ examples require a C++17-capable compiler. GCC `g++` is the default
+selected by the root Makefile; Clang or another compatible compiler can be
+selected with `CXX`.
+
+Run with GCC:
+
+```sh
+make -C examples/cpp/calc test CXX=g++
+```
+
+Run with Clang:
+
+```sh
+make -C examples/cpp/calc test CXX=clang++
+```
+
+The C++ example Makefile still validates and generates when no C++ compiler is
+available. Build and run steps print a skip message if `CXX` cannot be found.
+
 ## Docker
 
 Docker is optional. It is useful for:
@@ -113,7 +136,7 @@ The Woodpecker `test` step runs `make examples-test`, so it must include all
 example toolchains in addition to Go. The pipeline installs:
 
 ```sh
-apk add --no-cache gcc musl-dev make dotnet10-sdk
+apk add --no-cache gcc g++ musl-dev make dotnet10-sdk
 ```
 
 If the `dotnet10-sdk` package is missing from the runner's Alpine repositories,

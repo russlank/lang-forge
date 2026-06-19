@@ -2,20 +2,20 @@
 
 Document id: `lang-forge-encoding-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `Scanner source encoding and Unicode support model`
 
 LangForge's first scanner implementation was byte-oriented. The active scanner
 architecture is now encoding-aware, with UTF-8 as the first generated source
-encoding for the in-process engine and generated Go, C#, and C backends.
+encoding for the in-process engine and generated Go, C#, C, and C++ backends.
 
 ## Goals
 
 - Treat UTF-8 source text as the normal path for generated scanners.
 - Build regex, NFA, DFA, and minimization logic over Unicode scalar values.
 - Keep generated scanner APIs deterministic and target-neutral across Go, C#,
-  and C.
+  C, and C++.
 - Preserve byte offsets for slicing and tooling while also reporting line and
   column positions for diagnostics.
 - Keep sparse range-transition tables so Unicode support does not imply giant

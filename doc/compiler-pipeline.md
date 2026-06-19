@@ -30,7 +30,7 @@ source specification
 
 LangForge separates the language-independent compiler algorithms from target
 code generation. This keeps scanner and parser behavior consistent across the
-current Go, C#, and C backends.
+current Go, C#, C, and C++ backends.
 
 ## Stage 1: Source Specification
 

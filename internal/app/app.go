@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	ccodegen "github.com/russlank/lang-forge/internal/codegen/c"
+	cppcodegen "github.com/russlank/lang-forge/internal/codegen/cpp"
 	csharpcodegen "github.com/russlank/lang-forge/internal/codegen/csharp"
 	gocodegen "github.com/russlank/lang-forge/internal/codegen/golang"
 	"github.com/russlank/lang-forge/internal/diagnostics"
@@ -69,7 +70,8 @@ Usage:
   lang-forge inspect --spec grammar.lf --format text|json
   lang-forge generate --spec grammar.lf --target go --out ./generated
   lang-forge generate --spec grammar.lf --target csharp --out ./Generated
-  lang-forge generate --spec grammar.lf --target c --out ./generated`)
+  lang-forge generate --spec grammar.lf --target c --out ./generated
+  lang-forge generate --spec grammar.lf --target cpp --out ./generated`)
 }
 
 func runValidate(args []string, stdout, stderr io.Writer) int {
@@ -127,7 +129,7 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	input := addInputFlags(fs)
-	target := fs.String("target", "go", "target backend: go, csharp, or c")
+	target := fs.String("target", "go", "target backend: go, csharp, c, or cpp")
 	outDir := fs.String("out", "", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
@@ -152,8 +154,10 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 		err = csharpcodegen.Generate(csharpcodegen.Input{Spec: result.Spec, DFA: result.DFA, Grammar: result.Grammar, ParseTable: result.ParseTable}, *outDir)
 	case "c":
 		err = ccodegen.Generate(ccodegen.Input{Spec: result.Spec, DFA: result.DFA, Grammar: result.Grammar, ParseTable: result.ParseTable}, *outDir)
+	case "cpp", "c++", "cplusplus":
+		err = cppcodegen.Generate(cppcodegen.Input{Spec: result.Spec, DFA: result.DFA, Grammar: result.Grammar, ParseTable: result.ParseTable}, *outDir)
 	default:
-		fmt.Fprintf(stderr, "target %q is not implemented yet; available: go, csharp, c\n", *target)
+		fmt.Fprintf(stderr, "target %q is not implemented yet; available: go, csharp, c, cpp\n", *target)
 		return ExitUsage
 	}
 	if err != nil {

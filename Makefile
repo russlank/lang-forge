@@ -1,5 +1,6 @@
 GO ?= /usr/local/go/bin/go
 DOTNET ?= dotnet
+CXX ?= g++
 
 APP_NAME := lang-forge
 CMD_PATH := ./cmd/lang-forge
@@ -104,6 +105,7 @@ examples-run:
 	$(MAKE) -C examples/c/datakeeper GO=$(GO) run
 	$(MAKE) -C examples/c/draw GO=$(GO) run
 	$(MAKE) -C examples/c/vehicle-report GO=$(GO) run
+	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) run
 
 examples-test:
 	$(MAKE) -C examples/parser-algorithms GO=$(GO) test
@@ -119,6 +121,7 @@ examples-test:
 	$(MAKE) -C examples/c/datakeeper GO=$(GO) test
 	$(MAKE) -C examples/c/draw GO=$(GO) test
 	$(MAKE) -C examples/c/vehicle-report GO=$(GO) test
+	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) test
 
 examples-clean:
 	$(MAKE) -C examples/go/calc clean
@@ -133,6 +136,7 @@ examples-clean:
 	$(MAKE) -C examples/c/datakeeper clean
 	$(MAKE) -C examples/c/draw clean
 	$(MAKE) -C examples/c/vehicle-report clean
+	$(MAKE) -C examples/cpp/calc clean
 
 docker-build:
 	docker build \

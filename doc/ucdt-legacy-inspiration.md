@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-ucdt-legacy-inspiration-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `How the Pascal UCDT project influenced LangForge without defining a compatibility contract`
 
@@ -12,9 +12,10 @@ Lex/Yacc implementation and sample languages. UCDT remains valuable historical
 material, but it is not a compatibility target for LangForge.
 
 New LangForge work should use the modern combined `.lf` format, target-neutral
-scanner/parser models, and generated output designed for Go, C#, C, and future
-backends. UCDT-derived files under `testdata/ucdt` are source-only regression
-and learning fixtures. They do not define a public compatibility contract.
+scanner/parser models, and generated output designed for Go, C#, C, C++, and
+future backends. UCDT-derived files under `testdata/ucdt` are source-only
+regression and learning fixtures. They do not define a public compatibility
+contract.
 
 ## What LangForge Keeps As Inspiration
 
@@ -52,7 +53,7 @@ quirk or byte-level behavior.
 The preferred path for new examples and users is:
 
 ```text
-modern .lf spec -> target-neutral lexer/parser tables -> generated Go/C#/C
+modern .lf spec -> target-neutral lexer/parser tables -> generated Go/C#/C/C++
 ```
 
 The old UCDT project helped prove the idea. LangForge is free to choose better

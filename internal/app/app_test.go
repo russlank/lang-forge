@@ -284,6 +284,47 @@ S : A B {c: pair} ;
 	}
 }
 
+func TestRunGenerate_WritesCppScannerParserFiles(t *testing.T) {
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "semantic-cpp.lf")
+	writeFile(t, specPath, `%target cpp
+%package langforge::tests::semantic
+%semantic cpp mode reducer
+%token A B
+%start S
+%% lexer
+"a" => token(A);
+"b" => token(B);
+[1-32]+ => skip;
+%% parser
+S : A B {cpp: pair} ;
+`)
+	out := filepath.Join(dir, "generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "c++", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "generated ") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	for _, name := range []string{"tokens.hpp", "scanner.hpp", "scanner.cpp", "parser.hpp", "parser.cpp", "langforge.manifest.json"} {
+		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
+			t.Fatalf("expected C++ generated file %s: %v", name, err)
+		}
+	}
+	manifest := readFile(t, filepath.Join(out, "langforge.manifest.json"))
+	if !strings.Contains(manifest, `"target": "cpp"`) || !strings.Contains(manifest, `"namespace": "langforge::tests::semantic"`) {
+		t.Fatalf("unexpected C++ manifest:\n%s", manifest)
+	}
+	parserHeader := readFile(t, filepath.Join(out, "parser.hpp"))
+	for _, fragment := range []string{"enum class SemanticAction", "Pair"} {
+		if !strings.Contains(parserHeader, fragment) {
+			t.Fatalf("parser.hpp does not expose C++ semantic action fragment %q:\n%s", fragment, parserHeader)
+		}
+	}
+}
+
 func TestRunGenerate_RejectsInvalidGoPackageName(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad-package.lf")
@@ -426,6 +467,128 @@ func TestGeneratedScannerParserConcurrentUse(t *testing.T) {
 `)
 	run(t, out, goBin, "mod", "init", "calc")
 	run(t, out, goBin, "test", "./...")
+}
+
+func TestRunGenerate_GeneratedCppScannerParserCompilesAndParses(t *testing.T) {
+	cxx, ok := findCppCompiler()
+	if !ok {
+		t.Skip("C++ compiler unavailable")
+	}
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "calc.lf")
+	writeFile(t, specPath, cppCalcSpec())
+	out := filepath.Join(dir, "generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "cpp", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	writeFile(t, filepath.Join(dir, "main.cpp"), `#include "generated/parser.hpp"
+
+#include <any>
+#include <atomic>
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+using namespace LangForge::Examples::Calc::Generated;
+
+static double number_arg(const Reduction& ctx, std::size_t index) {
+    return std::any_cast<double>(ctx.values.at(index));
+}
+
+static Lexeme lexeme_arg(const Reduction& ctx, std::size_t index) {
+    return std::any_cast<Lexeme>(ctx.values.at(index));
+}
+
+static double eval(const std::string& source) {
+    auto tokens = tokenize(source);
+    ReducerMap reducers{
+        {SemanticAction::Start, [](const Reduction& ctx) -> Value { return ctx.values.at(0); }},
+        {SemanticAction::Pass, [](const Reduction& ctx) -> Value { return ctx.values.at(0); }},
+        {SemanticAction::Group, [](const Reduction& ctx) -> Value { return ctx.values.at(1); }},
+        {SemanticAction::Number, [](const Reduction& ctx) -> Value {
+            const auto lexeme = lexeme_arg(ctx, 0);
+            return std::stod(std::string(lexeme.text));
+        }},
+        {SemanticAction::Negate, [](const Reduction& ctx) -> Value { return -number_arg(ctx, 1); }},
+        {SemanticAction::Add, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) + number_arg(ctx, 2); }},
+        {SemanticAction::Subtract, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) - number_arg(ctx, 2); }},
+        {SemanticAction::Multiply, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) * number_arg(ctx, 2); }},
+        {SemanticAction::Divide, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) / number_arg(ctx, 2); }},
+    };
+    return std::any_cast<double>(parse_value(tokens, reducers));
+}
+
+static void require(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+int main() {
+    require(std::fabs(eval("1+2*(3-4)") - -1.0) < 0.000001, "wrong expression result");
+    auto visible = tokenize("1+2");
+    parse(visible);
+    auto with_eof = visible;
+    with_eof.push_back(Lexeme{Token::End, "", "", 0, 0, 1, 1, 1, 1});
+    parse(with_eof);
+    with_eof.push_back(Lexeme{Token::Plus, "+", "", 0, 1, 1, 1, 1, 2});
+    try {
+        parse(with_eof);
+        throw std::runtime_error("expected token-after-EOF parse error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("token after EOF") != std::string::npos, "wrong EOF error");
+    }
+    try {
+        tokenize("1@");
+        throw std::runtime_error("expected scanner error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("no lexical rule") != std::string::npos, "wrong scanner error");
+    }
+    try {
+        tokenize(std::string("1") + static_cast<char>(0xff));
+        throw std::runtime_error("expected invalid UTF-8 error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("invalid UTF-8") != std::string::npos, "wrong UTF-8 error");
+    }
+
+    Parser parser;
+    std::vector<std::thread> workers;
+    for (int i = 0; i < 8; ++i) {
+        workers.emplace_back([&parser]() {
+            parser.parse(tokenize("1+2*(3-4)"));
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
+    }
+
+    Scanner shared("1+2*(3-4)");
+    std::atomic<int> count{0};
+    workers.clear();
+    for (int i = 0; i < 4; ++i) {
+        workers.emplace_back([&shared, &count]() {
+            Lexeme lexeme;
+            while (shared.next(lexeme)) {
+                ++count;
+            }
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
+    }
+    require(count == static_cast<int>(tokenize("1+2*(3-4)").size()), "shared scanner token count mismatch");
+    SemanticAction action = SemanticAction::None;
+    require(lookup_semantic_action("add", action) && action == SemanticAction::Add, "semantic action lookup failed");
+    std::cout << "ok\n";
+}
+`)
+	run(t, dir, cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-I", out, filepath.Join(dir, "main.cpp"), filepath.Join(out, "scanner.cpp"), filepath.Join(out, "parser.cpp"), "-o", filepath.Join(dir, "calc-cpp-test"))
+	run(t, dir, filepath.Join(dir, "calc-cpp-test"))
 }
 
 func TestRunGenerate_GeneratedGoScannerTokenizesUTF8(t *testing.T) {
@@ -836,6 +999,16 @@ func run(t *testing.T, dir string, name string, args ...string) {
 	}
 }
 
+func findCppCompiler() (string, bool) {
+	for _, name := range []string{"g++", "c++", "clang++"} {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			return path, true
+		}
+	}
+	return "", false
+}
+
 func lr1ButNotSLRSpec(prefix string) string {
 	return prefix + `%token ID Star Eq
 %start S
@@ -898,6 +1071,40 @@ Term : Term Mul Factor {csharp: multiply}
 Factor : Number {csharp: number}
        | LParen Expr RParen {csharp: group}
        | Minus Factor {csharp: negate}
+       ;
+`
+}
+
+func cppCalcSpec() string {
+	return `%target cpp
+%package LangForge::Examples::Calc::Generated
+%semantic cpp mode reducer
+%token Number Plus Minus Mul Div LParen RParen
+%start S
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+NUMBER => token(Number);
+"+" => token(Plus);
+"-" => token(Minus);
+"*" => token(Mul);
+"/" => token(Div);
+"(" => token(LParen);
+")" => token(RParen);
+[1-32]+ => skip;
+%% parser
+S : Expr {cpp: start} ;
+Expr : Expr Plus Term {cpp: add}
+     | Expr Minus Term {cpp: subtract}
+     | Term {cpp: pass}
+     ;
+Term : Term Mul Factor {cpp: multiply}
+     | Term Div Factor {cpp: divide}
+     | Factor {cpp: pass}
+     ;
+Factor : Number {cpp: number}
+       | LParen Expr RParen {cpp: group}
+       | Minus Factor {cpp: negate}
        ;
 `
 }

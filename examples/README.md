@@ -11,6 +11,9 @@ LangForge examples are organized by supported target language.
   scenarios with generated C headers/sources and handwritten C reducers. The C
   Makefiles skip compilation when no C compiler is available, but generation
   and validation still run.
+- `cpp/calc` demonstrates generated C++17 scanner/parser output with
+  handwritten reducer-map semantics. Its Makefile skips compilation when no
+  C++ compiler is available, but generation and validation still run.
 - `parser-algorithms` contains source-only parser-table fixtures shared by all
   targets.
 
@@ -23,3 +26,6 @@ Requirements:
 - C# examples target `net10.0` and need the .NET `10.0` SDK.
 - C examples need GCC or another C11 compiler for compile/run steps. Use
   `CC=clang` or another compiler override when needed.
+- C++ examples need `g++`, `clang++`, or another C++17 compiler for
+  compile/run steps. Use `CXX=clang++` or another compiler override when
+  needed.

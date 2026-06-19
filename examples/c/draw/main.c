@@ -1,5 +1,5 @@
-#include "demo.h"
-#include "parser.h"
+#include "../common/demo.h"
+#include "generated/parser.h"
 
 #include <math.h>
 #include <stdio.h>

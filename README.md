@@ -28,25 +28,32 @@ Current implementation status:
 - C backend output for conventional `tokens.h`, `scanner.h`/`.c`, and
   `parser.h`/`.c` files, reentrant scanner/parser APIs, reducer function
   pointers, semantic action enums, UTF-8 checking, and deterministic manifests;
+- C++ backend output for conventional `tokens.hpp`, `scanner.hpp`/`.cpp`, and
+  `parser.hpp`/`.cpp` files, thread-safe scanner instances, table-driven parser
+  APIs, semantic action enums, reducer maps, UTF-8 checking, and deterministic
+  manifests;
 - validation for empty-matching lexer rules, token/nonterminal name collisions,
   parser conflicts, invalid Unicode scalar ranges, and unsupported scanner
   settings;
-- language-grouped examples under `examples/go`, `examples/csharp`, and
-  `examples/c`;
+- language-grouped examples under `examples/go`, `examples/csharp`,
+  `examples/c`, and `examples/cpp`;
 - runnable calc, DataKeeper, DRAW, and vehicle-report examples for Go, C#,
   and C;
 - Go examples with generated parser reduction hooks, AST construction,
   stack-machine lowering, PNG rendering, and XML-like report output;
 - C# examples with generated `.g.cs` scanner/parser output, .NET 10 builds,
-  reducer-backed semantic handling, and console/log reports.
+  reducer-backed semantic handling, and console/log reports;
 - C examples with generated C headers/sources, handwritten reducers, a shared
-  support module, console/log reports, and a full DRAW PNG renderer.
+  support module, console/log reports, and a full DRAW PNG renderer;
+- a C++ calculator example with generated C++17 scanner/parser output and
+  reducer-map semantic dispatch.
 
 ## Requirements
 
 The core tool needs Go `1.26.4` or a compatible newer toolchain plus `make`.
-The full example and CI suite also needs the .NET `10.0` SDK for C# examples
-and GCC or another C11 compiler for C examples and Go race tests.
+The full example and CI suite also needs the .NET `10.0` SDK for C# examples,
+GCC or another C11 compiler for C examples and Go race tests, and a C++17
+compiler for C++ examples.
 
 See [Requirements](doc/requirements.md) for the complete toolchain matrix and
 target-specific notes.
@@ -69,6 +76,7 @@ make -C examples/c/calc run
 make -C examples/c/datakeeper run
 make -C examples/c/draw run
 make -C examples/c/vehicle-report run
+make -C examples/cpp/calc run
 ```
 
 If `go` is on your `PATH`, the same commands work with `go` instead of
@@ -92,6 +100,7 @@ make -C examples/c/calc LANG_FORGE=../../../dist/lang-forge run
 make -C examples/c/datakeeper LANG_FORGE=../../../dist/lang-forge run
 make -C examples/c/draw LANG_FORGE=../../../dist/lang-forge run
 make -C examples/c/vehicle-report LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/calc LANG_FORGE=../../../dist/lang-forge run
 ```
 
 If you do not want to install a binary, the Docker image can be used as the
@@ -119,6 +128,7 @@ make -C examples/c/calc clean
 make -C examples/c/datakeeper clean
 make -C examples/c/draw clean
 make -C examples/c/vehicle-report clean
+make -C examples/cpp/calc clean
 ```
 
 Build, CI, release, and Docker targets are available through the root
@@ -162,11 +172,11 @@ Reusable Codex skills for LangForge live under [skills](skills):
 - LALR(1) is the default parser algorithm. SLR, IELR(1), and canonical LR(1)
   can be selected with `%type slr`, `%type ielr`, or `%type canonical`.
 - Scanners default to checked UTF-8 and sparse Unicode scalar ranges for the
-  in-process engine plus generated Go, C#, and C output. Additional source
+  in-process engine plus generated Go, C#, C, and C++ output. Additional source
   encodings remain planned. See
   [Scanner encoding architecture](doc/encoding.md).
-- Generated Go, C#, and C parsers accept visible tokens from `Tokenize` and
-  optionally one trailing explicit EOF token. Target-tagged parser actions are
+- Generated Go, C#, C, and C++ parsers accept visible tokens from `Tokenize`
+  and optionally one trailing explicit EOF token. Target-tagged parser actions are
   exposed through reducer callbacks with generated action IDs/enums and
   reducer-map helpers where the target has that convenience layer. Specs can
   also opt into Go inline action mode with target-tagged semantic imports for

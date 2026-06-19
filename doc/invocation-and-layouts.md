@@ -283,7 +283,7 @@ packages imported by reducers, not inside generated output.
 
 ## Multiple Output Languages
 
-The current implementation generates Go, C#, and C output. Keep generated
+The current implementation generates Go, C#, C, and C++ output. Keep generated
 output target-specific so each language can use its normal file layout:
 
 ```text
@@ -293,6 +293,7 @@ generated/
   go/calc/
   csharp/Calc/
   c/calc/
+  cpp/calc/
 ```
 
 The `.lf` file remains the source of truth. Generated directories are
@@ -303,14 +304,15 @@ reducer wiring.
 For portable grammars, prefer short action labels:
 
 ```text
-Expr : Expr Plus Term {go: add} {csharp: add} {c: add}
-     | Expr Minus Term {go: subtract} {csharp: subtract} {c: subtract}
+Expr : Expr Plus Term {go: add} {csharp: add} {c: add} {cpp: add}
+     | Expr Minus Term {go: subtract} {csharp: subtract} {c: subtract} {cpp: subtract}
      ;
 ```
 
 The labels become Go constants plus a reducer map, C# enum values plus a
-`ReducerMap`, and C enum values dispatched through a reducer function pointer.
-Inline target code is useful, but it is intentionally less portable.
+`ReducerMap`, C enum values dispatched through a reducer function pointer, and
+C++ `enum class` values dispatched through a generated `ReducerMap`. Inline
+target code is useful, but it is intentionally less portable.
 
 ## Generated Output Policy
 

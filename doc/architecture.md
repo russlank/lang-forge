@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-architecture-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-19`
 Owner: `Project maintainers`
 Scope: `Implementation architecture for the LangForge Go tool`
 
@@ -162,6 +162,26 @@ Sharing one scanner struct across threads requires caller synchronization.
 Action labels such as `{c: add}` become target-prefixed enum values such as
 `CALC_ACTION_ADD`, and shifted terminals are passed to reducers as pointers to
 generated `*_lexeme` records.
+
+## C++ Backend
+
+`lang-forge generate --target cpp` writes:
+
+- `langforge.manifest.json`: deterministic metadata for CI and auditing.
+- `langforge.tables.json`: full source model and generated tables.
+- `tokens.hpp`: strongly typed token enum and token-name helper.
+- `scanner.hpp` and `scanner.cpp`: generated scanner runtime and DFA tables.
+- `parser.hpp` and `parser.cpp`: generated table-driven parser with
+  recognizer-only and reducer-backed semantic APIs.
+
+Generated C++ output targets C++17. Scanner instances store a
+`std::string_view` into caller-owned source text and serialize shared cursor
+access with a mutex. Parser state is local to each parse call, so a parser can
+be reused concurrently when the installed reducer is also safe. Action labels
+such as `{cpp: add}` become `enum class SemanticAction` values such as
+`SemanticAction::Add`. Parser action/goto lookup uses static sorted arrays and
+binary search, while handwritten semantics normally dispatch through the
+generated `ReducerMap`.
 
 ## Example Project Layout
 

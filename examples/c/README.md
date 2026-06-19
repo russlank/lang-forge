@@ -12,6 +12,13 @@ scanner/parser API is reentrant and does not use global mutable parse state; the
 examples keep semantic memory in per-parse arena structs so application code can
 run multiple parsers independently.
 
+The handwritten C files include generated headers through explicit relative
+paths such as `generated/parser.h`, and shared demo helpers through
+`../common/demo.h`. This keeps the generated parser header as the single source
+of truth while letting IDEs resolve types such as `calc_lexeme` without reading
+Makefile `-I` flags. Generate the example once before relying on IDE
+navigation.
+
 GCC is the verified compiler in the current workspace. Any C11-capable compiler
 should work through the `CC` override. The DRAW example links the math library
 with `LDLIBS=-lm` by default.

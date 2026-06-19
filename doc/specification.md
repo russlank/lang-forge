@@ -36,8 +36,8 @@ For a guided tour of how this file turns into scanner and parser tables, see
 
 | Directive | Meaning |
 |---|---|
-| `%target go` / `%target csharp` / `%target c` | Preferred generation target. The CLI still requires `--target` today. |
-| `%package name` | Package/namespace/prefix hint for generated code. Go expects a package identifier; C# expects a namespace; C derives a public symbol prefix. |
+| `%target go` / `%target csharp` / `%target c` / `%target cpp` | Preferred generation target. The CLI still requires `--target` today. |
+| `%package name` | Package/namespace/prefix hint for generated code. Go expects a package identifier; C# expects a namespace; C derives a public symbol prefix; C++ expects a namespace. |
 | `%scanner utf8` | Selects checked UTF-8 scanner input. This is the default. |
 | `%scanner encoding=utf8 invalid=error newline=lf` | Structured scanner settings for future extension. |
 | `%semantic go mode reducer` | Treat Go parser actions as reducer labels. This is the default. |
@@ -112,11 +112,12 @@ Expr : Expr Plus Term {go:
 }
 ```
 
-The target tag can also be `csharp` or `c` for generated reducer hooks:
+The target tag can also be `csharp`, `c`, or `cpp` for generated reducer hooks:
 
 ```text
 Expr : Expr Plus Term {csharp: add}
 Expr : Expr Plus Term {c: add}
+Expr : Expr Plus Term {cpp: add}
 ```
 
 For a beginner-friendly explanation of how this hook becomes runtime behavior,
@@ -173,9 +174,10 @@ grammar rule name, because parser tables need terminals and nonterminals to map
 to distinct action/goto entries.
 
 For Go generation, `%package` must be a valid non-keyword Go package identifier
-when it is set explicitly. Other target-specific namespace forms will be
-handled by those future backends rather than silently rewritten by the Go
-backend.
+when it is set explicitly. For C# generation, `%package` is a dotted namespace.
+For C++ generation, `%package` is a namespace written with `::` or dotted
+separators, such as `LangForge::Examples::Calc::Generated`. For C generation,
+`%package` becomes the public symbol prefix.
 
 ## Authoring Style For Readable Grammars
 

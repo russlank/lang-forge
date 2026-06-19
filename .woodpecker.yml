@@ -29,7 +29,10 @@ steps:
     environment:
       CGO_ENABLED: '1'
     commands:
-      - apk add --no-cache gcc musl-dev make
+      - apk add --no-cache gcc musl-dev make dotnet10-sdk
+      - go version
+      - dotnet --version
+      - gcc --version | head -n 1
       - make GO=go test-race
       - make GO=go examples-test
     when:

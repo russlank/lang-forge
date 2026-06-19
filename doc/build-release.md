@@ -232,6 +232,16 @@ It runs the same core gates and, on `v*` tags, can:
 - build and push multi-architecture container images;
 - publish a Gitea release with attached binaries and checksums.
 
+The Woodpecker `test` step uses the Go Alpine image and installs the extra
+toolchains required by the full example suite:
+
+```sh
+apk add --no-cache gcc musl-dev make dotnet10-sdk
+```
+
+`gcc`/`musl-dev` cover Go race tests and C examples. `dotnet10-sdk` covers the
+C# examples, which target `net10.0`.
+
 Required secrets for release publishing:
 
 ```text

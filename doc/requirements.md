@@ -106,3 +106,17 @@ The GitHub workflow provisions:
 It builds CLI release artifacts and a local Docker image for smoke testing. It
 does not log in to a registry and does not publish Docker images. For now,
 GitHub releases contain CLI binaries and checksums only.
+
+## Woodpecker
+
+The Woodpecker `test` step runs `make examples-test`, so it must include all
+example toolchains in addition to Go. The pipeline installs:
+
+```sh
+apk add --no-cache gcc musl-dev make dotnet10-sdk
+```
+
+If the `dotnet10-sdk` package is missing from the runner's Alpine repositories,
+the C# examples fail at `dotnet run` with `No such file or directory`. In that
+case, update the runner image or Alpine repository set so .NET `10.0` SDK
+packages are available.

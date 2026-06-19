@@ -77,6 +77,9 @@ make -C examples/c/datakeeper run
 make -C examples/c/draw run
 make -C examples/c/vehicle-report run
 make -C examples/cpp/calc run
+make -C examples/cpp/datakeeper run
+make -C examples/cpp/draw run
+make -C examples/cpp/vehicle-report run
 ```
 
 If `go` is on your `PATH`, the same commands work with `go` instead of
@@ -101,6 +104,9 @@ make -C examples/c/datakeeper LANG_FORGE=../../../dist/lang-forge run
 make -C examples/c/draw LANG_FORGE=../../../dist/lang-forge run
 make -C examples/c/vehicle-report LANG_FORGE=../../../dist/lang-forge run
 make -C examples/cpp/calc LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/datakeeper LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/draw LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/vehicle-report LANG_FORGE=../../../dist/lang-forge run
 ```
 
 If you do not want to install a binary, the Docker image can be used as the
@@ -129,6 +135,9 @@ make -C examples/c/datakeeper clean
 make -C examples/c/draw clean
 make -C examples/c/vehicle-report clean
 make -C examples/cpp/calc clean
+make -C examples/cpp/datakeeper clean
+make -C examples/cpp/draw clean
+make -C examples/cpp/vehicle-report clean
 ```
 
 Build, CI, release, and Docker targets are available through the root

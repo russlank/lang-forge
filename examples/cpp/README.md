@@ -4,16 +4,22 @@ The C++ examples are generated-on-demand projects. Each example keeps the
 grammar in `.lf`, handwritten semantics in normal C++ source, and generated
 scanner/parser output under an ignored `generated/` directory.
 
-Run the calculator example:
+Run one example:
 
 ```sh
 make -C examples/cpp/calc run
+make -C examples/cpp/datakeeper run
+make -C examples/cpp/draw run
+make -C examples/cpp/vehicle-report run
 ```
 
-Run its assertions:
+Run generated-code checks:
 
 ```sh
 make -C examples/cpp/calc test
+make -C examples/cpp/datakeeper test
+make -C examples/cpp/draw test
+make -C examples/cpp/vehicle-report test
 ```
 
 The Makefiles invoke LangForge from source by default:
@@ -34,3 +40,6 @@ Generated C++ output uses conventional filenames: `tokens.hpp`,
 includes generated headers through paths such as `generated/parser.hpp` so IDEs
 can see generated types while the generated directory remains the single source
 of generated declarations.
+
+The DRAW C++ example writes a PNG image with a tiny local encoder rather than
+using an external image library.

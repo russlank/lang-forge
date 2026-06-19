@@ -16,6 +16,12 @@ Run assertions:
 make -C examples/cpp/calc test
 ```
 
+The example is built as C++17. The repository's shared VS Code settings mirror
+the Makefile flags for IntelliSense, including the `generated/` include path.
+If `std::string_view`, `std::any_cast`, or reducer conversions are underlined in
+the editor, regenerate once with `make -C examples/cpp/calc generate` and make
+sure the workspace is using the recommended C/C++ extension.
+
 The generated files are written to `generated/`:
 
 - `tokens.hpp`

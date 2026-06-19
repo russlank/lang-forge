@@ -11,9 +11,10 @@ LangForge examples are organized by supported target language.
   scenarios with generated C headers/sources and handwritten C reducers. The C
   Makefiles skip compilation when no C compiler is available, but generation
   and validation still run.
-- `cpp/calc` demonstrates generated C++17 scanner/parser output with
-  handwritten reducer-map semantics. Its Makefile skips compilation when no
-  C++ compiler is available, but generation and validation still run.
+- `cpp/calc`, `cpp/datakeeper`, `cpp/draw`, and `cpp/vehicle-report` mirror
+  the same scenarios with generated C++17 scanner/parser output and handwritten
+  reducer-map semantics. Their Makefiles skip compilation when no C++ compiler
+  is available, but generation and validation still run.
 - `parser-algorithms` contains source-only parser-table fixtures shared by all
   targets.
 

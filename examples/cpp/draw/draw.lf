@@ -1,0 +1,182 @@
+%target cpp
+%package LangForge::Examples::Draw::Generated
+%semantic cpp mode reducer
+%start Program
+%token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
+
+%% lexer
+DIGIT = [0-9];
+HEX = [0-9A-Fa-f];
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = DIGIT+ ( "." DIGIT+ )?;
+COLOR = "#" HEX HEX HEX HEX HEX HEX;
+LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
+BLOCK_COMMENT = "/" \* ( [1-41] | [43-127] )* \* "/";
+
+"canvas"     => token(Canvas);
+"background" => token(Background);
+"stroke"     => token(Stroke);
+"fill"       => token(Fill);
+"none"       => token(None);
+"width"      => token(Width);
+"draw"       => token(Draw);
+"repdraw"    => token(RepDraw);
+"circle"     => token(Circle);
+"line"       => token(Line);
+"box"        => token(Box);
+"point"      => token(Point);
+"sin"        => token(Func);
+"cos"        => token(Func);
+"tan"        => token(Func);
+"ln"         => token(Func);
+"sqrt"       => token(Func);
+"sqr"        => token(Func);
+"exp"        => token(Func);
+"="          => token(Assign);
+"+"          => token(Plus);
+"-"          => token(Minus);
+"*"          => token(Star);
+"/"          => token(Slash);
+"("          => token(LParen);
+")"          => token(RParen);
+","          => token(Comma);
+";"          => token(Semi);
+COLOR        => token(Color);
+NUMBER       => token(Number);
+IDENT        => token(Ident);
+LINE_COMMENT => skip;
+BLOCK_COMMENT => skip;
+[1-32]+      => skip;
+
+%% parser
+Program : Statements
+            {cpp: program}
+        ;
+
+Statements : Statement StatementTail
+               {cpp: statements}
+           ;
+StatementTail : Semi Statement StatementTail
+                  {cpp: statement_tail.more}
+              | Semi
+                  {cpp: statement_tail.empty}
+              | %empty
+                  {cpp: statement_tail.empty}
+              ;
+
+Statement : CanvasStatement
+              {cpp: pass}
+          | BackgroundStatement
+              {cpp: pass}
+          | StyleStatement
+              {cpp: pass}
+          | DefinitionStatement
+              {cpp: pass}
+          | DrawStatement
+              {cpp: pass}
+          | Primitive
+              {cpp: pass}
+          ;
+
+CanvasStatement : Canvas Expr Comma Expr
+                    {cpp: canvas}
+                ;
+BackgroundStatement : Background ColorValue
+                        {cpp: background}
+                    ;
+StyleStatement : Stroke ColorValue
+                   {cpp: stroke}
+               | Fill ColorValue
+                   {cpp: fill}
+               | Fill None
+                   {cpp: fill.none}
+               | Width Expr
+                   {cpp: width}
+               ;
+DefinitionStatement : Ident Assign Expr
+                        {cpp: assign}
+                    | Ident Assign FigureBlock
+                        {cpp: define_figure}
+                    ;
+DrawStatement : Draw FigureReference
+                  {cpp: draw}
+              | RepDraw Expr FigureReference
+                  {cpp: repdraw}
+              ;
+FigureReference : Ident
+                    {cpp: figure_ref.named}
+                | FigureBlock
+                    {cpp: figure_ref.inline}
+                ;
+
+FigureBlock : LParen Figures RParen
+                {cpp: figureBlock}
+            ;
+Figures : Figure FigureTail
+            {cpp: figures}
+        ;
+FigureTail : Semi Figure FigureTail
+               {cpp: figure_tail.more}
+           | Semi
+               {cpp: figure_tail.empty}
+           | %empty
+               {cpp: figure_tail.empty}
+           ;
+
+Figure : StyleStatement
+           {cpp: pass}
+       | DefinitionStatement
+           {cpp: pass}
+       | DrawStatement
+           {cpp: pass}
+       | Primitive
+           {cpp: pass}
+       ;
+Primitive : Point Expr Comma Expr
+              {cpp: primitive.point}
+          | Line Expr Comma Expr Comma Expr Comma Expr
+              {cpp: primitive.line}
+          | Box Expr Comma Expr Comma Expr Comma Expr
+              {cpp: primitive.box}
+          | Circle Expr Comma Expr Comma Expr
+              {cpp: primitive.circle}
+          ;
+
+ColorValue : Color
+               {cpp: color}
+           ;
+
+Expr : Term ExprTail
+         {cpp: expr}
+     ;
+ExprTail : Plus Term ExprTail
+             {cpp: expr_tail.add}
+         | Minus Term ExprTail
+             {cpp: expr_tail.subtract}
+         | %empty
+             {cpp: expr_tail.empty}
+         ;
+Term : Unary TermTail
+         {cpp: term}
+     ;
+TermTail : Star Unary TermTail
+             {cpp: term_tail.multiply}
+         | Slash Unary TermTail
+             {cpp: term_tail.divide}
+         | %empty
+             {cpp: term_tail.empty}
+         ;
+Unary : Minus Unary
+          {cpp: unary.negate}
+      | Primary
+          {cpp: pass}
+      ;
+Primary : Number
+            {cpp: number}
+        | Ident
+            {cpp: variable}
+        | Func LParen Expr RParen
+            {cpp: call}
+        | LParen Expr RParen
+            {cpp: group}
+        ;

@@ -137,13 +137,16 @@ The C# DRAW example writes `dist/sample-csharp.png` and a render report. It is
 the C# mirror of the Go DRAW PNG workflow, with handwritten C# AST and PNG code
 outside `Generated/`.
 
-## C++ Example
+## C++ Examples
 
-The first C++ example lives under:
+The C++ examples live under:
 
 - [examples/cpp/calc/calc.lf](../examples/cpp/calc/calc.lf)
+- [examples/cpp/datakeeper/datakeeper.lf](../examples/cpp/datakeeper/datakeeper.lf)
+- [examples/cpp/draw/draw.lf](../examples/cpp/draw/draw.lf)
+- [examples/cpp/vehicle-report/vehicle.lf](../examples/cpp/vehicle-report/vehicle.lf)
 
-It uses `%target cpp`, a C++ namespace package, and `{cpp: ...}` action labels:
+They use `%target cpp`, C++ namespace packages, and `{cpp: ...}` action labels:
 
 ```text
 Expr : Expr Plus Term {cpp: add}
@@ -153,19 +156,25 @@ Run it:
 
 ```sh
 make -C examples/cpp/calc run
+make -C examples/cpp/datakeeper run
+make -C examples/cpp/draw run
+make -C examples/cpp/vehicle-report run
 ```
 
 Test it:
 
 ```sh
 make -C examples/cpp/calc test
+make -C examples/cpp/datakeeper test
+make -C examples/cpp/draw test
+make -C examples/cpp/vehicle-report test
 ```
 
-The handwritten [examples/cpp/calc/main.cpp](../examples/cpp/calc/main.cpp)
-uses generated `SemanticAction` enum values and `ReducerMap` instead of a long
-reduction `switch`. That mirrors the preferred C++ backend style from
-ADR-0014: generated tables stay static and deterministic, while handwritten
-semantics are ordinary C++ functions and lambdas keyed by action IDs.
+The handwritten `main.cpp` files use generated `SemanticAction` enum values and
+`ReducerMap` instead of embedding semantics in generated parser code. That
+mirrors the preferred C++ backend style from ADR-0014: generated tables stay
+static and deterministic, while handwritten semantics are ordinary C++ functions
+and lambdas keyed by action IDs.
 
 ## C Mirror Examples
 

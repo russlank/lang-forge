@@ -1,0 +1,91 @@
+%target cpp
+%package LangForge::Examples::VehicleReport::Generated
+%semantic cpp mode reducer
+%start Program
+%token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
+
+%% lexer
+DIGIT = [0-9];
+LETTER = [A-Za-z];
+IDENT = [A-Za-z_] ( [A-Za-z0-9_] | "-" )*;
+NUMBER = DIGIT+;
+LICENSE_STRING = \" DIGIT+ "-" ( [A-Za-z0-9_] | "-" )+ \";
+DATE_STRING = \" [0-3] DIGIT "-" [0-1] DIGIT "-" DIGIT DIGIT DIGIT DIGIT \";
+STRING = \" ( [1-33] | [35-91] | [93-127] )* \";
+LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
+
+"car"          => token(Car);
+"model"        => token(Model);
+"license"      => token(License);
+"distance"     => token(Distance);
+"features"     => token(Features);
+"repairs"      => token(Repairs);
+"reparations"  => token(Repairs);
+"date"         => token(Date);
+"description"  => token(Description);
+"="            => token(Assign);
+","            => token(Comma);
+"{"            => token(LBrace);
+"}"            => token(RBrace);
+"("            => token(LParen);
+")"            => token(RParen);
+DATE_STRING    => token(DateString);
+LICENSE_STRING => token(LicenseString);
+STRING         => token(String);
+NUMBER         => token(Number);
+IDENT          => token(Ident);
+LINE_COMMENT   => skip;
+[1-32]+        => skip;
+
+%% parser
+Program : Car Assign LBrace VehicleInfo RBrace
+            {cpp: vehicle}
+        ;
+
+VehicleInfo : ModelField Comma LicenseField Comma DistanceField Comma FeaturesField Comma RepairsField
+                {cpp: info}
+            ;
+
+ModelField : Model Assign String
+               {cpp: field_model}
+           ;
+LicenseField : License Assign LicenseString
+                 {cpp: field_license}
+             ;
+DistanceField : Distance Assign Number
+                  {cpp: field_distance}
+              ;
+
+FeaturesField : Features Assign LBrace FeatureItems RBrace
+                  {cpp: field_features}
+              ;
+FeatureItems : Feature FeatureTail
+                 {cpp: feature_items}
+             | %empty
+                 {cpp: feature_empty}
+             ;
+FeatureTail : Comma Feature FeatureTail
+                {cpp: feature_tail_more}
+            | %empty
+                {cpp: feature_tail_empty}
+            ;
+Feature : Ident Assign String
+            {cpp: feature}
+        ;
+
+RepairsField : Repairs Assign LBrace RepairItems RBrace
+                 {cpp: field_repairs}
+             ;
+RepairItems : Repair RepairTail
+                {cpp: repair_items}
+            | %empty
+                {cpp: repair_empty}
+            ;
+RepairTail : Comma Repair RepairTail
+               {cpp: repair_tail_more}
+           | %empty
+               {cpp: repair_tail_empty}
+           ;
+Repair : LParen Date Assign DateString Comma Description Assign String RParen
+           {cpp: repair}
+       ;

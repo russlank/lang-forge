@@ -4,5 +4,17 @@
   "editor.formatOnSave": true,
   "files.trimTrailingWhitespace": true,
   "files.insertFinalNewline": true,
-  "makefile.configureOnOpen": false
+  "makefile.configureOnOpen": false,
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.compilerPath": "/usr/bin/g++",
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/examples/cpp/calc",
+    "${workspaceFolder}/examples/cpp/calc/generated",
+    "${workspaceFolder}/examples/cpp/datakeeper",
+    "${workspaceFolder}/examples/cpp/datakeeper/generated",
+    "${workspaceFolder}/examples/cpp/draw",
+    "${workspaceFolder}/examples/cpp/draw/generated",
+    "${workspaceFolder}/examples/cpp/vehicle-report",
+    "${workspaceFolder}/examples/cpp/vehicle-report/generated"
+  ]
 }

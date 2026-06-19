@@ -93,15 +93,21 @@ Run with GCC:
 
 ```sh
 make -C examples/cpp/calc test CXX=g++
+make -C examples/cpp/datakeeper test CXX=g++
+make -C examples/cpp/draw test CXX=g++
+make -C examples/cpp/vehicle-report test CXX=g++
 ```
 
 Run with Clang:
 
 ```sh
 make -C examples/cpp/calc test CXX=clang++
+make -C examples/cpp/datakeeper test CXX=clang++
+make -C examples/cpp/draw test CXX=clang++
+make -C examples/cpp/vehicle-report test CXX=clang++
 ```
 
-The C++ example Makefile still validates and generates when no C++ compiler is
+The C++ example Makefiles still validate and generate when no C++ compiler is
 available. Build and run steps print a skip message if `CXX` cannot be found.
 
 ## Docker

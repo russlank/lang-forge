@@ -252,6 +252,12 @@ local stacks so they are reentrant. Semantic labels such as `{cpp: add}` become
 `SemanticAction::Add` values and can be connected to handwritten code with the
 generated `ReducerMap`.
 
+The C++ examples are Makefile-based rather than CMake-based. The repository
+includes shared VS Code settings that tell the Microsoft C/C++ extension to use
+C++17 and to index `examples/cpp/calc/generated`. Without those settings,
+IntelliSense may parse `main.cpp` with an older C++ dialect and incorrectly
+underline valid C++17 names such as `std::string_view` or `std::any_cast`.
+
 ## Run Example Projects
 
 The example projects regenerate their target-specific scanner/parser code
@@ -271,11 +277,14 @@ make -C examples/c/datakeeper run
 make -C examples/c/draw run
 make -C examples/c/vehicle-report run
 make -C examples/cpp/calc run
+make -C examples/cpp/datakeeper run
+make -C examples/cpp/draw run
+make -C examples/cpp/vehicle-report run
 ```
 
 The examples write runnable binaries and report logs under their local `dist`
 directories. Generated scanner/parser output lives under local `generated`
-directories for Go and C, and `Generated` directories for C#.
+directories for Go, C, and C++, and `Generated` directories for C#.
 Both paths are ignored by Git.
 
 The C Makefiles validate and generate even when no C compiler is installed.
@@ -286,7 +295,7 @@ found. To select a compiler explicitly:
 make -C examples/c/calc CC=clang test
 ```
 
-The C++ Makefile follows the same pattern. To select a compiler explicitly:
+The C++ Makefiles follow the same pattern. To select a compiler explicitly:
 
 ```sh
 make -C examples/cpp/calc CXX=clang++ test

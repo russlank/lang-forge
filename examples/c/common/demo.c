@@ -45,9 +45,11 @@ int demo_read_file(const char *path, demo_buffer *out, char *error, size_t error
     }
     read_count = fread(data, 1, (size_t)length, file);
     if (read_count != (size_t)length) {
+        int read_error = ferror(file);
+        int saved_errno = errno;
         free(data);
         fclose(file);
-        return demo_set_error(error, error_size, "read %s: %s", path, ferror(file) ? strerror(errno) : "short read");
+        return demo_set_error(error, error_size, "read %s: %s", path, read_error ? strerror(saved_errno) : "short read");
     }
     fclose(file);
     data[length] = '\0';

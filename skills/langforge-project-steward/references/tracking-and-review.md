@@ -15,6 +15,8 @@ Prioritize:
   parsing, inline target-specific actions, and handwritten semantic layers.
 - Test coverage for malformed input, edge grammar constructs, and clean
   artifact policy.
+- Cross-target example parity for Go, C#, C, and C++, especially when a scenario
+  exists in one family but not another.
 
 ## Private Project Memory
 
@@ -50,7 +52,16 @@ For example workflows, also test standalone mode:
 
 ```sh
 make build
-make -C examples/<name> LANG_FORGE=../../dist/lang-forge run
+make -C examples/<target>/<name> LANG_FORGE=../../../dist/lang-forge run
+```
+
+For native example changes, prefer strict warning checks when compilers are
+available:
+
+```sh
+make -C examples/c/<name> test CC=gcc CFLAGS='-std=c11 -Wall -Wextra -Werror -O2'
+make -C examples/cpp/<name> test CXX=g++ CXXFLAGS='-std=c++17 -Wall -Wextra -Werror -O2'
+make -C examples/cpp/<name> test CXX=clang++ CXXFLAGS='-std=c++17 -Wall -Wextra -Werror -O2'
 ```
 
 ## Final Handoff Notes

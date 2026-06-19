@@ -10,8 +10,9 @@ examples/<name>/
   README.md
   <name>.lf
   sample/input files
-  cmd/<name>-demo/
+  cmd/<name>-demo/   # Go examples
   generated/   # generated, ignored
+  Generated/   # generated, ignored for C#
   dist/        # binaries, logs, rendered output, ignored
 ```
 
@@ -29,37 +30,42 @@ Command packages should also have a non-generated placeholder `main` guarded by
 Example Makefiles should expose:
 
 - `validate`: `$(LANG_FORGE) validate --spec <name>.lf`
-- `generate`: validate and write Go output under `generated`
-- `build`: generate and build the demo with `-tags langforge_generated`
+- `generate`: validate and write target output under `generated` or `Generated`
+- `build`: generate and build the demo
 - `run`: build and run sample input, writing report/output under `dist`
-- `test`: generate and run `go test -tags langforge_generated -count=1 ./...`
+- `test`: generate and run target-appropriate assertions
 - `clean`: remove `generated` and `dist`
 
 Default variables:
 
 ```make
 GO ?= /usr/local/go/bin/go
-LANG_FORGE ?= $(GO) run ../../cmd/lang-forge
+LANG_FORGE ?= $(GO) run ../../../cmd/lang-forge
 GENERATED_DIR := generated
 DIST_DIR := dist
-TAGS := langforge_generated
 ```
 
 ## Existing Examples
 
-- `examples/calc`: scanner/parser and reducer smoke demo for arithmetic
-  expressions.
-- `examples/datakeeper`: script compiler demo lowering to stack-machine code
-  and mock execution logs.
-- `examples/draw`: reducer-backed DRAW-language renderer demo producing a PNG
-  and log.
+- `examples/go/{calc,datakeeper,draw,vehicle-report}`: full Go generated
+  examples. Go builds use the `langforge_generated` tag.
+- `examples/csharp/{calc,datakeeper,draw,vehicle-report}`: generated C# output
+  under `Generated/` and handwritten C# reducers.
+- `examples/c/{calc,datakeeper,draw,vehicle-report}`: generated C output with
+  native compiler skip behavior through `CC`.
+- `examples/cpp/{calc,datakeeper,draw,vehicle-report}`: generated C++17 output
+  with native compiler skip behavior through `CXX`. The C++ DRAW example writes
+  `dist/sample-cpp.png`.
+- `examples/parser-algorithms`: source-only parser-table fixtures.
 
-Do not assume the root `Makefile` lists every example. Discover examples with
-`find examples -maxdepth 2 -name Makefile -print` and inspect local targets.
+The root `Makefile` should list runnable example families in `examples-run`,
+`examples-test`, and `examples-clean`. When adding an example, update both the
+local files and the root targets.
 
 ## Artifact Policy
 
-- Keep `examples/**/generated/` and `examples/**/dist/` ignored.
+- Keep `examples/**/generated/`, `examples/**/Generated/`, and
+  `examples/**/dist/` ignored.
 - Do not commit regenerated recognizers unless the task explicitly calls for a
   golden fixture or bootstrapping artifact.
 - Before final status, prefer `make -C examples/<name> clean` and rerun

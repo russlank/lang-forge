@@ -8,6 +8,7 @@ validation debugging.
 ```text
 %target go
 %package packagename
+%semantic go mode reducer
 %start StartSymbol
 %token TokenA TokenB TokenC
 
@@ -35,9 +36,8 @@ Rule : TokenA TokenB
   are not needed.
 - Use `channel(Name)` only when hidden-channel tokens must be preserved for a
   caller; generated parsers expect visible grammar tokens.
-- Current generated Go scanners use checked UTF-8 and Unicode scalar ranges.
-  Keep C#/C and additional encoding assumptions explicit until those backends
-  are implemented.
+- Current generated Go, C#, C, and C++ scanners use checked UTF-8 and Unicode
+  scalar ranges. Keep non-UTF-8 encoding assumptions explicit.
 - Avoid nullable expressions: `""`, `X*`, and `X?` as whole rules are invalid.
 
 ## Parser Patterns
@@ -47,10 +47,13 @@ Rule : TokenA TokenB
 - Use `%empty` for intentional empty productions.
 - Keep terminals declared with `%token`; every nonterminal should have a rule.
 - Keep token and nonterminal names disjoint.
-- Use `%type slr`, `%type lalr`, or `%type canonical` only when selecting a
-  parser algorithm intentionally. LALR is the default.
+- Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
+  selecting a parser algorithm intentionally. LALR is the default.
 - Treat conflicts as design work, not warnings to ignore. Use `inspect` to
   review states and lookaheads.
+- Use target-tagged reducer labels such as `{go: add}`, `{csharp: add}`,
+  `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
+  generated `SemanticAction` values with `ReducerMap`.
 
 ## Legacy Split Inputs
 

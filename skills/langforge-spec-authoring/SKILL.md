@@ -18,8 +18,8 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
    syntax, migrating legacy `.l`/`.y`, or debugging validation errors.
 3. Prefer combined `.lf` specs for new examples and tools.
 4. Remember the current scanner defaults to checked UTF-8 for in-process and
-   generated Go output. Additional source encodings and C#/C runtime contracts
-   are still future work.
+   generated Go, C#, C, and C++ output. Additional non-UTF-8 source encoding
+   adapters are future work.
 5. Encode precedence through grammar structure because precedence declarations
    are not implemented yet. Use target-tagged parser actions as reducer hooks
    by default; add `%semantic <target> import` for handwritten semantic
@@ -38,9 +38,10 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
 /usr/local/go/bin/go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format json
 ```
 
-8. If generating Go output, write it to the example/tool-local generated
-   directory and keep generated output out of committed source unless the task
-   explicitly asks for a golden fixture.
+8. If generating target output, write it to the example/tool-local generated
+   directory (`generated/` for Go, C, and C++; `Generated/` for C#) and keep
+   generated output out of committed source unless the task explicitly asks for
+   a golden fixture.
 
 ## Rules Of Thumb
 
@@ -48,8 +49,8 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
   first, then rule priority.
 - Reject or rewrite rules that can match empty input.
 - Keep token names and nonterminal names disjoint.
-- Use `%type lalr` only when being explicit; LALR(1) is already the default.
-- Use `%type canonical` for conflict diagnosis when LALR merging is suspected.
+- Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
+  selecting a parser algorithm intentionally. LALR is the default.
 - Use split `.l`/`.y` inputs only for source-only fixtures or import
   experiments; UCDT is inspiration, not a compatibility target.
 

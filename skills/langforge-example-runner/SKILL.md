@@ -1,15 +1,16 @@
 ---
 name: langforge-example-runner
-description: Generate, build, test, clean, or troubleshoot LangForge examples and generated parser/scanner output. Use when working under `examples/`, adding runnable demos, converting specs into full projects, running `make -C examples/...`, using `LANG_FORGE=../../dist/lang-forge`, managing `generated/` or `dist/` artifacts, or proving a `.lf` grammar with a runnable sample.
+description: Generate, build, test, clean, or troubleshoot LangForge examples and generated parser/scanner output. Use when working under `examples/`, adding runnable demos, converting specs into full projects, running `make -C examples/...`, using `LANG_FORGE=../../../dist/lang-forge`, managing `generated/`, `Generated/`, or `dist/` artifacts, or proving a `.lf` grammar with a runnable sample.
 ---
 
 # LangForge Example Runner
 
 ## Overview
 
-Run LangForge examples as reproducible source projects: spec in, generated Go
-scanner/parser out, reducer or inline semantics wired, demo binary executed
-against sample input, and generated output kept out of source control.
+Run LangForge examples as reproducible source projects: spec in, generated
+scanner/parser output for the selected target, handwritten semantics wired,
+demo binary executed against sample input, and generated output kept out of
+source control. Current runnable families cover Go, C#, C, and C++.
 
 ## Workflow
 
@@ -27,7 +28,9 @@ make -C examples/<name> test
 make -C examples/<name> clean
 ```
 
-4. Use source-run mode while developing:
+4. Use source-run mode while developing. Example paths include language and
+   scenario, such as `examples/go/calc`, `examples/c/draw`, or
+   `examples/cpp/vehicle-report`:
 
 ```sh
 make -C examples/<name> run
@@ -38,14 +41,18 @@ make -C examples/<name> run
 
 ```sh
 make build
-make -C examples/<name> LANG_FORGE=../../dist/lang-forge run
+make -C examples/<target>/<name> LANG_FORGE=../../../dist/lang-forge run
 ```
 
-6. Keep generated imports behind `//go:build langforge_generated` when a clean
-   checkout does not contain generated code.
-7. Add a non-generated placeholder `main` for command packages so broad
+6. For Go examples, keep generated imports behind
+   `//go:build langforge_generated` when a clean checkout does not contain
+   generated code.
+7. For Go command packages, add a non-generated placeholder `main` so broad
    `go build ./...` stays healthy.
-8. Clean generated and binary output before final status unless the task
+8. Native C and C++ Makefiles validate/generate even when no compiler is
+   installed; compile/run steps should print a skip message through `CC` or
+   `CXX`.
+9. Clean generated and binary output before final status unless the task
    explicitly asks to inspect those files.
 
 ## Expected Evidence
@@ -56,7 +63,7 @@ For an example change, run the strongest applicable set:
 make -C examples/<name> run
 make -C examples/<name> test
 make build
-make -C examples/<name> LANG_FORGE=../../dist/lang-forge run
+make -C examples/<target>/<name> LANG_FORGE=../../../dist/lang-forge run
 make -C examples/<name> clean
 /usr/local/go/bin/go test -count=1 ./...
 /usr/local/go/bin/go build ./...

@@ -27,8 +27,8 @@ LDFLAGS := -s -w \
 
 .PHONY: all ci fmt fmt-check vet test test-race vulncheck tidy build install \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
-	examples-run examples-test examples-clean docker-build docker-smoke docker-push \
-	image-tags clean
+	examples-generate examples-run examples-test examples-cleanliness \
+	examples-parity examples-clean docker-build docker-smoke docker-push image-tags clean
 
 all: fmt vet test build
 
@@ -92,6 +92,24 @@ windows-amd64:
 dist: linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64
 	cd $(DIST_DIR) && sha256sum $(APP_NAME)-linux-* $(APP_NAME)-darwin-* $(APP_NAME)-windows-* > SHA256SUMS
 
+examples-generate:
+	$(MAKE) -C examples/go/calc GO=$(GO) generate
+	$(MAKE) -C examples/go/datakeeper GO=$(GO) generate
+	$(MAKE) -C examples/go/draw GO=$(GO) generate
+	$(MAKE) -C examples/go/vehicle-report GO=$(GO) generate
+	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/csharp/draw GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/csharp/vehicle-report GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/c/calc GO=$(GO) generate
+	$(MAKE) -C examples/c/datakeeper GO=$(GO) generate
+	$(MAKE) -C examples/c/draw GO=$(GO) generate
+	$(MAKE) -C examples/c/vehicle-report GO=$(GO) generate
+	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) generate
+
 examples-run:
 	$(MAKE) -C examples/go/calc GO=$(GO) run
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) run
@@ -111,6 +129,8 @@ examples-run:
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) run
 
 examples-test:
+	$(MAKE) examples-cleanliness
+	$(MAKE) examples-parity
 	$(MAKE) -C examples/parser-algorithms GO=$(GO) test
 	$(MAKE) -C examples/go/calc GO=$(GO) test
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) test
@@ -128,6 +148,12 @@ examples-test:
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) test
+
+examples-cleanliness:
+	sh scripts/check-example-cleanliness.sh
+
+examples-parity:
+	$(GO) run ./cmd/check-example-spec-parity
 
 examples-clean:
 	$(MAKE) -C examples/go/calc clean

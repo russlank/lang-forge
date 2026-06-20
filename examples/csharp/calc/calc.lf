@@ -6,7 +6,7 @@
 
 %% lexer
 DIGIT = [0-9];
-NUMBER = DIGIT+;
+NUMBER = DIGIT+ ("." DIGIT+)?;
 
 NUMBER => token(Number);
 "+"    => token(Plus);

@@ -4,7 +4,8 @@ This example is a small calculator grammar packaged as a runnable LangForge
 project.
 
 The source of truth is [calc.lf](calc.lf). The sample input is
-[input.calc](input.calc).
+[input.calc](input.calc). The grammar is kept in parity with the C#, C, and
+C++ calculator specs, including decimal literals such as `4.5`.
 
 From this directory:
 

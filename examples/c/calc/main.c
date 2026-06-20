@@ -10,6 +10,8 @@ typedef struct calc_demo
     demo_arena arena;
 } calc_demo;
 
+typedef double (*calc_binary_op)(double left, double right);
+
 static calc_value calc_number(calc_demo *demo, calc_error *error, double value)
 {
     double *slot = (double *)demo_arena_alloc(&demo->arena, sizeof(double));
@@ -32,6 +34,62 @@ static const calc_lexeme *calc_value_as_lexeme(calc_value value)
     return (const calc_lexeme *)value;
 }
 
+static int calc_check_arg(const calc_reduction *ctx, size_t index, const char *name, calc_error *error)
+{
+    if (index >= ctx->rhs_count || ctx->values[index] == NULL)
+    {
+        snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
+        return 0;
+    }
+    return 1;
+}
+
+static int calc_number_arg(const calc_reduction *ctx, size_t index, const char *name, double *out, calc_error *error)
+{
+    if (!calc_check_arg(ctx, index, name, error))
+    {
+        return 0;
+    }
+    *out = calc_value_as_number(ctx->values[index]);
+    return 1;
+}
+
+static const calc_lexeme *calc_lexeme_arg(const calc_reduction *ctx, size_t index, const char *name, calc_error *error)
+{
+    if (!calc_check_arg(ctx, index, name, error))
+    {
+        return NULL;
+    }
+    return calc_value_as_lexeme(ctx->values[index]);
+}
+
+static double calc_add_numbers(double left, double right)
+{
+    return left + right;
+}
+
+static double calc_subtract_numbers(double left, double right)
+{
+    return left - right;
+}
+
+static double calc_multiply_numbers(double left, double right)
+{
+    return left * right;
+}
+
+static calc_value calc_reduce_binary(const calc_reduction *ctx, calc_demo *demo, calc_error *error, calc_binary_op op)
+{
+    double left = 0.0;
+    double right = 0.0;
+    if (!calc_number_arg(ctx, 0, "left operand", &left, error) ||
+        !calc_number_arg(ctx, 2, "right operand", &right, error))
+    {
+        return NULL;
+    }
+    return calc_number(demo, error, op(left, right));
+}
+
 static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error *error)
 {
     calc_demo *demo = (calc_demo *)user;
@@ -44,7 +102,11 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
         return ctx->values[1];
     case CALC_ACTION_NUMBER:
     {
-        const calc_lexeme *lexeme = calc_value_as_lexeme(ctx->values[0]);
+        const calc_lexeme *lexeme = calc_lexeme_arg(ctx, 0, "number lexeme", error);
+        if (lexeme == NULL)
+        {
+            return NULL;
+        }
         char *text = demo_arena_copy(&demo->arena, lexeme->text, lexeme->length);
         if (text == NULL)
         {
@@ -54,22 +116,35 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
         return calc_number(demo, error, strtod(text, NULL));
     }
     case CALC_ACTION_NEGATE:
-        return calc_number(demo, error, -calc_value_as_number(ctx->values[1]));
+    {
+        double operand = 0.0;
+        if (!calc_number_arg(ctx, 1, "operand", &operand, error))
+        {
+            return NULL;
+        }
+        return calc_number(demo, error, -operand);
+    }
     case CALC_ACTION_ADD:
-        return calc_number(demo, error, calc_value_as_number(ctx->values[0]) + calc_value_as_number(ctx->values[2]));
+        return calc_reduce_binary(ctx, demo, error, calc_add_numbers);
     case CALC_ACTION_SUBTRACT:
-        return calc_number(demo, error, calc_value_as_number(ctx->values[0]) - calc_value_as_number(ctx->values[2]));
+        return calc_reduce_binary(ctx, demo, error, calc_subtract_numbers);
     case CALC_ACTION_MULTIPLY:
-        return calc_number(demo, error, calc_value_as_number(ctx->values[0]) * calc_value_as_number(ctx->values[2]));
+        return calc_reduce_binary(ctx, demo, error, calc_multiply_numbers);
     case CALC_ACTION_DIVIDE:
     {
-        double right = calc_value_as_number(ctx->values[2]);
+        double left = 0.0;
+        double right = 0.0;
+        if (!calc_number_arg(ctx, 0, "left operand", &left, error) ||
+            !calc_number_arg(ctx, 2, "right operand", &right, error))
+        {
+            return NULL;
+        }
         if (right == 0.0)
         {
             snprintf(error->message, sizeof(error->message), "division by zero");
             return NULL;
         }
-        return calc_number(demo, error, calc_value_as_number(ctx->values[0]) / right);
+        return calc_number(demo, error, left / right);
     }
     case CALC_ACTION_NONE:
     default:
@@ -116,10 +191,20 @@ static int calc_run_assertions(char *message, size_t message_size)
     calc_lexeme *tokens = NULL;
     size_t count = 0;
     error.message[0] = '\0';
-    if (!calc_eval(&demo, "1+2*(3-4)", &value, message, message_size) || !calc_close_enough(value, -1.0))
+    if (!calc_eval(&demo, "1 + 2 * (3 - 4.5)", &value, message, message_size) || !calc_close_enough(value, -2.0))
     {
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "calculator assertion failed, got %.6f", value);
+    }
+    if (!calc_eval(&demo, "7.5/2.5", &value, message, message_size) || !calc_close_enough(value, 3.0))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "decimal division assertion failed, got %.6f", value);
+    }
+    if (calc_eval(&demo, "1/0", &value, message, message_size))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "expected division-by-zero failure");
     }
     demo_arena_free(&demo.arena);
     if (calc_tokenize("1@", &tokens, &count, &error))

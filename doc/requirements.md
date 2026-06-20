@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-requirements-v1`
 Status: `active`
-Last updated: `2026-06-19`
+Last updated: `2026-06-20`
 Owner: `Project maintainers`
 Scope: `Toolchain requirements for building LangForge and running examples`
 
@@ -16,6 +16,7 @@ Required for the main CLI:
 
 - Go `1.26.4` or a compatible newer Go toolchain.
 - GNU Make or a compatible `make`.
+- Git for repository-aware checks such as `make examples-cleanliness`.
 - A POSIX-like shell for the provided Makefile and script targets.
 
 The Makefile defaults to `/usr/local/go/bin/go` because that is the toolchain
@@ -36,6 +37,8 @@ example tests. It therefore needs:
 - a C compiler for Go's race detector and C examples;
 - the .NET `10.0` SDK for C# examples;
 - a C++17 compiler for C++ examples.
+- Git for source-cleanliness checks that verify generated/build artifacts are
+  not tracked.
 
 Use these checks to confirm the expected tools are available:
 
@@ -44,6 +47,7 @@ go version
 dotnet --version
 gcc --version
 g++ --version
+git --version
 make --version
 ```
 
@@ -142,7 +146,7 @@ The Woodpecker `test` step runs `make examples-test`, so it must include all
 example toolchains in addition to Go. The pipeline installs:
 
 ```sh
-apk add --no-cache gcc g++ musl-dev make dotnet10-sdk
+apk add --no-cache gcc g++ musl-dev make git dotnet10-sdk
 ```
 
 If the `dotnet10-sdk` package is missing from the runner's Alpine repositories,

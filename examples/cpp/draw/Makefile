@@ -8,6 +8,7 @@ BIN := $(DIST_DIR)/draw-cpp-demo
 INPUT ?= sample.draw
 OUTPUT ?= $(DIST_DIR)/sample-cpp.png
 LOG ?= $(DIST_DIR)/draw-cpp-demo.log
+SRCS := main.cpp io.cpp parser_adapter.cpp renderer.cpp png_writer.cpp report.cpp $(GENERATED_DIR)/scanner.cpp $(GENERATED_DIR)/parser.cpp
 
 .PHONY: validate generate build run test clean
 
@@ -22,7 +23,7 @@ build: generate
 		echo "skip: C++ compiler '$(CXX)' not found"; \
 	else \
 		mkdir -p $(DIST_DIR); \
-		$(CXX) $(CXXFLAGS) -I$(GENERATED_DIR) main.cpp $(GENERATED_DIR)/scanner.cpp $(GENERATED_DIR)/parser.cpp -o $(BIN); \
+		$(CXX) $(CXXFLAGS) -I. -I$(GENERATED_DIR) $(SRCS) -o $(BIN); \
 	fi
 
 run: build

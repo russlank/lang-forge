@@ -1,8 +1,21 @@
 # C# DRAW Example
 
 This example generates a C# scanner/parser from [draw.lf](draw.lf). The
-handwritten reducer and renderer in [Program.cs](Program.cs) build a DRAW AST,
-render the script to `dist/sample-csharp.png`, and write a text report.
+handwritten code builds a DRAW AST, renders the script to
+`dist/sample-csharp.png`, and writes a text report.
+
+The example is intentionally split by responsibility so it is easier to copy
+into real projects:
+
+| File | Responsibility |
+|---|---|
+| `Program.cs` | CLI options, file IO, assertion orchestration |
+| `ParserAdapter.cs` | generated scanner/parser calls and reducer dispatch |
+| `Ast.cs` | typed DRAW AST and color model |
+| `DrawRenderer.cs` | AST interpretation and raster drawing |
+| `ImageBuffer.cs` | in-memory RGB pixel storage |
+| `PngWriter.cs` | dependency-free PNG output |
+| `ReportWriter.cs` | deterministic console/log report |
 
 Run:
 

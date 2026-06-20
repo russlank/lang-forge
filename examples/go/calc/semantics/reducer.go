@@ -25,7 +25,7 @@ var reducers = calc.ReducerMap{
 	calc.SemanticActionAdd:      reduceBinary(func(left, right float64) float64 { return left + right }),
 	calc.SemanticActionSubtract: reduceBinary(func(left, right float64) float64 { return left - right }),
 	calc.SemanticActionMultiply: reduceBinary(func(left, right float64) float64 { return left * right }),
-	calc.SemanticActionDivide:   reduceBinary(func(left, right float64) float64 { return left / right }),
+	calc.SemanticActionDivide:   reduceDivide,
 }
 
 // Reduce evaluates one calculator grammar reduction.
@@ -73,6 +73,21 @@ func reduceBinary(op func(left float64, right float64) float64) calc.ReductionHa
 		}
 		return op(left, right), nil
 	}
+}
+
+func reduceDivide(ctx calc.Reduction) (calc.Value, error) {
+	left, err := NumberArg(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	right, err := NumberArg(ctx, 2)
+	if err != nil {
+		return nil, err
+	}
+	if right == 0 {
+		return nil, fmt.Errorf("rule %d action %q: division by zero", ctx.Rule, ctx.Action)
+	}
+	return left / right, nil
 }
 
 // NumberArg returns a float64 reduction argument.

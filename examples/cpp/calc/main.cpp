@@ -36,19 +36,27 @@ static void write_text_file(const std::string& path, std::string_view text) {
 }
 
 /// Returns the numeric semantic value at the requested reduction argument.
-static double number_arg(const lfcalc::Reduction& ctx, std::size_t index) {
+static double number_arg(const lfcalc::Reduction& ctx, std::size_t index, std::string_view name) {
     if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing numeric argument");
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing numeric argument " + std::string(name));
     }
-    return std::any_cast<double>(ctx.values.at(index));
+    try {
+        return std::any_cast<double>(ctx.values.at(index));
+    } catch (const std::bad_any_cast&) {
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " argument " + std::to_string(index + 1) + " is not numeric");
+    }
 }
 
 /// Returns the generated scanner lexeme at the requested reduction argument.
-static lfcalc::Lexeme lexeme_arg(const lfcalc::Reduction& ctx, std::size_t index) {
+static lfcalc::Lexeme lexeme_arg(const lfcalc::Reduction& ctx, std::size_t index, std::string_view name) {
     if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument");
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
-    return std::any_cast<lfcalc::Lexeme>(ctx.values.at(index));
+    try {
+        return std::any_cast<lfcalc::Lexeme>(ctx.values.at(index));
+    } catch (const std::bad_any_cast&) {
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " argument " + std::to_string(index + 1) + " is not a lexeme");
+    }
 }
 
 /// Builds the calculator's handwritten semantics.
@@ -63,27 +71,27 @@ static lfcalc::ReducerMap make_reducers() {
         {lfcalc::SemanticAction::Pass, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
         {lfcalc::SemanticAction::Group, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(1); }},
         {lfcalc::SemanticAction::Number, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            const auto lexeme = lexeme_arg(ctx, 0);
+            const auto lexeme = lexeme_arg(ctx, 0, "number");
             return std::stod(std::string(lexeme.text));
         }},
         {lfcalc::SemanticAction::Negate, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            return -number_arg(ctx, 1);
+            return -number_arg(ctx, 1, "operand");
         }},
         {lfcalc::SemanticAction::Add, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            return number_arg(ctx, 0) + number_arg(ctx, 2);
+            return number_arg(ctx, 0, "left operand") + number_arg(ctx, 2, "right operand");
         }},
         {lfcalc::SemanticAction::Subtract, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            return number_arg(ctx, 0) - number_arg(ctx, 2);
+            return number_arg(ctx, 0, "left operand") - number_arg(ctx, 2, "right operand");
         }},
         {lfcalc::SemanticAction::Multiply, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            return number_arg(ctx, 0) * number_arg(ctx, 2);
+            return number_arg(ctx, 0, "left operand") * number_arg(ctx, 2, "right operand");
         }},
         {lfcalc::SemanticAction::Divide, [](const lfcalc::Reduction& ctx) -> lfcalc::Value {
-            const double right = number_arg(ctx, 2);
+            const double right = number_arg(ctx, 2, "right operand");
             if (right == 0.0) {
                 throw std::runtime_error("division by zero");
             }
-            return number_arg(ctx, 0) / right;
+            return number_arg(ctx, 0, "left operand") / right;
         }},
     };
 }
@@ -104,7 +112,8 @@ static void require(bool condition, const std::string& message) {
 
 /// Covers behavior that is easy to regress while changing generated runtimes.
 static void run_assertions() {
-    require(std::fabs(evaluate("1+2*(3-4)") - -1.0) < 0.000001, "wrong expression result");
+    require(std::fabs(evaluate("1 + 2 * (3 - 4.5)") - -2.0) < 0.000001, "wrong expression result");
+    require(std::fabs(evaluate("7.5/2.5") - 3.0) < 0.000001, "wrong decimal division result");
 
     const auto visible = lfcalc::tokenize("1+2");
     lfcalc::parse(visible);
@@ -139,14 +148,14 @@ static void run_assertions() {
     std::vector<std::thread> workers;
     for (int i = 0; i < 8; ++i) {
         workers.emplace_back([&parser]() {
-            parser.parse(lfcalc::tokenize("1+2*(3-4)"));
+            parser.parse(lfcalc::tokenize("1 + 2 * (3 - 4.5)"));
         });
     }
     for (auto& worker : workers) {
         worker.join();
     }
 
-    lfcalc::Scanner shared("1+2*(3-4)");
+    lfcalc::Scanner shared("1 + 2 * (3 - 4.5)");
     std::atomic<int> count{0};
     workers.clear();
     for (int i = 0; i < 4; ++i) {
@@ -160,7 +169,7 @@ static void run_assertions() {
     for (auto& worker : workers) {
         worker.join();
     }
-    require(count == static_cast<int>(lfcalc::tokenize("1+2*(3-4)").size()), "shared scanner token count mismatch");
+    require(count == static_cast<int>(lfcalc::tokenize("1 + 2 * (3 - 4.5)").size()), "shared scanner token count mismatch");
 }
 
 /// Removes an option with one value from argv-like storage.

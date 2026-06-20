@@ -4,6 +4,15 @@ This example generates a C# scanner/parser from [calc.lf](calc.lf), then uses a
 handwritten reducer in [Program.cs](Program.cs) to evaluate arithmetic
 expressions.
 
+The grammar intentionally matches the Go, C, and C++ calculator specs: numbers
+may contain a fractional part, and the default sample evaluates
+`1 + 2 * (3 - 4.5)` to `-2`.
+
+Action labels such as `{csharp: add}` become generated `SemanticAction` enum
+values. They do not contain arithmetic by themselves; [Program.cs](Program.cs)
+maps those enum values to C# lambdas and uses typed helper functions to keep
+`object?` conversions in one easy-to-review place.
+
 Run:
 
 ```sh

@@ -35,3 +35,8 @@ example, `{cpp: add}` becomes `SemanticAction::Add`; `main.cpp` maps that enum
 value to the C++ lambda that adds two semantic values. This keeps generated code
 separate from handwritten application code while still giving the reducer a
 fast, strongly typed dispatch key.
+
+The calculator grammar intentionally stays in parity with the Go, C#, and C
+versions. The shared sample expression contains a decimal literal and evaluates
+to `-2`, so scanner, parser, reducer, and numeric conversion behavior are
+exercised together.

@@ -157,6 +157,7 @@ make docker-smoke
 - [Compiler pipeline](doc/compiler-pipeline.md)
 - [Glossary](doc/glossary.md)
 - [Architecture](doc/architecture.md)
+- [Tool improvement roadmap](doc/tool-improvement-roadmap.md)
 - [Build, pipeline, and Docker](doc/build-release.md)
 - [Scanner encoding architecture](doc/encoding.md)
 - [Usage](doc/usage.md)

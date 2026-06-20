@@ -20,6 +20,17 @@ LangForge examples are organized by supported target language.
 
 Generated folders, build outputs, and demo logs are ignored. Run each example's
 Makefile to regenerate the target-specific scanner/parser before building.
+The repository root also provides source-health checks:
+
+```sh
+make examples-cleanliness
+make examples-parity
+```
+
+`examples-cleanliness` fails if generated or build artifacts become tracked by
+Git. `examples-parity` currently compares the calculator grammars across Go,
+C#, C, and C++ after normalizing target/package/semantic directives and action
+tag prefixes.
 
 Requirements:
 

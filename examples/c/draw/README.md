@@ -5,6 +5,17 @@ builds a handwritten AST through reducer callbacks, executes variables,
 figures, `draw`, `repdraw`, math calls, style changes, and drawing primitives,
 then writes a PNG image.
 
+The handwritten C is split by responsibility:
+
+| File | Responsibility |
+|---|---|
+| `main.c` | CLI options, assertions, orchestration |
+| `ast.*` | typed DRAW AST/model and parse allocation context |
+| `parser_adapter.*` | generated scanner/parser calls and reducer callbacks |
+| `renderer.*` | AST interpretation and raster drawing |
+| `report.*` | deterministic console/log report |
+| `../common/demo.*` | shared file, arena, text, image, and PNG helpers |
+
 ```sh
 make -C examples/c/draw run
 make -C examples/c/draw test

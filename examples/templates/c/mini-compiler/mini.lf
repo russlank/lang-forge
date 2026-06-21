@@ -1,0 +1,27 @@
+%target c
+%package mini_compiler
+%semantic c mode reducer
+%start Program
+%token Print Number Plus Semi
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+"print" => token(Print);
+NUMBER  => token(Number);
+"+"     => token(Plus);
+";"     => token(Semi);
+[1-32]+ => skip;
+
+%% parser
+Program : Statements {c: program} ;
+Statements : Statement StatementsTail {c: statements} ;
+StatementsTail : Statement StatementsTail {c: statements_tail_more}
+               | /* empty */ {c: statements_tail_empty}
+               ;
+Statement : Print Expr Semi {c: print} ;
+Expr : Expr Plus Term {c: add}
+     | Term {c: pass}
+     ;
+Term : Number {c: number} ;

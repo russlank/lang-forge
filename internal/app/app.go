@@ -273,12 +273,43 @@ func printTextSummary(w io.Writer, r *BuildResult) {
 	}
 	fmt.Fprintf(w, "Conflicts: %d\n", len(r.ParseTable.Conflicts))
 	for _, conflict := range r.ParseTable.Conflicts {
-		fmt.Fprintf(w, "  state %d on %s: %s\n", conflict.State, conflict.Symbol, conflict.Message)
+		printConflict(w, conflict, "  ")
 	}
 }
 
 func printConflicts(w io.Writer, conflicts []parse.Conflict) {
 	for _, conflict := range conflicts {
-		fmt.Fprintf(w, "conflict: state %d on %s: %s\n", conflict.State, conflict.Symbol, conflict.Message)
+		printConflict(w, conflict, "conflict: ")
 	}
+}
+
+func printConflict(w io.Writer, conflict parse.Conflict, prefix string) {
+	fmt.Fprintf(w, "%sstate %d on %s: %s\n", prefix, conflict.State, conflict.Symbol, conflict.Message)
+	if conflict.Hint != "" {
+		fmt.Fprintf(w, "%s  hint: %s\n", prefix, conflict.Hint)
+	}
+	printConflictRule(w, prefix, "existing", conflict.ExistingRule)
+	printConflictRule(w, prefix, "incoming", conflict.IncomingRule)
+	if len(conflict.ItemDetails) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s  state items:\n", prefix)
+	for _, item := range conflict.ItemDetails {
+		fmt.Fprintf(w, "%s    %s", prefix, item.Display)
+		if item.Span.File != "" {
+			fmt.Fprintf(w, " [%s]", item.Span)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printConflictRule(w io.Writer, prefix, label string, rule *parse.ConflictRule) {
+	if rule == nil {
+		return
+	}
+	fmt.Fprintf(w, "%s  %s rule: %s", prefix, label, rule.Display)
+	if rule.Span.File != "" {
+		fmt.Fprintf(w, " [%s]", rule.Span)
+	}
+	fmt.Fprintln(w)
 }

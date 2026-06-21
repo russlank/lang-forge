@@ -36,6 +36,8 @@ steps:
       - g++ --version | head -n 1
       - git --version
       - make GO=go test-race
+      - make GO=go fuzz-smoke
+      - make GO=go golden-stability
       - make GO=go examples-test
     when:
       - event: [push, tag, pull_request]

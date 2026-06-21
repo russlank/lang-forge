@@ -19,10 +19,29 @@ static const vehicle_report_lexeme *vehicle_lexeme(vehicle_report_value value) {
 }
 
 static char *vehicle_copy_lexeme(vehicle_demo *demo, const vehicle_report_lexeme *lexeme) {
+    if (lexeme == NULL) {
+        return NULL;
+    }
     return demo_arena_copy(&demo->arena, lexeme->text, lexeme->length);
 }
 
+static vehicle_report_value vehicle_arg(const vehicle_report_reduction *ctx, size_t index, const char *name, vehicle_report_error *error) {
+    if (index >= ctx->rhs_count || ctx->values[index] == NULL) {
+        snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
+        return NULL;
+    }
+    return ctx->values[index];
+}
+
+static const vehicle_report_lexeme *vehicle_lexeme_arg(const vehicle_report_reduction *ctx, size_t index, const char *name, vehicle_report_error *error) {
+    vehicle_report_value value = vehicle_arg(ctx, index, name, error);
+    return value == NULL ? NULL : vehicle_lexeme(value);
+}
+
 static char *vehicle_unquote(vehicle_demo *demo, const vehicle_report_lexeme *lexeme) {
+    if (lexeme == NULL) {
+        return NULL;
+    }
     const char *text = lexeme->text;
     size_t length = lexeme->length;
     if (length >= 2 && text[0] == '"' && text[length - 1] == '"') {
@@ -42,19 +61,19 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
     vehicle_demo *demo = (vehicle_demo *)user;
     switch (ctx->action_id) {
     case VEHICLE_REPORT_ACTION_FIELD_MODEL: {
-        char *model = vehicle_unquote(demo, vehicle_lexeme(ctx->values[2]));
+        char *model = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 2, "model literal", error));
         demo->saw_model = 1;
         demo_text_appendf(&demo->report, error->message, sizeof(error->message), "model: %s\n", model);
         return NULL;
     }
     case VEHICLE_REPORT_ACTION_FIELD_LICENSE: {
-        char *license = vehicle_unquote(demo, vehicle_lexeme(ctx->values[2]));
+        char *license = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 2, "license literal", error));
         demo->saw_license = 1;
         demo_text_appendf(&demo->report, error->message, sizeof(error->message), "license: %s\n", license);
         return NULL;
     }
     case VEHICLE_REPORT_ACTION_FIELD_DISTANCE: {
-        char *distance = vehicle_copy_lexeme(demo, vehicle_lexeme(ctx->values[2]));
+        char *distance = vehicle_copy_lexeme(demo, vehicle_lexeme_arg(ctx, 2, "distance literal", error));
         demo->saw_distance = 1;
         demo_text_appendf(&demo->report, error->message, sizeof(error->message), "distance: %s\n", distance);
         return NULL;
@@ -62,8 +81,8 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
     case VEHICLE_REPORT_ACTION_FIELD_FEATURES:
         return NULL;
     case VEHICLE_REPORT_ACTION_FEATURE: {
-        char *name = vehicle_copy_lexeme(demo, vehicle_lexeme(ctx->values[0]));
-        char *value = vehicle_unquote(demo, vehicle_lexeme(ctx->values[2]));
+        char *name = vehicle_copy_lexeme(demo, vehicle_lexeme_arg(ctx, 0, "feature name", error));
+        char *value = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 2, "feature value", error));
         if (demo->features == 0) {
             demo_text_append(&demo->report, "features:\n", error->message, sizeof(error->message));
         }
@@ -74,8 +93,8 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
     case VEHICLE_REPORT_ACTION_FIELD_REPAIRS:
         return NULL;
     case VEHICLE_REPORT_ACTION_REPAIR: {
-        char *date = vehicle_unquote(demo, vehicle_lexeme(ctx->values[3]));
-        char *description = vehicle_unquote(demo, vehicle_lexeme(ctx->values[7]));
+        char *date = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 3, "repair date", error));
+        char *description = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 7, "repair description", error));
         if (demo->repairs == 0) {
             demo_text_append(&demo->report, "repairs:\n", error->message, sizeof(error->message));
         }

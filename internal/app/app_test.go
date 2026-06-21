@@ -96,6 +96,12 @@ S : S S | A ;
 	if !strings.Contains(stderr.String(), "conflict") {
 		t.Fatalf("stderr = %q", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), "hint: shift/reduce conflict") ||
+		!strings.Contains(stderr.String(), "state items:") ||
+		!strings.Contains(stderr.String(), "S -> S S •") ||
+		!strings.Contains(stderr.String(), "ambig.lf:") {
+		t.Fatalf("stderr does not include source-rich conflict context:\n%s", stderr.String())
+	}
 }
 
 func TestRunValidate_DefaultLALRAcceptsGrammarThatSLRRejects(t *testing.T) {

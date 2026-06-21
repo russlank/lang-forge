@@ -554,8 +554,9 @@ For legacy fixture work:
   default and support explicit inline Go action mode for target-specific
   library calls. Typed semantic values, generated AST helpers, and debug
   tracing remain future work.
-- Conflict diagnostics record state, symbol, existing action, incoming action,
-  and item cores, but do not yet generate counterexample strings.
+- Conflict diagnostics record state, symbol, competing actions, involved
+  reduce rules, source spans, expanded item displays, and item cores. They do
+  not yet generate minimal counterexample strings.
 - IELR is currently conservative rather than fully minimal. It preserves the
   LR(1)-precision goal by splitting unsafe merges, but a future optimization
   pass can reduce extra states further.

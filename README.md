@@ -37,6 +37,8 @@ Current implementation status:
   settings;
 - language-grouped examples under `examples/go`, `examples/csharp`,
   `examples/c`, and `examples/cpp`;
+- copyable mini-compiler templates under `examples/templates` for Go, C#, C,
+  and C++;
 - runnable calc, DataKeeper, DRAW, and vehicle-report examples for Go, C#,
   and C;
 - Go examples with generated parser reduction hooks, AST construction,
@@ -145,6 +147,10 @@ Makefile:
 
 ```sh
 make ci
+make fuzz-smoke
+make golden-stability
+make examples-testdata
+make examples-templates
 make dist VERSION=0.1.0
 make docker-build
 make docker-smoke
@@ -166,6 +172,7 @@ make docker-smoke
 - [Generated code and semantics](doc/generated-code-and-semantics.md)
 - [Parser algorithms](doc/parser-algorithms.md)
 - [Examples](doc/examples.md)
+- [Example Template Guide](doc/example-template-guide.md)
 - [UCDT legacy inspiration](doc/ucdt-legacy-inspiration.md)
 
 ## Agent Skills

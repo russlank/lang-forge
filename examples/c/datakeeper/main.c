@@ -19,6 +19,24 @@ static const datakeeper_lexeme *dks_lexeme(datakeeper_value value) {
     return (const datakeeper_lexeme *)value;
 }
 
+static datakeeper_value dks_arg(const datakeeper_reduction *ctx, size_t index, const char *name, datakeeper_error *error) {
+    if (index >= ctx->rhs_count || ctx->values[index] == NULL) {
+        snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
+        return NULL;
+    }
+    return ctx->values[index];
+}
+
+static const datakeeper_lexeme *dks_lexeme_arg(const datakeeper_reduction *ctx, size_t index, const char *name, datakeeper_error *error) {
+    datakeeper_value value = dks_arg(ctx, index, name, error);
+    return value == NULL ? NULL : dks_lexeme(value);
+}
+
+static const char *dks_string_arg(const datakeeper_reduction *ctx, size_t index, const char *name, datakeeper_error *error) {
+    datakeeper_value value = dks_arg(ctx, index, name, error);
+    return value == NULL ? NULL : (const char *)value;
+}
+
 static char *dks_decode_literal(dks_demo *demo, const datakeeper_lexeme *lexeme) {
     const char *text = lexeme->text;
     size_t length = lexeme->length;
@@ -109,14 +127,16 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
     dks_demo *demo = (dks_demo *)user;
     switch (ctx->action_id) {
     case DATAKEEPER_ACTION_PARAMETERS_DECL: {
-        char *name = dks_copy_lexeme(demo, dks_lexeme(ctx->values[0]));
+        const datakeeper_lexeme *parameter_name = dks_lexeme_arg(ctx, 0, "parameter name", error);
+        char *name = parameter_name == NULL ? NULL : dks_copy_lexeme(demo, parameter_name);
         if (name == NULL || !dks_append_parameter(demo, name, error)) {
             snprintf(error->message, sizeof(error->message), "out of memory collecting parameter");
         }
         return NULL;
     }
     case DATAKEEPER_ACTION_PARAMETERS_TAIL_MORE: {
-        char *name = dks_copy_lexeme(demo, dks_lexeme(ctx->values[1]));
+        const datakeeper_lexeme *parameter_name = dks_lexeme_arg(ctx, 1, "parameter name", error);
+        char *name = parameter_name == NULL ? NULL : dks_copy_lexeme(demo, parameter_name);
         if (name == NULL || !dks_append_parameter(demo, name, error)) {
             snprintf(error->message, sizeof(error->message), "out of memory collecting parameter");
         }
@@ -124,7 +144,8 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
     }
     case DATAKEEPER_ACTION_VALUE_STRING:
     {
-        char *value = dks_decode_literal(demo, dks_lexeme(ctx->values[0]));
+        const datakeeper_lexeme *literal = dks_lexeme_arg(ctx, 0, "string literal", error);
+        char *value = literal == NULL ? NULL : dks_decode_literal(demo, literal);
         if (value == NULL) {
             snprintf(error->message, sizeof(error->message), "out of memory decoding string literal");
         }
@@ -132,7 +153,8 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
     }
     case DATAKEEPER_ACTION_VALUE_NUMBER:
     {
-        char *value = dks_copy_lexeme(demo, dks_lexeme(ctx->values[0]));
+        const datakeeper_lexeme *literal = dks_lexeme_arg(ctx, 0, "number literal", error);
+        char *value = literal == NULL ? NULL : dks_copy_lexeme(demo, literal);
         if (value == NULL) {
             snprintf(error->message, sizeof(error->message), "out of memory copying number literal");
         }
@@ -140,31 +162,53 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
     }
     case DATAKEEPER_ACTION_VALUE_IDENT:
     {
-        char *value = dks_ident_value(demo, dks_lexeme(ctx->values[0]));
+        const datakeeper_lexeme *identifier = dks_lexeme_arg(ctx, 0, "identifier value", error);
+        char *value = identifier == NULL ? NULL : dks_ident_value(demo, identifier);
         if (value == NULL) {
             snprintf(error->message, sizeof(error->message), "out of memory copying identifier value");
         }
         return value;
     }
     case DATAKEEPER_ACTION_ASSIGN: {
-        char *name = dks_copy_lexeme(demo, dks_lexeme(ctx->values[0]));
-        dks_append_command(demo, error, "assign", name, (const char *)ctx->values[2], NULL);
+        const datakeeper_lexeme *assignment_name = dks_lexeme_arg(ctx, 0, "assignment name", error);
+        const char *assignment_value = dks_string_arg(ctx, 2, "assignment value", error);
+        char *name = assignment_name == NULL ? NULL : dks_copy_lexeme(demo, assignment_name);
+        if (name == NULL || assignment_value == NULL || !dks_append_command(demo, error, "assign", name, assignment_value, NULL)) {
+            snprintf(error->message, sizeof(error->message), "out of memory collecting assignment");
+        }
         return NULL;
     }
-    case DATAKEEPER_ACTION_REPLACE:
-        dks_append_command(demo, error, "replace", dks_copy_lexeme(demo, dks_lexeme(ctx->values[2])), (const char *)ctx->values[4], (const char *)ctx->values[6]);
+    case DATAKEEPER_ACTION_REPLACE: {
+        const datakeeper_lexeme *target = dks_lexeme_arg(ctx, 2, "replace target", error);
+        dks_append_command(demo, error, "replace",
+                           target == NULL ? NULL : dks_copy_lexeme(demo, target),
+                           dks_string_arg(ctx, 4, "old value", error),
+                           dks_string_arg(ctx, 6, "new value", error));
         return NULL;
+    }
     case DATAKEEPER_ACTION_SQLRUN:
-        dks_append_command(demo, error, "sqlrun", (const char *)ctx->values[2], (const char *)ctx->values[4], NULL);
+        dks_append_command(demo, error, "sqlrun",
+                           dks_string_arg(ctx, 2, "instance", error),
+                           dks_string_arg(ctx, 4, "script", error),
+                           NULL);
         return NULL;
     case DATAKEEPER_ACTION_ADD_OBJECT:
-        dks_append_command(demo, error, "addobject", (const char *)ctx->values[2], (const char *)ctx->values[4], NULL);
+        dks_append_command(demo, error, "addobject",
+                           dks_string_arg(ctx, 2, "parent", error),
+                           dks_string_arg(ctx, 4, "xml", error),
+                           NULL);
         return NULL;
     case DATAKEEPER_ACTION_REMOVE_OBJECT:
-        dks_append_command(demo, error, "removeobject", (const char *)ctx->values[2], (const char *)ctx->values[4], NULL);
+        dks_append_command(demo, error, "removeobject",
+                           dks_string_arg(ctx, 2, "parent", error),
+                           dks_string_arg(ctx, 4, "name", error),
+                           NULL);
         return NULL;
     case DATAKEEPER_ACTION_RUN_OBJECTS_JOB:
-        dks_append_command(demo, error, "runobjectsjob", (const char *)ctx->values[2], (const char *)ctx->values[4], (const char *)ctx->values[6]);
+        dks_append_command(demo, error, "runobjectsjob",
+                           dks_string_arg(ctx, 2, "parent", error),
+                           dks_string_arg(ctx, 4, "name", error),
+                           dks_string_arg(ctx, 6, "jobs tag", error));
         return NULL;
     case DATAKEEPER_ACTION_NONE:
     default:

@@ -17,6 +17,11 @@ LangForge examples are organized by supported target language.
   is available, but generation and validation still run.
 - `parser-algorithms` contains source-only parser-table fixtures shared by all
   targets.
+- `templates/{go,csharp,c,cpp}/mini-compiler` contains small copyable starter
+  projects with AST, reducer, compiler/runtime, diagnostics, and tests.
+- `testdata` contains shared valid, invalid, and golden fixtures consumed by
+  the example gates.
+- `mk` contains shared Makefile fragments used by demos and templates.
 
 Generated folders, build outputs, and demo logs are ignored. Run each example's
 Makefile to regenerate the target-specific scanner/parser before building.
@@ -25,12 +30,19 @@ The repository root also provides source-health checks:
 ```sh
 make examples-cleanliness
 make examples-parity
+make examples-testdata
+make examples-templates
 ```
 
 `examples-cleanliness` fails if generated or build artifacts become tracked by
 Git. `examples-parity` currently compares the calculator grammars across Go,
 C#, C, and C++ after normalizing target/package/semantic directives and action
-tag prefixes.
+tag prefixes. `examples-testdata` runs shared fixtures and golden checks.
+`examples-templates` validates the copyable mini-compiler templates.
+
+Read [../doc/example-template-guide.md](../doc/example-template-guide.md) for
+the template layout, generated/handwritten boundary, typed reducer-helper
+pattern, shared testdata, and reusable Makefile fragments.
 
 Requirements:
 

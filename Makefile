@@ -25,14 +25,16 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/version.BuildDate=$(DATE) \
 	-X $(MODULE)/internal/version.Branch=$(BRANCH)
 
-.PHONY: all ci fmt fmt-check vet test test-race vulncheck tidy build install \
+.PHONY: all ci fmt fmt-check vet test test-race fuzz-smoke golden-stability \
+	vulncheck tidy build install \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
 	examples-generate examples-run examples-test examples-cleanliness \
-	examples-parity examples-clean docker-build docker-smoke docker-push image-tags clean
+	examples-parity examples-testdata examples-templates examples-clean \
+	docker-build docker-smoke docker-push image-tags clean
 
 all: fmt vet test build
 
-ci: fmt-check vet test-race build examples-test
+ci: fmt-check vet test-race fuzz-smoke golden-stability build examples-test
 
 fmt:
 	$(GO) fmt ./...
@@ -54,6 +56,13 @@ test:
 
 test-race:
 	CGO_ENABLED=1 $(GO) test -race -count=1 ./...
+
+fuzz-smoke:
+	$(GO) test -run '^$$' -fuzz=FuzzParseRegexSmoke -fuzztime=1s ./internal/lex
+	$(GO) test -run '^$$' -fuzz=FuzzParseCombinedSmoke -fuzztime=1s ./internal/spec
+
+golden-stability:
+	GO=$(GO) sh scripts/check-golden-stability.sh
 
 vulncheck:
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
@@ -109,6 +118,10 @@ examples-generate:
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) generate
+	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) generate
+	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) generate
 
 examples-run:
 	$(MAKE) -C examples/go/calc GO=$(GO) run
@@ -127,10 +140,16 @@ examples-run:
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) run
+	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) run
+	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) run
+	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) run
+	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) run
 
 examples-test:
 	$(MAKE) examples-cleanliness
 	$(MAKE) examples-parity
+	$(MAKE) examples-testdata
+	$(MAKE) examples-templates
 	$(MAKE) -C examples/parser-algorithms GO=$(GO) test
 	$(MAKE) -C examples/go/calc GO=$(GO) test
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) test
@@ -155,6 +174,15 @@ examples-cleanliness:
 examples-parity:
 	$(GO) run ./cmd/check-example-spec-parity
 
+examples-testdata:
+	GO=$(GO) sh scripts/check-example-testdata.sh
+
+examples-templates:
+	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) test
+	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) test
+	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) test
+	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) test
+
 examples-clean:
 	$(MAKE) -C examples/go/calc clean
 	$(MAKE) -C examples/go/datakeeper clean
@@ -172,6 +200,10 @@ examples-clean:
 	$(MAKE) -C examples/cpp/datakeeper clean
 	$(MAKE) -C examples/cpp/draw clean
 	$(MAKE) -C examples/cpp/vehicle-report clean
+	$(MAKE) -C examples/templates/go/mini-compiler clean
+	$(MAKE) -C examples/templates/csharp/mini-compiler clean
+	$(MAKE) -C examples/templates/c/mini-compiler clean
+	$(MAKE) -C examples/templates/cpp/mini-compiler clean
 
 docker-build:
 	docker build \

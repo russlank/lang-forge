@@ -1,0 +1,27 @@
+%target csharp
+%package LangForge.Examples.Templates.MiniCompiler.Generated
+%semantic csharp mode reducer
+%start Program
+%token Print Number Plus Semi
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+"print" => token(Print);
+NUMBER  => token(Number);
+"+"     => token(Plus);
+";"     => token(Semi);
+[1-32]+ => skip;
+
+%% parser
+Program : Statements {csharp: program} ;
+Statements : Statement StatementsTail {csharp: statements} ;
+StatementsTail : Statement StatementsTail {csharp: statements_tail_more}
+               | /* empty */ {csharp: statements_tail_empty}
+               ;
+Statement : Print Expr Semi {csharp: print} ;
+Expr : Expr Plus Term {csharp: add}
+     | Term {csharp: pass}
+     ;
+Term : Number {csharp: number} ;

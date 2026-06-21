@@ -36,16 +36,16 @@ static void write_text_file(const std::string& path, std::string_view text) {
     output << text;
 }
 
-static dks::Lexeme lexeme_arg(const dks::Reduction& ctx, std::size_t index) {
+static dks::Lexeme lexeme_arg(const dks::Reduction& ctx, std::size_t index, std::string_view name) {
     if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument");
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
     return std::any_cast<dks::Lexeme>(ctx.values.at(index));
 }
 
-static std::string string_arg(const dks::Reduction& ctx, std::size_t index) {
+static std::string string_arg(const dks::Reduction& ctx, std::size_t index, std::string_view name) {
     if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing string argument");
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing string argument " + std::string(name));
     }
     return std::any_cast<std::string>(ctx.values.at(index));
 }
@@ -112,11 +112,11 @@ static dks::ReducerMap make_reducers(Demo& demo) {
         {dks::SemanticAction::ProgramNoParameters, noop},
         {dks::SemanticAction::ParametersList, noop},
         {dks::SemanticAction::ParametersDecl, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_parameter(demo, text(lexeme_arg(ctx, 0)));
+            append_parameter(demo, text(lexeme_arg(ctx, 0, "parameter name")));
             return {};
         }},
         {dks::SemanticAction::ParametersTailMore, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_parameter(demo, text(lexeme_arg(ctx, 1)));
+            append_parameter(demo, text(lexeme_arg(ctx, 1, "parameter name")));
             return {};
         }},
         {dks::SemanticAction::ParametersTailEmpty, noop},
@@ -126,36 +126,36 @@ static dks::ReducerMap make_reducers(Demo& demo) {
         {dks::SemanticAction::StatementsTailEmpty, noop},
         {dks::SemanticAction::StatementPass, pass},
         {dks::SemanticAction::ValueString, [](const dks::Reduction& ctx) -> dks::Value {
-            return decode_literal(lexeme_arg(ctx, 0));
+            return decode_literal(lexeme_arg(ctx, 0, "string literal"));
         }},
         {dks::SemanticAction::ValueNumber, [](const dks::Reduction& ctx) -> dks::Value {
-            return text(lexeme_arg(ctx, 0));
+            return text(lexeme_arg(ctx, 0, "number literal"));
         }},
         {dks::SemanticAction::ValueIdent, [](const dks::Reduction& ctx) -> dks::Value {
-            return "$" + text(lexeme_arg(ctx, 0));
+            return "$" + text(lexeme_arg(ctx, 0, "identifier value"));
         }},
         {dks::SemanticAction::Assign, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "assign", text(lexeme_arg(ctx, 0)), string_arg(ctx, 2));
+            append_command(demo, "assign", text(lexeme_arg(ctx, 0, "assignment name")), string_arg(ctx, 2, "assignment value"));
             return {};
         }},
         {dks::SemanticAction::Replace, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "replace", text(lexeme_arg(ctx, 2)), string_arg(ctx, 4), string_arg(ctx, 6));
+            append_command(demo, "replace", text(lexeme_arg(ctx, 2, "replace target")), string_arg(ctx, 4, "old value"), string_arg(ctx, 6, "new value"));
             return {};
         }},
         {dks::SemanticAction::Sqlrun, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "sqlrun", string_arg(ctx, 2), string_arg(ctx, 4));
+            append_command(demo, "sqlrun", string_arg(ctx, 2, "instance"), string_arg(ctx, 4, "script"));
             return {};
         }},
         {dks::SemanticAction::AddObject, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "addobject", string_arg(ctx, 2), string_arg(ctx, 4));
+            append_command(demo, "addobject", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "xml"));
             return {};
         }},
         {dks::SemanticAction::RemoveObject, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "removeobject", string_arg(ctx, 2), string_arg(ctx, 4));
+            append_command(demo, "removeobject", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "name"));
             return {};
         }},
         {dks::SemanticAction::RunObjectsJob, [&demo](const dks::Reduction& ctx) -> dks::Value {
-            append_command(demo, "runobjectsjob", string_arg(ctx, 2), string_arg(ctx, 4), string_arg(ctx, 6));
+            append_command(demo, "runobjectsjob", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "name"), string_arg(ctx, 6, "jobs tag"));
             return {};
         }},
     };

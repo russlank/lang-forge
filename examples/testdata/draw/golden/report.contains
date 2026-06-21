@@ -1,0 +1,6 @@
+DRAW render report
+Canvas: 960x640
+Operation summary:
+  box 4 args: 2
+  circle 3 args: 196
+  line 4 args: 90

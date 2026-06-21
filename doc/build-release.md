@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-build-release-v1`
 Status: `active`
-Last updated: `2026-06-20`
+Last updated: `2026-06-21`
 Owner: `Project maintainers`
 Scope: `Local build targets, CI pipelines, release artifacts, Docker image, and licensing`
 
@@ -42,9 +42,19 @@ make fmt-check
 make vet
 make test
 make test-race
+make fuzz-smoke
+make golden-stability
+make examples-testdata
+make examples-templates
 make build
 make ci
 ```
+
+`make fuzz-smoke` runs bounded fuzz sessions for the regex and combined-spec
+parsers. `make golden-stability` regenerates representative inspect JSON and
+Go/C#/C/C++ generated outputs twice, then byte-compares the results.
+`make examples-testdata` checks shared example fixtures and golden fragments.
+`make examples-templates` regenerates and tests all mini-compiler templates.
 
 `make build` writes the local CLI binary to:
 

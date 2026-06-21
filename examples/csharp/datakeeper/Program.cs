@@ -16,26 +16,26 @@ static object? Reduce(Reduction ctx)
     // application behavior.
     return ctx.ActionID switch
     {
-        SemanticAction.ProgramWithParameters => new Script((List<string>)ctx.Values[0]!, (List<Command>)ctx.Values[1]!),
-        SemanticAction.ProgramNoParameters => new Script([], (List<Command>)ctx.Values[0]!),
+        SemanticAction.ProgramWithParameters => new Script(StringList(ctx, 0, "parameter list"), CommandList(ctx, 1, "command list")),
+        SemanticAction.ProgramNoParameters => new Script([], CommandList(ctx, 0, "command list")),
         SemanticAction.ParametersList => ctx.Values[1],
-        SemanticAction.ParametersDecl => Prepend(Text(ctx, 0), (List<string>)ctx.Values[1]!),
-        SemanticAction.ParametersTailMore => Prepend(Text(ctx, 1), (List<string>)ctx.Values[2]!),
+        SemanticAction.ParametersDecl => Prepend(Text(ctx, 0, "parameter name"), StringList(ctx, 1, "parameter tail")),
+        SemanticAction.ParametersTailMore => Prepend(Text(ctx, 1, "parameter name"), StringList(ctx, 2, "parameter tail")),
         SemanticAction.ParametersTailEmpty => new List<string>(),
         SemanticAction.CommandBlock => ctx.Values[1],
-        SemanticAction.Statements => Prepend((Command)ctx.Values[0]!, (List<Command>)ctx.Values[1]!),
-        SemanticAction.StatementsTailMore => Prepend((Command)ctx.Values[1]!, (List<Command>)ctx.Values[2]!),
+        SemanticAction.Statements => Prepend(CommandArg(ctx, 0, "statement"), CommandList(ctx, 1, "statement tail")),
+        SemanticAction.StatementsTailMore => Prepend(CommandArg(ctx, 1, "statement"), CommandList(ctx, 2, "statement tail")),
         SemanticAction.StatementsTailEmpty => new List<Command>(),
         SemanticAction.StatementPass => ctx.Values[0],
-        SemanticAction.Assign => new Command("assign", [Text(ctx, 0), (string)ctx.Values[2]!]),
-        SemanticAction.Replace => new Command("replace", [Text(ctx, 2), (string)ctx.Values[4]!, (string)ctx.Values[6]!]),
-        SemanticAction.Sqlrun => new Command("sqlrun", [(string)ctx.Values[2]!, (string)ctx.Values[4]!]),
-        SemanticAction.AddObject => new Command("addobject", [(string)ctx.Values[2]!, (string)ctx.Values[4]!]),
-        SemanticAction.RemoveObject => new Command("removeobject", [(string)ctx.Values[2]!, (string)ctx.Values[4]!]),
-        SemanticAction.RunObjectsJob => new Command("runobjectsjob", [(string)ctx.Values[2]!, (string)ctx.Values[4]!, (string)ctx.Values[6]!]),
-        SemanticAction.ValueString => DecodeLiteral(Text(ctx, 0)),
-        SemanticAction.ValueNumber => Text(ctx, 0),
-        SemanticAction.ValueIdent => "$" + Text(ctx, 0),
+        SemanticAction.Assign => new Command("assign", [Text(ctx, 0, "assignment name"), StringArg(ctx, 2, "assignment value")]),
+        SemanticAction.Replace => new Command("replace", [Text(ctx, 2, "replace target"), StringArg(ctx, 4, "old value"), StringArg(ctx, 6, "new value")]),
+        SemanticAction.Sqlrun => new Command("sqlrun", [StringArg(ctx, 2, "instance"), StringArg(ctx, 4, "script")]),
+        SemanticAction.AddObject => new Command("addobject", [StringArg(ctx, 2, "parent"), StringArg(ctx, 4, "xml")]),
+        SemanticAction.RemoveObject => new Command("removeobject", [StringArg(ctx, 2, "parent"), StringArg(ctx, 4, "name")]),
+        SemanticAction.RunObjectsJob => new Command("runobjectsjob", [StringArg(ctx, 2, "parent"), StringArg(ctx, 4, "name"), StringArg(ctx, 6, "jobs tag")]),
+        SemanticAction.ValueString => DecodeLiteral(Text(ctx, 0, "string literal")),
+        SemanticAction.ValueNumber => Text(ctx, 0, "number literal"),
+        SemanticAction.ValueIdent => "$" + Text(ctx, 0, "identifier value"),
         _ => DefaultReduce(ctx.Values),
     };
 }
@@ -57,7 +57,28 @@ static object? DefaultReduce(IReadOnlyList<object?> values)
     };
 }
 
-static string Text(Reduction ctx, int index) => ((Lexeme)ctx.Values[index]!).Text;
+static T Arg<T>(Reduction ctx, int index, string name)
+{
+    if (index < 0 || index >= ctx.Values.Count)
+    {
+        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name} at argument {index + 1}");
+    }
+    if (ctx.Values[index] is not T value)
+    {
+        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} argument {index + 1} for {name} has type {ctx.Values[index]?.GetType().Name ?? "<null>"}, want {typeof(T).Name}");
+    }
+    return value;
+}
+
+static string Text(Reduction ctx, int index, string name) => Arg<Lexeme>(ctx, index, name).Text;
+
+static string StringArg(Reduction ctx, int index, string name) => Arg<string>(ctx, index, name);
+
+static Command CommandArg(Reduction ctx, int index, string name) => Arg<Command>(ctx, index, name);
+
+static List<string> StringList(Reduction ctx, int index, string name) => Arg<List<string>>(ctx, index, name);
+
+static List<Command> CommandList(Reduction ctx, int index, string name) => Arg<List<Command>>(ctx, index, name);
 
 static string DecodeLiteral(string text)
 {

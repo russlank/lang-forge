@@ -83,6 +83,12 @@ jobs:
       - name: Run race tests
         run: make GO=go test-race
 
+      - name: Run fuzz smoke tests
+        run: make GO=go fuzz-smoke
+
+      - name: Run generated-output stability checks
+        run: make GO=go golden-stability
+
       - name: Run generated example tests
         run: make GO=go examples-test
 

@@ -44,3 +44,7 @@ make -C examples/c/vehicle-report test
 If `cc`, `gcc`, or another C compiler is not available through `CC`, the C
 Makefiles print a skip message after validation/generation. Set `CC=clang` or
 another compiler name when needed.
+
+The Makefiles include shared fragments from `examples/mk` and default to
+shared valid fixtures under `examples/testdata`. For a smaller copyable starter
+project, use `examples/templates/c/mini-compiler`.

@@ -38,9 +38,9 @@ static void write_text_file(const std::string& path, std::string_view text) {
     output << text;
 }
 
-static vehicle::Lexeme lexeme_arg(const vehicle::Reduction& ctx, std::size_t index) {
+static vehicle::Lexeme lexeme_arg(const vehicle::Reduction& ctx, std::size_t index, std::string_view name) {
     if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument");
+        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
     return std::any_cast<vehicle::Lexeme>(ctx.values.at(index));
 }
@@ -64,17 +64,17 @@ static vehicle::ReducerMap make_reducers(Demo& demo) {
         {vehicle::SemanticAction::Info, noop},
         {vehicle::SemanticAction::FieldModel, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_model = true;
-            demo.report << "model: " << unquote(lexeme_arg(ctx, 2)) << "\n";
+            demo.report << "model: " << unquote(lexeme_arg(ctx, 2, "model literal")) << "\n";
             return {};
         }},
         {vehicle::SemanticAction::FieldLicense, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_license = true;
-            demo.report << "license: " << unquote(lexeme_arg(ctx, 2)) << "\n";
+            demo.report << "license: " << unquote(lexeme_arg(ctx, 2, "license literal")) << "\n";
             return {};
         }},
         {vehicle::SemanticAction::FieldDistance, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_distance = true;
-            demo.report << "distance: " << text(lexeme_arg(ctx, 2)) << "\n";
+            demo.report << "distance: " << text(lexeme_arg(ctx, 2, "distance literal")) << "\n";
             return {};
         }},
         {vehicle::SemanticAction::FieldFeatures, noop},
@@ -87,7 +87,7 @@ static vehicle::ReducerMap make_reducers(Demo& demo) {
                 demo.report << "features:\n";
             }
             ++demo.features;
-            demo.report << "  - " << text(lexeme_arg(ctx, 0)) << " = " << unquote(lexeme_arg(ctx, 2)) << "\n";
+            demo.report << "  - " << text(lexeme_arg(ctx, 0, "feature name")) << " = " << unquote(lexeme_arg(ctx, 2, "feature value")) << "\n";
             return {};
         }},
         {vehicle::SemanticAction::FieldRepairs, noop},
@@ -100,7 +100,7 @@ static vehicle::ReducerMap make_reducers(Demo& demo) {
                 demo.report << "repairs:\n";
             }
             ++demo.repairs;
-            demo.report << "  - " << unquote(lexeme_arg(ctx, 3)) << ": " << unquote(lexeme_arg(ctx, 7)) << "\n";
+            demo.report << "  - " << unquote(lexeme_arg(ctx, 3, "repair date")) << ": " << unquote(lexeme_arg(ctx, 7, "repair description")) << "\n";
             return {};
         }},
     };

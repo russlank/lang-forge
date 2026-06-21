@@ -229,6 +229,7 @@ The examples are meant to be read in increasing complexity:
 
 | Step | Example | What it teaches |
 |---|---|---|
+| 0 | `examples/templates/*/mini-compiler` | Copyable scanner/parser/compiler starter shape with AST, reducer, stack-code lowering, runtime, diagnostics, and tests |
 | 1 | `examples/go/calc` | Small combined `.lf`, generated scanner/parser, reducer-backed expression value, simple CLI report |
 | 2 | `examples/parser-algorithms` | LR parser algorithm differences and expected SLR conflict |
 | 3 | `examples/go/datakeeper` | DSL syntax, generated reduction hooks, AST adapter, stack-machine lowering, mock execution |
@@ -237,6 +238,11 @@ The examples are meant to be read in increasing complexity:
 | 6 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
 | 7 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
 | 8 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
+
+For starter-project guidance rather than a demo tour, read
+[Example Template Guide](example-template-guide.md). It explains the
+`examples/templates` folders, shared fixtures under `examples/testdata`, typed
+reducer helpers, and reusable fragments under `examples/mk`.
 
 See [Learning Path](learning-path.md) for the guided route through these
 examples.

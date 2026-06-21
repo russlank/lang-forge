@@ -1,0 +1,27 @@
+%target go
+%package mini
+%semantic go mode reducer
+%start Program
+%token Print Number Plus Semi
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+"print"  => token(Print);
+NUMBER   => token(Number);
+"+"      => token(Plus);
+";"      => token(Semi);
+[1-32]+  => skip;
+
+%% parser
+Program : Statements {go: program} ;
+Statements : Statement StatementsTail {go: statements} ;
+StatementsTail : Statement StatementsTail {go: statements_tail_more}
+               | /* empty */ {go: statements_tail_empty}
+               ;
+Statement : Print Expr Semi {go: print} ;
+Expr : Expr Plus Term {go: add}
+     | Term {go: pass}
+     ;
+Term : Number {go: number} ;

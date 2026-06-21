@@ -1,27 +1,9 @@
-GO ?= /usr/local/go/bin/go
-DOTNET ?= dotnet
-LANG_FORGE ?= $(GO) run ../../../cmd/lang-forge
-GENERATED_DIR := Generated
-DIST_DIR := dist
-INPUT ?= sample.vehicle
+REPO_ROOT ?= ../../..
+SPEC := vehicle.lf
+PROJECT := VehicleReportCSharp.csproj
+INPUT ?= ../../testdata/vehicle-report/valid/basic.vehicle
 LOG ?= $(DIST_DIR)/vehicle-report-csharp-demo.log
+RUN_ARGS = $(INPUT) --log $(LOG)
+TEST_ARGS = --assert $(INPUT) --log $(LOG)
 
-.PHONY: validate generate build run test clean
-
-validate:
-	$(LANG_FORGE) validate --spec vehicle.lf
-
-generate: validate
-	$(LANG_FORGE) generate --spec vehicle.lf --target csharp --out $(GENERATED_DIR)
-
-build: generate
-	$(DOTNET) build VehicleReportCSharp.csproj
-
-run: generate
-	$(DOTNET) run --project VehicleReportCSharp.csproj -- $(INPUT) --log $(LOG)
-
-test: generate
-	$(DOTNET) run --project VehicleReportCSharp.csproj -- --assert $(INPUT) --log $(LOG)
-
-clean:
-	rm -rf $(GENERATED_DIR) $(DIST_DIR) bin obj
+include ../../mk/csharp.mk

@@ -17,28 +17,28 @@ static object? Reduce(Reduction ctx)
     // raw strings on every reduction.
     return ctx.ActionID switch
     {
-        SemanticAction.Vehicle => new Vehicle((VehicleInfo)ctx.Values[3]!),
+        SemanticAction.Vehicle => new Vehicle(InfoArg(ctx, 3, "vehicle info")),
         SemanticAction.Info => new VehicleInfo(
-            (string)ctx.Values[0]!,
-            (string)ctx.Values[2]!,
-            (int)ctx.Values[4]!,
-            (List<Feature>)ctx.Values[6]!,
-            (List<Repair>)ctx.Values[8]!),
-        SemanticAction.FieldModel => DecodeQuoted(Text(ctx, 2)),
-        SemanticAction.FieldLicense => DecodeQuoted(Text(ctx, 2)),
-        SemanticAction.FieldDistance => int.Parse(Text(ctx, 2), CultureInfo.InvariantCulture),
+            StringArg(ctx, 0, "model"),
+            StringArg(ctx, 2, "license"),
+            IntArg(ctx, 4, "distance"),
+            FeatureList(ctx, 6, "features"),
+            RepairList(ctx, 8, "repairs")),
+        SemanticAction.FieldModel => DecodeQuoted(Text(ctx, 2, "model literal")),
+        SemanticAction.FieldLicense => DecodeQuoted(Text(ctx, 2, "license literal")),
+        SemanticAction.FieldDistance => int.Parse(Text(ctx, 2, "distance literal"), CultureInfo.InvariantCulture),
         SemanticAction.FieldFeatures => ctx.Values[3],
-        SemanticAction.FeatureItems => Prepend((Feature)ctx.Values[0]!, (List<Feature>)ctx.Values[1]!),
+        SemanticAction.FeatureItems => Prepend(FeatureArg(ctx, 0, "feature"), FeatureList(ctx, 1, "feature tail")),
         SemanticAction.FeatureEmpty => new List<Feature>(),
-        SemanticAction.FeatureTailMore => Prepend((Feature)ctx.Values[1]!, (List<Feature>)ctx.Values[2]!),
+        SemanticAction.FeatureTailMore => Prepend(FeatureArg(ctx, 1, "feature"), FeatureList(ctx, 2, "feature tail")),
         SemanticAction.FeatureTailEmpty => new List<Feature>(),
-        SemanticAction.Feature => new Feature(Text(ctx, 0), DecodeQuoted(Text(ctx, 2))),
+        SemanticAction.Feature => new Feature(Text(ctx, 0, "feature name"), DecodeQuoted(Text(ctx, 2, "feature value"))),
         SemanticAction.FieldRepairs => ctx.Values[3],
-        SemanticAction.RepairItems => Prepend((Repair)ctx.Values[0]!, (List<Repair>)ctx.Values[1]!),
+        SemanticAction.RepairItems => Prepend(RepairArg(ctx, 0, "repair"), RepairList(ctx, 1, "repair tail")),
         SemanticAction.RepairEmpty => new List<Repair>(),
-        SemanticAction.RepairTailMore => Prepend((Repair)ctx.Values[1]!, (List<Repair>)ctx.Values[2]!),
+        SemanticAction.RepairTailMore => Prepend(RepairArg(ctx, 1, "repair"), RepairList(ctx, 2, "repair tail")),
         SemanticAction.RepairTailEmpty => new List<Repair>(),
-        SemanticAction.Repair => new Repair(DecodeQuoted(Text(ctx, 3)), DecodeQuoted(Text(ctx, 7))),
+        SemanticAction.Repair => new Repair(DecodeQuoted(Text(ctx, 3, "repair date")), DecodeQuoted(Text(ctx, 7, "repair description"))),
         _ => DefaultReduce(ctx.Values),
     };
 }
@@ -60,7 +60,34 @@ static object? DefaultReduce(IReadOnlyList<object?> values)
     };
 }
 
-static string Text(Reduction ctx, int index) => ((Lexeme)ctx.Values[index]!).Text;
+static T Arg<T>(Reduction ctx, int index, string name)
+{
+    if (index < 0 || index >= ctx.Values.Count)
+    {
+        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name} at argument {index + 1}");
+    }
+    if (ctx.Values[index] is not T value)
+    {
+        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} argument {index + 1} for {name} has type {ctx.Values[index]?.GetType().Name ?? "<null>"}, want {typeof(T).Name}");
+    }
+    return value;
+}
+
+static string Text(Reduction ctx, int index, string name) => Arg<Lexeme>(ctx, index, name).Text;
+
+static string StringArg(Reduction ctx, int index, string name) => Arg<string>(ctx, index, name);
+
+static int IntArg(Reduction ctx, int index, string name) => Arg<int>(ctx, index, name);
+
+static VehicleInfo InfoArg(Reduction ctx, int index, string name) => Arg<VehicleInfo>(ctx, index, name);
+
+static Feature FeatureArg(Reduction ctx, int index, string name) => Arg<Feature>(ctx, index, name);
+
+static Repair RepairArg(Reduction ctx, int index, string name) => Arg<Repair>(ctx, index, name);
+
+static List<Feature> FeatureList(Reduction ctx, int index, string name) => Arg<List<Feature>>(ctx, index, name);
+
+static List<Repair> RepairList(Reduction ctx, int index, string name) => Arg<List<Repair>>(ctx, index, name);
 
 static string DecodeQuoted(string text) => text.Length >= 2 && text[0] == '"' && text[^1] == '"' ? text[1..^1] : text;
 

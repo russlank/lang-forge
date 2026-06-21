@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/russlank/lang-forge/internal/diagnostics"
 	"github.com/russlank/lang-forge/internal/parseralgo"
 )
 
@@ -40,12 +41,40 @@ type Action struct {
 
 // Conflict records a parser-table conflict with enough context to diagnose it.
 type Conflict struct {
-	State    int    `json:"state"`
-	Symbol   string `json:"symbol"`
-	Existing Action `json:"existing"`
-	Incoming Action `json:"incoming"`
-	Items    []Item `json:"items"`
-	Message  string `json:"message"`
+	State        int            `json:"state"`
+	Symbol       string         `json:"symbol"`
+	Existing     Action         `json:"existing"`
+	Incoming     Action         `json:"incoming"`
+	ExistingRule *ConflictRule  `json:"existingRule,omitempty"`
+	IncomingRule *ConflictRule  `json:"incomingRule,omitempty"`
+	Items        []Item         `json:"items"`
+	ItemDetails  []ConflictItem `json:"itemDetails,omitempty"`
+	Message      string         `json:"message"`
+	Hint         string         `json:"hint,omitempty"`
+}
+
+// ConflictRule records source-rich information about a reduce/accept rule that
+// participates in a parser-table conflict.
+type ConflictRule struct {
+	ID      int              `json:"id"`
+	LHS     string           `json:"lhs"`
+	RHS     []string         `json:"rhs"`
+	Span    diagnostics.Span `json:"span"`
+	Display string           `json:"display"`
+}
+
+// ConflictItem expands an LR item core with the source production it came from.
+// It keeps the compact Item value for stable machine consumers while making
+// text and JSON inspection useful to humans debugging a grammar.
+type ConflictItem struct {
+	Rule      int              `json:"rule"`
+	Dot       int              `json:"dot"`
+	LHS       string           `json:"lhs"`
+	RHS       []string         `json:"rhs"`
+	BeforeDot string           `json:"beforeDot,omitempty"`
+	AfterDot  string           `json:"afterDot,omitempty"`
+	Span      diagnostics.Span `json:"span"`
+	Display   string           `json:"display"`
 }
 
 // State describes one generated parser automaton state.
@@ -143,13 +172,18 @@ func (t *Table) setAction(state int, symbol string, action Action, items itemSet
 		t.Actions[state][symbol] = action
 		return
 	}
+	itemsList := sortedItems(items)
 	t.Conflicts = append(t.Conflicts, Conflict{
-		State:    state,
-		Symbol:   symbol,
-		Existing: existing,
-		Incoming: action,
-		Items:    sortedItems(items),
-		Message:  fmt.Sprintf("%s/%s conflict on `%s` in state %d", existing.Kind, action.Kind, symbol, state),
+		State:        state,
+		Symbol:       symbol,
+		Existing:     existing,
+		Incoming:     action,
+		ExistingRule: t.conflictRuleForAction(existing),
+		IncomingRule: t.conflictRuleForAction(action),
+		Items:        itemsList,
+		ItemDetails:  t.conflictItemDetails(itemsList),
+		Message:      fmt.Sprintf("%s/%s conflict on `%s` in state %d", existing.Kind, action.Kind, symbol, state),
+		Hint:         conflictHint(existing, action, symbol),
 	})
 	// Preserve conventional Yacc-ish behavior by preferring shift if one side
 	// shifts; otherwise keep the earlier reduce. The conflict remains fatal for
@@ -157,6 +191,97 @@ func (t *Table) setAction(state int, symbol string, action Action, items itemSet
 	if action.Kind == ActionShift {
 		t.Actions[state][symbol] = action
 	}
+}
+
+func (t *Table) conflictRuleForAction(action Action) *ConflictRule {
+	if action.Kind != ActionReduce && action.Kind != ActionAccept {
+		return nil
+	}
+	rule, ok := t.ruleByID(action.Rule)
+	if !ok {
+		return nil
+	}
+	info := conflictRuleInfo(rule)
+	return &info
+}
+
+func (t *Table) conflictItemDetails(items []Item) []ConflictItem {
+	out := make([]ConflictItem, 0, len(items))
+	for _, item := range items {
+		if item.Rule < 0 || item.Rule >= len(t.Rules) {
+			continue
+		}
+		rule := t.Rules[item.Rule]
+		detail := ConflictItem{
+			Rule:    rule.ID,
+			Dot:     item.Dot,
+			LHS:     rule.LHS,
+			RHS:     append([]string(nil), rule.RHS...),
+			Span:    rule.Span,
+			Display: formatRuleWithDot(rule, item.Dot),
+		}
+		if item.Dot > 0 && item.Dot <= len(rule.RHS) {
+			detail.BeforeDot = rule.RHS[item.Dot-1]
+		}
+		if item.Dot >= 0 && item.Dot < len(rule.RHS) {
+			detail.AfterDot = rule.RHS[item.Dot]
+		}
+		out = append(out, detail)
+	}
+	return out
+}
+
+func (t *Table) ruleByID(id int) (Rule, bool) {
+	for _, rule := range t.Rules {
+		if rule.ID == id {
+			return rule, true
+		}
+	}
+	return Rule{}, false
+}
+
+func conflictRuleInfo(rule Rule) ConflictRule {
+	return ConflictRule{
+		ID:      rule.ID,
+		LHS:     rule.LHS,
+		RHS:     append([]string(nil), rule.RHS...),
+		Span:    rule.Span,
+		Display: formatRule(rule),
+	}
+}
+
+func formatRule(rule Rule) string {
+	if len(rule.RHS) == 0 {
+		return fmt.Sprintf("%s -> e", rule.LHS)
+	}
+	return fmt.Sprintf("%s -> %s", rule.LHS, strings.Join(rule.RHS, " "))
+}
+
+func formatRuleWithDot(rule Rule, dot int) string {
+	parts := make([]string, 0, len(rule.RHS)+1)
+	for i, sym := range rule.RHS {
+		if i == dot {
+			parts = append(parts, "•")
+		}
+		parts = append(parts, sym)
+	}
+	if dot >= len(rule.RHS) {
+		parts = append(parts, "•")
+	}
+	if len(parts) == 1 && parts[0] == "•" {
+		return fmt.Sprintf("%s -> •", rule.LHS)
+	}
+	return fmt.Sprintf("%s -> %s", rule.LHS, strings.Join(parts, " "))
+}
+
+func conflictHint(existing, incoming Action, symbol string) string {
+	if existing.Kind == ActionShift || incoming.Kind == ActionShift {
+		return fmt.Sprintf("shift/reduce conflict: parser can shift `%s` or reduce a completed rule before seeing it", symbol)
+	}
+	if existing.Kind == ActionReduce && incoming.Kind == ActionReduce {
+		return fmt.Sprintf("reduce/reduce conflict: two completed rules can reduce on `%s`", symbol)
+	}
+	return fmt.Sprintf("multiple parser actions compete on `%s`", symbol)
 }
 
 type itemSet map[Item]bool

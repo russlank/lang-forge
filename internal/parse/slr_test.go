@@ -1,8 +1,11 @@
 package parse
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/russlank/lang-forge/internal/diagnostics"
 	"github.com/russlank/lang-forge/internal/parseralgo"
 	"github.com/russlank/lang-forge/internal/spec"
 )
@@ -22,10 +25,11 @@ func TestBuildSLR_CalcGrammarHasNoConflicts(t *testing.T) {
 }
 
 func TestBuildSLR_AmbiguousGrammarReportsConflict(t *testing.T) {
+	span := diagnostics.Span{File: "ambig.lf", Start: diagnostics.Position{Line: 6, Column: 5}, End: diagnostics.Position{Line: 6, Column: 14}}
 	g, diags := FromSpec(spec.Spec{
 		Tokens: []spec.TokenDecl{{Name: "A"}},
 		Grammar: spec.GrammarSpec{Start: "S", Rules: []spec.RuleSpec{
-			{Name: "S", Alternatives: []spec.Alternative{{Symbols: []string{"S", "S"}}, {Symbols: []string{"A"}}}},
+			{Name: "S", Alternatives: []spec.Alternative{{Symbols: []string{"S", "S"}, Span: span}, {Symbols: []string{"A"}}}},
 		}},
 	})
 	if diags.HasErrors() {
@@ -34,6 +38,69 @@ func TestBuildSLR_AmbiguousGrammarReportsConflict(t *testing.T) {
 	table := BuildSLR(g)
 	if len(table.Conflicts) == 0 {
 		t.Fatal("expected conflict")
+	}
+	conflict := table.Conflicts[0]
+	if conflict.Hint == "" {
+		t.Fatalf("conflict missing hint: %#v", conflict)
+	}
+	if len(conflict.ItemDetails) == 0 {
+		t.Fatalf("conflict missing item details: %#v", conflict)
+	}
+	if conflict.ExistingRule == nil && conflict.IncomingRule == nil {
+		t.Fatalf("conflict missing reduce rule details: %#v", conflict)
+	}
+	foundSpan := false
+	foundDisplay := false
+	for _, item := range conflict.ItemDetails {
+		if item.Span.File == "ambig.lf" {
+			foundSpan = true
+		}
+		if item.Display == "S -> S S •" {
+			foundDisplay = true
+		}
+	}
+	if !foundSpan {
+		t.Fatalf("conflict item details did not preserve source span: %#v", conflict.ItemDetails)
+	}
+	if !foundDisplay {
+		t.Fatalf("conflict item details did not include completed production display: %#v", conflict.ItemDetails)
+	}
+}
+
+func TestBuild_UCDTAmbigYReportsSourceRichConflict(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "ucdt", "metas", "ambig.y")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, specDiags := spec.ParseYacc(data, path)
+	if specDiags.HasErrors() {
+		t.Fatalf("unexpected spec diagnostics: %v", specDiags)
+	}
+	g, grammarDiags := FromSpec(*parsed)
+	if grammarDiags.HasErrors() {
+		t.Fatalf("unexpected grammar diagnostics: %v", grammarDiags)
+	}
+	table := Build(g, parsed.Grammar.Algorithm)
+	if len(table.Conflicts) == 0 {
+		t.Fatal("expected conflict")
+	}
+	conflict := table.Conflicts[0]
+	foundFixtureSpan := false
+	foundCompletedExpr := false
+	for _, item := range conflict.ItemDetails {
+		if item.Span.File == path {
+			foundFixtureSpan = true
+		}
+		if item.Display == "EXPR -> EXPR plus EXPR •" {
+			foundCompletedExpr = true
+		}
+	}
+	if !foundFixtureSpan {
+		t.Fatalf("conflict did not preserve UCDT fixture source span: %#v", conflict.ItemDetails)
+	}
+	if !foundCompletedExpr {
+		t.Fatalf("conflict did not include completed ambiguous expression item: %#v", conflict.ItemDetails)
 	}
 }
 

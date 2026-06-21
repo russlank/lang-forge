@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-requirements-v1`
 Status: `active`
-Last updated: `2026-06-20`
+Last updated: `2026-06-21`
 Owner: `Project maintainers`
 Scope: `Toolchain requirements for building LangForge and running examples`
 
@@ -30,8 +30,9 @@ make GO=/path/to/go build
 
 ## Full Local CI
 
-`make ci` runs formatting, vetting, race tests, a CLI build, and all runnable
-example tests. It therefore needs:
+`make ci` runs formatting, vetting, race tests, fuzz-smoke tests,
+generated-output stability checks, a CLI build, and all runnable example tests.
+It therefore needs:
 
 - the core Go/Make/shell tooling;
 - a C compiler for Go's race detector and C examples;

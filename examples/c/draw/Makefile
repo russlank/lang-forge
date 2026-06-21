@@ -1,45 +1,13 @@
-GO ?= /usr/local/go/bin/go
-CC ?= cc
-CFLAGS ?= -std=c11 -Wall -Wextra -O2
-LDLIBS ?= -lm
-LANG_FORGE ?= $(GO) run ../../../cmd/lang-forge
-GENERATED_DIR := generated
-DIST_DIR := dist
-BIN := $(DIST_DIR)/draw-c-demo
-INPUT ?= sample.draw
+REPO_ROOT ?= ../../..
+SPEC := draw.lf
+BIN = $(DIST_DIR)/draw-c-demo
+INPUT ?= ../../testdata/draw/valid/basic.draw
 OUTPUT ?= $(DIST_DIR)/sample-c.png
 LOG ?= $(DIST_DIR)/draw-c-demo.log
-SOURCES := main.c ast.c parser_adapter.c renderer.c report.c ../common/demo.c $(GENERATED_DIR)/scanner.c $(GENERATED_DIR)/parser.c
+SOURCES = main.c ast.c parser_adapter.c renderer.c report.c ../common/demo.c $(GENERATED_DIR)/scanner.c $(GENERATED_DIR)/parser.c
+INCLUDES = -I. -I$(GENERATED_DIR) -I../common
+LDLIBS = -lm
+RUN_ARGS = $(INPUT) --output $(OUTPUT) --log $(LOG)
+TEST_ARGS = --assert $(INPUT) --output $(OUTPUT) --log $(LOG)
 
-.PHONY: validate generate build run test clean
-
-validate:
-	$(LANG_FORGE) validate --spec draw.lf
-
-generate: validate
-	$(LANG_FORGE) generate --spec draw.lf --target c --out $(GENERATED_DIR)
-
-build: generate
-	@if ! command -v "$(CC)" >/dev/null 2>&1; then \
-		echo "skip: C compiler '$(CC)' not found"; \
-	else \
-		mkdir -p $(DIST_DIR); \
-		$(CC) $(CFLAGS) -I. -I$(GENERATED_DIR) -I../common $(SOURCES) -o $(BIN) $(LDLIBS); \
-	fi
-
-run: build
-	@if ! command -v "$(CC)" >/dev/null 2>&1; then \
-		echo "skip: C compiler '$(CC)' not found"; \
-	else \
-		./$(BIN) $(INPUT) --output $(OUTPUT) --log $(LOG); \
-	fi
-
-test: build
-	@if ! command -v "$(CC)" >/dev/null 2>&1; then \
-		echo "skip: C compiler '$(CC)' not found"; \
-	else \
-		./$(BIN) --assert $(INPUT) --output $(OUTPUT) --log $(LOG); \
-	fi
-
-clean:
-	rm -rf $(GENERATED_DIR) $(DIST_DIR)
+include ../../mk/c.mk

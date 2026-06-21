@@ -25,3 +25,7 @@ make -C examples/csharp/vehicle-report test
 Generated scanner/parser files are written to `Generated/` with `.g.cs`
 filenames and ignored by Git. Each project keeps handwritten reducer and demo
 code outside `Generated/`.
+
+The Makefiles include shared fragments from `examples/mk` and default to
+shared valid fixtures under `examples/testdata`. For a smaller copyable starter
+project, use `examples/templates/csharp/mini-compiler`.

@@ -275,7 +275,7 @@ S : A B {c: pair} ;
 	if !strings.Contains(stdout.String(), "generated ") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	for _, name := range []string{"tokens.h", "scanner.h", "scanner.c", "parser.h", "parser.c", "langforge.manifest.json"} {
+	for _, name := range []string{"tokens.h", "scanner.h", "scanner.c", "parser.h", "parser.c", "langforge.manifest.json", "langforge.actions.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected C generated file %s: %v", name, err)
 		}
@@ -314,7 +314,7 @@ S : A B {cpp: pair} ;
 	if !strings.Contains(stdout.String(), "generated ") {
 		t.Fatalf("stdout = %q", stdout.String())
 	}
-	for _, name := range []string{"tokens.hpp", "scanner.hpp", "scanner.cpp", "parser.hpp", "parser.cpp", "langforge.manifest.json"} {
+	for _, name := range []string{"tokens.hpp", "scanner.hpp", "scanner.cpp", "parser.hpp", "parser.cpp", "langforge.manifest.json", "langforge.actions.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected C++ generated file %s: %v", name, err)
 		}
@@ -658,6 +658,7 @@ func TestRunGenerate_GeneratedGoParserDispatchesSemanticReducer(t *testing.T) {
 	dir := t.TempDir()
 	specPath := filepath.Join(dir, "semantic.lf")
 	writeFile(t, specPath, `%package semantic
+%semantic go type S string
 %token A B
 %start S
 %% lexer
@@ -665,13 +666,25 @@ func TestRunGenerate_GeneratedGoParserDispatchesSemanticReducer(t *testing.T) {
 "b" => token(B);
 [1-32]+ => skip;
 %% parser
-S : A B {go: pair} ;
+S : left=A right=B {go: pair} ;
 `)
 	out := filepath.Join(dir, "generated")
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "go", "--out", out}, &stdout, &stderr)
 	if code != ExitOK {
 		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	actionManifest := readFile(t, filepath.Join(out, "langforge.actions.json"))
+	for _, fragment := range []string{
+		`"name": "pair"`,
+		`"returnType": "string"`,
+		`"label": "left"`,
+		`"label": "right"`,
+		`"typed": true`,
+	} {
+		if !strings.Contains(actionManifest, fragment) {
+			t.Fatalf("action manifest missing %q:\n%s", fragment, actionManifest)
+		}
 	}
 	writeFile(t, filepath.Join(out, "generated_test.go"), `package semantic
 
@@ -704,11 +717,22 @@ func TestGeneratedReducerDispatch(t *testing.T) {
 		if len(ctx.RHS) != 2 || ctx.RHS[0] != "A" || ctx.RHS[1] != "B" {
 			t.Fatalf("rhs = %#v", ctx.RHS)
 		}
+		if len(ctx.Labels) != 2 || ctx.Labels[0] != "left" || ctx.Labels[1] != "right" {
+			t.Fatalf("labels = %#v", ctx.Labels)
+		}
 		if len(ctx.Values) != 2 {
 			t.Fatalf("values = %#v", ctx.Values)
 		}
-		left := ctx.Values[0].(Lexeme)
-		right := ctx.Values[1].(Lexeme)
+		leftValue, err := ctx.ValueFor("left")
+		if err != nil {
+			return nil, err
+		}
+		rightValue, err := ctx.ValueFor("right")
+		if err != nil {
+			return nil, err
+		}
+		left := leftValue.(Lexeme)
+		right := rightValue.(Lexeme)
 		return left.Text + right.Text, nil
 	}))
 	if err != nil {
@@ -722,15 +746,42 @@ func TestGeneratedReducerDispatch(t *testing.T) {
 		t.Fatalf("semantic action lookup = %v, %v", action, ok)
 	}
 	value, err = ParseWithReducer(tokens, ReducerMap{
-		SemanticActionPair: func(ctx Reduction) (Value, error) {
-			return ctx.ActionID.String(), nil
-		},
+		SemanticActionPair: TypedPair(func(ctx PairReduction) (string, error) {
+			return ctx.Left.Text + ctx.Right.Text, nil
+		}),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value != "pair" {
-		t.Fatalf("map reducer value = %#v, want pair", value)
+	if value != "ab" {
+		t.Fatalf("typed map reducer value = %#v, want ab", value)
+	}
+	if err := (ReducerMap{}).ValidateCoverage(); err == nil || !strings.Contains(err.Error(), "pair") {
+		t.Fatalf("missing reducer coverage error = %v", err)
+	}
+	unknownCoverage := ReducerMap{
+		SemanticActionPair: TypedPair(func(ctx PairReduction) (string, error) {
+			return ctx.Left.Text + ctx.Right.Text, nil
+		}),
+		SemanticAction(99): func(ctx Reduction) (Value, error) { return nil, nil },
+	}
+	if err := unknownCoverage.ValidateCoverage(); err == nil || !strings.Contains(err.Error(), "firstUnknown=99") {
+		t.Fatalf("unknown reducer coverage error = %v", err)
+	}
+	if _, err := ParseWithReducer(tokens, ReducerMap{}); err == nil || !strings.Contains(err.Error(), "coverage") {
+		t.Fatalf("parse coverage error = %v", err)
+	}
+	if _, err := (Reduction{Rule: 1, Action: "pair"}).ValueFor("left"); err == nil || !strings.Contains(err.Error(), "no RHS label") {
+		t.Fatalf("missing label error = %v", err)
+	}
+	if _, err := NewPairReduction(Reduction{
+		Rule:     1,
+		ActionID: SemanticActionPair,
+		Action:   "pair",
+		Labels:   []string{"left", "right"},
+		Values:   []Value{"not a lexeme", Lexeme{Text: "b"}},
+	}); err == nil || !strings.Contains(err.Error(), "want semantic.Lexeme") {
+		t.Fatalf("typed context mismatch error = %v", err)
 	}
 	_, err = ParseWithReducer(tokens, ReducerFunc(func(ctx Reduction) (Value, error) {
 		return nil, errors.New("reducer stopped")
@@ -844,7 +895,7 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 	if !strings.Contains(manifest, `"target": "csharp"`) || !strings.Contains(manifest, `"namespace": "LangForge.Examples.Calc.Generated"`) {
 		t.Fatalf("unexpected C# manifest:\n%s", manifest)
 	}
-	for _, name := range []string{"Tokens.g.cs", "Scanner.g.cs", "Parser.g.cs"} {
+	for _, name := range []string{"Tokens.g.cs", "Scanner.g.cs", "Parser.g.cs", "langforge.actions.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("generated C# file %s missing: %v", name, err)
 		}

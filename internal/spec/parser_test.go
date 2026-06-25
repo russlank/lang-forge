@@ -95,12 +95,13 @@ func TestParseCombined_SemanticDirectives(t *testing.T) {
 	parsed, diags := ParseCombined([]byte(`%target go
 %semantic go mode inline
 %semantic go import sem "example.test/semantics"
+%semantic go type S sem.Result
 %token A
 %start S
 %% lexer
 "a" => token(A);
 %% parser
-S : A {go: return sem.Reduce(ctx)} ;
+S : value=A {go: return sem.Reduce(ctx)} ;
 `), "semantic.lf")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
@@ -117,6 +118,36 @@ S : A {go: return sem.Reduce(ctx)} ;
 	}
 	if got := parsed.Grammar.Rules[0].Alternatives[0].Actions["go"]; got != "return sem.Reduce(ctx)" {
 		t.Fatalf("action = %q", got)
+	}
+	if got, ok := parsed.Semantics.TypeFor("go", "S"); !ok || got != "sem.Result" {
+		t.Fatalf("semantic type = %q, %v", got, ok)
+	}
+	alternative := parsed.Grammar.Rules[0].Alternatives[0]
+	if len(alternative.Labels) != 1 || alternative.Labels[0] != "value" || alternative.Symbols[0] != "A" {
+		t.Fatalf("labeled alternative = %#v", alternative)
+	}
+}
+
+func TestParseCombined_RejectsInvalidOrDuplicateRHSLabels(t *testing.T) {
+	for _, input := range []string{
+		"%token A B\n%% parser\nS : left=A left=B ;\n",
+		"%token A\n%% parser\nS : 1left=A ;\n",
+		"%token A\n%% parser\nS : left= ;\n",
+	} {
+		if _, diags := ParseCombined([]byte(input), "bad-label.lf"); !diags.HasErrors() {
+			t.Fatalf("expected label diagnostics for %q", input)
+		}
+	}
+}
+
+func TestParseCombined_RejectsDuplicateSemanticType(t *testing.T) {
+	_, diags := ParseCombined([]byte(`%semantic go type S float64
+%semantic go type S int
+%% parser
+S : %empty ;
+`), "duplicate-type.lf")
+	if !diags.HasErrors() {
+		t.Fatal("expected duplicate semantic type diagnostic")
 	}
 }
 

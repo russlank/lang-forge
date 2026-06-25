@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/russlank/lang-forge/internal/action"
 	"github.com/russlank/lang-forge/internal/lex"
 	"github.com/russlank/lang-forge/internal/parse"
 	"github.com/russlank/lang-forge/internal/spec"
@@ -69,7 +70,8 @@ func Generate(input Input, outDir string) error {
 	prefix := cPrefix(input.Spec.Package, filepath.Base(outDir))
 	tokens := tokenNames(input)
 	tokenIDs := tokenIdentifiers(prefix, tokens)
-	actions := semanticActions(input.ParseTable.Rules, "c", prefix)
+	actionManifest := action.Build(input.Grammar, input.Spec.Semantics, "c")
+	actions := semanticActionsFromNames(actionManifest.Names(), prefix)
 	manifest := Manifest{
 		Tool:         version.Name,
 		Version:      version.Version,
@@ -88,6 +90,9 @@ func Generate(input Input, outDir string) error {
 		GrammarRules: len(input.Grammar.Rules),
 	}
 	if err := writeJSON(filepath.Join(outDir, "langforge.manifest.json"), manifest); err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(outDir, "langforge.actions.json"), actionManifest); err != nil {
 		return err
 	}
 	if err := writeJSON(filepath.Join(outDir, "langforge.tables.json"), Summary{Spec: input.Spec, Lexer: input.DFA, Grammar: input.Grammar, ParseTable: input.ParseTable}); err != nil {
@@ -694,18 +699,25 @@ func renderParserGotos(prefix string, table *parse.Table) string {
 
 func semanticActions(rules []parse.Rule, target string, prefix string) []SemanticAction {
 	seen := map[string]bool{}
-	used := map[string]int{"NONE": 1}
-	var out []SemanticAction
+	var names []string
 	for _, rule := range rules {
 		name := strings.TrimSpace(rule.Actions[target])
 		if name == "" || seen[name] {
 			continue
 		}
 		seen[name] = true
+		names = append(names, name)
+	}
+	return semanticActionsFromNames(names, prefix)
+}
+
+func semanticActionsFromNames(names []string, prefix string) []SemanticAction {
+	used := map[string]int{"NONE": 1}
+	out := make([]SemanticAction, 0, len(names))
+	for _, name := range names {
 		id := len(out) + 1
 		out = append(out, SemanticAction{ID: id, Name: name, Constant: ""})
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	for i := range out {
 		out[i].Constant = uniqueConstant(cIdentifierSuffix(out[i].Name), used, strings.ToUpper(prefix)+"_ACTION_")
 	}

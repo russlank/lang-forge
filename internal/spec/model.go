@@ -80,6 +80,7 @@ const (
 type SemanticSpec struct {
 	Includes []SemanticInclude             `json:"includes,omitempty"`
 	Modes    map[string]SemanticActionMode `json:"modes,omitempty"`
+	Types    []SemanticType                `json:"types,omitempty"`
 }
 
 // SemanticInclude declares a target-specific handwritten package/library used by semantics.
@@ -87,6 +88,18 @@ type SemanticInclude struct {
 	Target string           `json:"target"`
 	Alias  string           `json:"alias,omitempty"`
 	Path   string           `json:"path"`
+	Span   diagnostics.Span `json:"span"`
+}
+
+// SemanticType declares the target-language result type of one nonterminal.
+//
+// Terminals keep the generated Lexeme type. Nonterminal declarations let
+// generators produce typed reduction contexts without changing the parser's
+// target-neutral table model.
+type SemanticType struct {
+	Target string           `json:"target"`
+	Symbol string           `json:"symbol"`
+	Type   string           `json:"type"`
 	Span   diagnostics.Span `json:"span"`
 }
 
@@ -107,6 +120,16 @@ func (s SemanticSpec) IncludesFor(target string) []SemanticInclude {
 		}
 	}
 	return out
+}
+
+// TypeFor returns the target-language semantic type declared for symbol.
+func (s SemanticSpec) TypeFor(target, symbol string) (string, bool) {
+	for _, semanticType := range s.Types {
+		if semanticType.Target == target && semanticType.Symbol == symbol {
+			return semanticType.Type, true
+		}
+	}
+	return "", false
 }
 
 // NamedSpan associates a source span with a named language element.
@@ -177,6 +200,7 @@ type RuleSpec struct {
 // Alternative is one right-hand side for a grammar production.
 type Alternative struct {
 	Symbols []string          `json:"symbols"`
+	Labels  []string          `json:"labels,omitempty"`
 	Actions map[string]string `json:"actions,omitempty"`
 	Span    diagnostics.Span  `json:"span"`
 }

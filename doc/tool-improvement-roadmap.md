@@ -2,14 +2,14 @@
 
 Document id: `lang-forge-tool-improvement-roadmap-v1`
 Status: `active`
-Last updated: `2026-06-20`
+Last updated: `2026-06-25`
 Owner: `Project maintainers`
 Scope: `Forward-looking public roadmap for LangForge usability, diagnostics, generated APIs, editor tooling, and production-readiness`
 
 **Document purpose:** Capture suggested improvements to LangForge as a parser/scanner/compiler tooling project.  
 **Audience:** LangForge maintainers, contributors, and AI coding agents working on future development.  
 **Scope:** Core generator features, grammar ergonomics, typed semantic values, diagnostics, IDE/editor support, runtime maturity, and production-readiness.  
-**Date:** 2026-06-20
+**Date:** 2026-06-25
 
 ---
 
@@ -30,6 +30,9 @@ LangForge already has a strong foundation as a modern Lex/Yacc-style parser-gene
 - Go, C#, C, and C++ output;
 - reducer-based semantic hooks;
 - deterministic manifests;
+- named RHS labels and target-specific nonterminal type declarations;
+- generated Go typed reducer contexts and reducer coverage validation;
+- deterministic cross-target semantic action manifests;
 - generated example projects.
 
 The examples show the intended model well:
@@ -102,57 +105,35 @@ This creates several problems:
 - diagnostics vary by target;
 - code becomes harder to audit.
 
-### Recommendation
+### Implemented Foundation
 
-Add grammar-level type annotations.
-
-Possible syntax:
+LangForge now accepts target-specific nonterminal result types:
 
 ```lf
-%type Expr float64
-%type Term float64
-%type Factor float64
-%token Number string
+%semantic go type Expr float64
+%semantic csharp type Expr double
+%semantic c type Expr double
+%semantic cpp type Expr double
 ```
 
-Or target-specific forms:
-
-```lf
-%type go Expr float64
-%type csharp Expr double
-%type c Expr double
-%type cpp Expr double
-```
-
-Generated reducers could expose typed contexts:
+Terminals remain generated `Lexeme` values so scanner text and source spans are
+not discarded. The Go backend validates type syntax and generates contexts:
 
 ```go
-func ReduceAdd(ctx AddReduction) (float64, error) {
-    return ctx.Left + ctx.Right, nil
-}
+parser.TypedAdd(func(ctx parser.AddReduction) (float64, error) {
+	return ctx.Left + ctx.Right, nil
+})
 ```
 
-### Intermediate Step
-
-Before full typed reducer generation, add named RHS labels:
+Named RHS labels are implemented in the grammar:
 
 ```lf
 Expr : left=Expr Plus right=Term {go: add}
 ```
 
-Then generated APIs can expose named values:
-
-```go
-ctx.Left
-ctx.Right
-```
-
-or typed helper methods:
-
-```go
-ctx.ArgExpr("left")
-ctx.ArgExpr("right")
-```
+All backends emit the labels and declared types in
+`langforge.actions.json`. C#, C, and C++ typed context APIs remain the next
+backend-parity step.
 
 ### Acceptance Criteria
 
@@ -821,15 +802,31 @@ Add options:
 
 Generate an action manifest and validate reducer coverage.
 
+Status: implemented across Go, C#, C, and C++ generation as deterministic
+`langforge.actions.json`. Go `ReducerMap` additionally exposes
+`ValidateCoverage`, and `ParseWithReducer` performs the check automatically.
+
 Example manifest:
 
 ```json
 {
   "actions": [
     {
-      "id": "Add",
-      "rule": "Expr : Expr Plus Term",
-      "rhs": ["Expr", "Plus", "Term"]
+      "id": 1,
+      "name": "add",
+      "typed": true,
+      "rules": [
+        {
+          "id": 2,
+          "lhs": "Expr",
+          "returnType": "float64",
+          "rhs": [
+            {"position": 1, "symbol": "Expr", "label": "left", "type": "float64"},
+            {"position": 2, "symbol": "Plus", "type": "Lexeme"},
+            {"position": 3, "symbol": "Term", "label": "right", "type": "float64"}
+          ]
+        }
+      ]
     }
   ]
 }

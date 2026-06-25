@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-generated-code-and-semantics-v1`
 Status: `active`
-Last updated: `2026-06-19`
+Last updated: `2026-06-25`
 Owner: `Project maintainers`
 Scope: `Beginner guide to generated files, semantic actions, reducers, Go build tags, and Go/C#/C/C++ output`
 
@@ -52,11 +52,15 @@ layer.
 
 ## What `{go: add}` Means
 
-In reducer mode, an action block is a label attached to a grammar alternative:
+In reducer mode, an action block is a label attached to a grammar alternative.
+RHS labels give semantic values stable names:
 
 ```text
-Expr : Expr Plus Term {go: add}
-     | Expr Minus Term {go: subtract}
+%semantic go type Expr float64
+%semantic go type Term float64
+
+Expr : left=Expr Plus right=Term {go: add}
+     | left=Expr Minus right=Term {go: subtract}
      ;
 ```
 
@@ -66,6 +70,7 @@ that rule, it creates a reduction context:
 ```text
 ActionID = SemanticActionAdd
 Action   = "add"
+Labels   = ["left", "", "right"]
 Values   = values for Expr, Plus, and Term
 ```
 
@@ -79,16 +84,16 @@ The reducer is ordinary Go code:
 
 ```go
 var reducers = parser.ReducerMap{
-	parser.SemanticActionAdd: func(ctx parser.Reduction) (parser.Value, error) {
-		left := ctx.Values[0].(float64)
-		right := ctx.Values[2].(float64)
-		return left + right, nil
-	},
-	parser.SemanticActionSubtract: func(ctx parser.Reduction) (parser.Value, error) {
-		left := ctx.Values[0].(float64)
-		right := ctx.Values[2].(float64)
-		return left - right, nil
-	},
+	parser.SemanticActionAdd: parser.TypedAdd(
+		func(ctx parser.AddReduction) (float64, error) {
+			return ctx.Left + ctx.Right, nil
+		},
+	),
+	parser.SemanticActionSubtract: parser.TypedSubtract(
+		func(ctx parser.SubtractReduction) (float64, error) {
+			return ctx.Left - ctx.Right, nil
+		},
+	),
 }
 
 func reduce(ctx parser.Reduction) (parser.Value, error) {
@@ -112,6 +117,30 @@ string comparisons and gives compiler-checked action names.
 The same idea is target-neutral. The `.lf` file contains portable action
 labels, while each backend exposes the labels in the idiom of its target
 language.
+
+## Typed Contexts And Coverage
+
+For Go, an action receives a generated typed context when its result
+nonterminal and labeled nonterminals have `%semantic go type` declarations,
+labeled terminals use the generated `Lexeme` type, and every rule sharing the
+action label has the same named field and result types.
+
+The generated adapter performs focused runtime conversion once at the parser
+boundary. Handwritten reducer logic then uses ordinary typed fields. The boxed
+API remains available for gradual migration:
+
+```go
+left, err := ctx.ValueFor("left")
+```
+
+Generated `ReducerMap` values expose `ValidateCoverage`. The standard
+`ParseWithReducer` entry point calls it automatically, so missing handlers fail
+before input-dependent parser execution can hide the gap.
+
+Every backend writes `langforge.actions.json`. It records actions, normalized
+rules, RHS positions, optional labels, semantic types, and why an action could
+not receive one consistent typed context. This is the stable contract for
+tests, tooling, and future target-specific typed adapters.
 
 ## Why Reducer Mode Is The Default
 
@@ -167,10 +196,11 @@ A spec can declare a handwritten semantic dependency:
 %semantic go import calcsem "example.com/project/calc/semantics"
 ```
 
-In reducer mode, this is metadata. LangForge records the dependency in the
-generated manifest and exposes it from the generated parser package, but it
-does not automatically call that package. The application still wires the
-reducer explicitly:
+In reducer mode, this is normally metadata. LangForge records the dependency
+in generated metadata and exposes it from the parser package, but it does not
+automatically call that package. If a `%semantic go type` uses the import alias,
+the generated parser imports the package because its typed context references
+that type. The application still wires reducer behavior explicitly:
 
 ```go
 value, err := calc.ParseWithReducer(tokens, calc.ReducerFunc(calcsem.Reduce))
@@ -182,13 +212,16 @@ because the generated inline action code may call that package directly.
 ## What Is Generated
 
 For Go, LangForge writes `tokens.go`, `scanner.go`, `parser.go`,
-`langforge.manifest.json`, and `langforge.tables.json`.
+`langforge.actions.json`, `langforge.manifest.json`, and
+`langforge.tables.json`.
 
 For C#, LangForge writes `Tokens.g.cs`, `Scanner.g.cs`, `Parser.g.cs`,
-`langforge.manifest.json`, and `langforge.tables.json`.
+`langforge.actions.json`, `langforge.manifest.json`, and
+`langforge.tables.json`.
 
 For C, LangForge writes `tokens.h`, `scanner.h`, `scanner.c`, `parser.h`,
-`parser.c`, `langforge.manifest.json`, and `langforge.tables.json`.
+`parser.c`, `langforge.actions.json`, `langforge.manifest.json`, and
+`langforge.tables.json`.
 
 Generated parser runtimes keep parse state local to each parse call. Go and C#
 scanner instances serialize their mutable cursor so a shared scanner can be
@@ -213,6 +246,7 @@ For Go output, that directory contains:
 tokens.go
 scanner.go
 parser.go
+langforge.actions.json
 langforge.tables.json
 langforge.manifest.json
 ```
@@ -230,7 +264,8 @@ examples/csharp/vehicle-report/Generated/
 ```
 
 That directory contains `Tokens.g.cs`, `Scanner.g.cs`, `Parser.g.cs`,
-`langforge.tables.json`, and `langforge.manifest.json`.
+`langforge.actions.json`, `langforge.tables.json`, and
+`langforge.manifest.json`.
 
 For C output, LangForge writes local `generated` directories:
 
@@ -242,7 +277,7 @@ examples/c/vehicle-report/generated/
 ```
 
 Each C generated directory contains `tokens.h`, `scanner.h`, `scanner.c`,
-`parser.h`, `parser.c`, `langforge.tables.json`, and
+`parser.h`, `parser.c`, `langforge.actions.json`, `langforge.tables.json`, and
 `langforge.manifest.json`.
 
 For C++ output, LangForge writes local `generated` directories:
@@ -252,8 +287,8 @@ examples/cpp/calc/generated/
 ```
 
 Each C++ generated directory contains `tokens.hpp`, `scanner.hpp`,
-`scanner.cpp`, `parser.hpp`, `parser.cpp`, `langforge.tables.json`, and
-`langforge.manifest.json`.
+`scanner.cpp`, `parser.hpp`, `parser.cpp`, `langforge.actions.json`,
+`langforge.tables.json`, and `langforge.manifest.json`.
 
 Application files outside `generated` are source-owned. For example:
 

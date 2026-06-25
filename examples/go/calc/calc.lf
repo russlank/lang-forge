@@ -2,6 +2,10 @@
 %package calc
 %semantic go mode reducer
 %semantic go import calcsem "github.com/russlank/lang-forge/examples/go/calc/semantics"
+%semantic go type S float64
+%semantic go type Expr float64
+%semantic go type Term float64
+%semantic go type Factor float64
 %start S
 %token Number Plus Minus Mul Div LParen RParen
 
@@ -19,25 +23,25 @@ NUMBER     => token(Number);
 [1-32]+    => skip;
 
 %% parser
-S : Expr {go: start} ;
-Expr : Expr Plus Term
+S : value=Expr {go: start} ;
+Expr : left=Expr Plus right=Term
          {go: add}
-     | Expr Minus Term
+     | left=Expr Minus right=Term
          {go: subtract}
-     | Term
+     | value=Term
          {go: pass}
      ;
-Term : Term Mul Factor
+Term : left=Term Mul right=Factor
          {go: multiply}
-     | Term Div Factor
+     | left=Term Div right=Factor
          {go: divide}
-     | Factor
+     | value=Factor
          {go: pass}
      ;
-Factor : Number
+Factor : token=Number
            {go: number}
-       | LParen Expr RParen
+       | LParen value=Expr RParen
            {go: group}
-       | Minus Factor
+       | Minus value=Factor
            {go: negate}
        ;

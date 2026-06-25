@@ -25,11 +25,17 @@ generated parser with `ParseWithReducer`.
 In reducer mode, action blocks such as `{go: add}` and `{go: subtract}` are
 labels, not generated arithmetic code. LangForge stores the label on the
 reduced rule and exposes both `Reduction.ActionID` and `Reduction.Action`.
-The handwritten reducer in [semantics/reducer.go](semantics/reducer.go) uses a
-generated `ReducerMap` keyed by constants such as `SemanticActionAdd` and
-`SemanticActionSubtract` to map those labels to addition, subtraction, and
-the other calculator behavior. There is no calculator-specific
-logic hard coded in LangForge.
+The grammar also names RHS values (`left=Expr`, `right=Term`) and declares
+`float64` results with `%semantic go type`. LangForge therefore generates
+contexts such as `AddReduction` and adapters such as `TypedAdd`. The
+handwritten reducer in [semantics/reducer.go](semantics/reducer.go) uses typed
+fields (`ctx.Left`, `ctx.Right`) rather than positional indexes and casts.
+
+The generated `ReducerMap` is keyed by constants such as
+`SemanticActionAdd` and `SemanticActionSubtract`. Its coverage is validated
+before `ParseWithReducer` starts parsing, so adding a grammar action without a
+handler fails immediately. There is still no calculator-specific arithmetic
+hard coded in LangForge.
 
 Only the `generated` directory is produced by LangForge. The `semantics` and
 `cmd` directories are ordinary source code that imports the generated package.
@@ -40,6 +46,9 @@ Only the `generated` directory is produced by LangForge. The `semantics` and
 | `generated/` | Recreated scanner/parser package, ignored by Git |
 | `semantics/reducer.go` | Handwritten reducer that maps action labels to arithmetic |
 | `cmd/calc-demo` | Handwritten command-line demo |
+
+The generated directory also contains `langforge.actions.json`, a deterministic
+record of action IDs, rules, RHS labels, and target semantic types.
 
 The real demo files are guarded by the Go build tag
 `//go:build langforge_generated` because they import `generated`. The Makefile

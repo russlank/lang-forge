@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/russlank/lang-forge/internal/action"
 	"github.com/russlank/lang-forge/internal/diagnostics"
 	"github.com/russlank/lang-forge/internal/lex"
 	"github.com/russlank/lang-forge/internal/parse"
@@ -72,7 +73,8 @@ func Generate(input Input, outDir string) error {
 	}
 	tokens := tokenNames(input)
 	tokenIDs := tokenIdentifiers(tokens)
-	actions := semanticActions(input.ParseTable.Rules, "cpp")
+	actionManifest := action.Build(input.Grammar, input.Spec.Semantics, "cpp")
+	actions := semanticActionsFromNames(actionManifest.Names())
 	manifest := Manifest{
 		Tool:         version.Name,
 		Version:      version.Version,
@@ -91,6 +93,9 @@ func Generate(input Input, outDir string) error {
 		GrammarRules: len(input.Grammar.Rules),
 	}
 	if err := writeJSON(filepath.Join(outDir, "langforge.manifest.json"), manifest); err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(outDir, "langforge.actions.json"), actionManifest); err != nil {
 		return err
 	}
 	if err := writeJSON(filepath.Join(outDir, "langforge.tables.json"), Summary{Spec: input.Spec, Lexer: input.DFA, Grammar: input.Grammar, ParseTable: input.ParseTable}); err != nil {
@@ -911,14 +916,22 @@ Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer) {
 
 func semanticActions(rules []parse.Rule, target string) []SemanticAction {
 	seen := map[string]bool{}
-	usedConstants := map[string]int{"None": 1}
-	var out []SemanticAction
+	var names []string
 	for _, rule := range rules {
 		name := strings.TrimSpace(rule.Actions[target])
 		if name == "" || seen[name] {
 			continue
 		}
 		seen[name] = true
+		names = append(names, name)
+	}
+	return semanticActionsFromNames(names)
+}
+
+func semanticActionsFromNames(names []string) []SemanticAction {
+	usedConstants := map[string]int{"None": 1}
+	out := make([]SemanticAction, 0, len(names))
+	for _, name := range names {
 		id := len(out) + 1
 		out = append(out, SemanticAction{
 			ID:       id,

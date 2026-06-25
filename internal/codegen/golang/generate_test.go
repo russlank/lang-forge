@@ -1,9 +1,11 @@
 package golang
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/russlank/lang-forge/internal/parse"
+	"github.com/russlank/lang-forge/internal/spec"
 )
 
 func TestGoPackageName_ExplicitPackageMustBeValid(t *testing.T) {
@@ -14,6 +16,15 @@ func TestGoPackageName_ExplicitPackageMustBeValid(t *testing.T) {
 	}
 	if got, err := goPackageName("calc", "fallback"); err != nil || got != "calc" {
 		t.Fatalf("goPackageName explicit calc = %q, %v; want calc, nil", got, err)
+	}
+}
+
+func TestValidateSemanticTypesRejectsInvalidGoType(t *testing.T) {
+	err := validateSemanticTypes(spec.SemanticSpec{Types: []spec.SemanticType{
+		{Target: "go", Symbol: "Expr", Type: "[]"},
+	}}, "go")
+	if err == nil || !strings.Contains(err.Error(), "Expr") {
+		t.Fatalf("error = %v", err)
 	}
 }
 

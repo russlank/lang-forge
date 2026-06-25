@@ -56,7 +56,7 @@ func TestFromSpec_PreservesAlternativeActionsOnNormalizedRules(t *testing.T) {
 		Tokens: []spec.TokenDecl{{Name: "A"}},
 		Grammar: spec.GrammarSpec{Start: "S", Rules: []spec.RuleSpec{
 			{Name: "S", Alternatives: []spec.Alternative{
-				{Symbols: []string{"A"}, Actions: map[string]string{"go": "make-s"}},
+				{Symbols: []string{"A"}, Labels: []string{"value"}, Actions: map[string]string{"go": "make-s"}},
 			}},
 		}},
 	})
@@ -65,5 +65,44 @@ func TestFromSpec_PreservesAlternativeActionsOnNormalizedRules(t *testing.T) {
 	}
 	if got := g.Rules[0].Actions["go"]; got != "make-s" {
 		t.Fatalf("action = %q, want make-s", got)
+	}
+	if got := g.Rules[0].Labels; len(got) != 1 || got[0] != "value" {
+		t.Fatalf("labels = %#v, want value", got)
+	}
+}
+
+func TestFromSpec_ValidatesSemanticTypes(t *testing.T) {
+	_, terminalDiags := FromSpec(spec.Spec{
+		Tokens:    []spec.TokenDecl{{Name: "A"}},
+		Semantics: spec.SemanticSpec{Types: []spec.SemanticType{{Target: "go", Symbol: "A", Type: "string"}}},
+		Grammar: spec.GrammarSpec{Start: "S", Rules: []spec.RuleSpec{
+			{Name: "S", Alternatives: []spec.Alternative{{Symbols: []string{"A"}}}},
+		}},
+	})
+	if !terminalDiags.HasErrors() {
+		t.Fatal("expected terminal semantic type diagnostic")
+	}
+
+	_, missingDiags := FromSpec(spec.Spec{
+		Semantics: spec.SemanticSpec{Types: []spec.SemanticType{{Target: "go", Symbol: "Missing", Type: "string"}}},
+		Grammar: spec.GrammarSpec{Start: "S", Rules: []spec.RuleSpec{
+			{Name: "S", Alternatives: []spec.Alternative{{}}},
+		}},
+	})
+	if !missingDiags.HasErrors() {
+		t.Fatal("expected undefined semantic type diagnostic")
+	}
+
+	_, duplicateDiags := FromSpec(spec.Spec{
+		Semantics: spec.SemanticSpec{Types: []spec.SemanticType{
+			{Target: "go", Symbol: "S", Type: "string"},
+			{Target: "go", Symbol: "S", Type: "int"},
+		}},
+		Grammar: spec.GrammarSpec{Start: "S", Rules: []spec.RuleSpec{
+			{Name: "S", Alternatives: []spec.Alternative{{}}},
+		}},
+	})
+	if !duplicateDiags.HasErrors() {
+		t.Fatal("expected duplicate semantic type diagnostic")
 	}
 }

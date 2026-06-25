@@ -26,6 +26,7 @@ type Rule struct {
 	ID      int               `json:"id"`
 	LHS     string            `json:"lhs"`
 	RHS     []string          `json:"rhs"`
+	Labels  []string          `json:"labels,omitempty"`
 	Actions map[string]string `json:"actions,omitempty"`
 	Span    diagnostics.Span  `json:"span"`
 }
@@ -67,6 +68,22 @@ func FromSpec(s spec.Spec) (*Grammar, diagnostics.List) {
 	if !g.Nonterminals[g.Start] {
 		diags.AddError("LF301", "start symbol `"+g.Start+"` has no rule", diagnostics.Span{})
 	}
+	semanticTypes := map[string]bool{}
+	for _, semanticType := range s.Semantics.Types {
+		key := semanticType.Target + "\x00" + semanticType.Symbol
+		if semanticTypes[key] {
+			diags.AddError("LF306", "duplicate semantic type for target `"+semanticType.Target+"` and nonterminal `"+semanticType.Symbol+"`", semanticType.Span)
+			continue
+		}
+		semanticTypes[key] = true
+		if g.Terminals[semanticType.Symbol] {
+			diags.AddError("LF304", "semantic type declarations apply to nonterminals; terminal `"+semanticType.Symbol+"` already has the generated Lexeme type", semanticType.Span)
+			continue
+		}
+		if !g.Nonterminals[semanticType.Symbol] {
+			diags.AddError("LF305", "semantic type references undefined nonterminal `"+semanticType.Symbol+"`", semanticType.Span)
+		}
+	}
 	nextID := 1
 	for _, rule := range s.Grammar.Rules {
 		for _, alt := range rule.Alternatives {
@@ -79,6 +96,7 @@ func FromSpec(s spec.Spec) (*Grammar, diagnostics.List) {
 				ID:      nextID,
 				LHS:     rule.Name,
 				RHS:     append([]string(nil), alt.Symbols...),
+				Labels:  append([]string(nil), alt.Labels...),
 				Actions: cloneStringMap(alt.Actions),
 				Span:    alt.Span,
 			})

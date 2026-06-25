@@ -19,9 +19,12 @@ Current implementation status:
 - LR(0), SLR, LALR(1), IELR(1), and canonical LR(1) parser-table construction
   with conflict reporting;
 - CLI commands: `version`, `validate`, `inspect`, `generate`;
+- named RHS labels, target-specific nonterminal semantic types, and
+  deterministic `langforge.actions.json` contracts across all backends;
 - Go backend output for scanner/parser tables, scanner runtime, parser
   runtime with reducer-based semantic action hooks, generated semantic action
-  IDs, reducer maps, token constants, and deterministic manifests;
+  IDs, typed reducer contexts, reducer coverage validation, reducer maps,
+  token constants, and deterministic manifests;
 - C# backend output for nullable-aware scanner/parser tables, thread-safe
   scanner instances, parser reducer hooks, semantic action enums, XML
   documentation comments, and deterministic manifests;
@@ -197,8 +200,11 @@ Reusable Codex skills for LangForge live under [skills](skills):
   exposed through reducer callbacks with generated action IDs/enums and
   reducer-map helpers where the target has that convenience layer. Specs can
   also opt into Go inline action mode with target-tagged semantic imports for
-  advanced handwritten-library integration. Typed semantic values, debug
-  tracing, and optional AST helper generation remain planned. See
+  advanced handwritten-library integration. Named RHS labels, target-specific
+  nonterminal types, deterministic action manifests, generated Go typed
+  reducer contexts, and Go reducer-map coverage validation are implemented.
+  Equivalent typed context APIs for C#, C, and C++, debug tracing, and optional
+  AST helper generation remain planned. See
   [Generated code and semantics](doc/generated-code-and-semantics.md) for a
   beginner-friendly explanation of reducer labels, generated directories, and
   Go build tags used by the runnable examples.

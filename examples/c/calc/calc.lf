@@ -1,6 +1,10 @@
 %target c
 %package calc
 %semantic c mode reducer
+%semantic c type S double
+%semantic c type Expr double
+%semantic c type Term double
+%semantic c type Factor double
 %start S
 %token Number Plus Minus Mul Div LParen RParen
 
@@ -18,25 +22,25 @@ NUMBER     => token(Number);
 [1-32]+    => skip;
 
 %% parser
-S : Expr {c: start} ;
-Expr : Expr Plus Term
+S : value=Expr {c: start} ;
+Expr : left=Expr Plus right=Term
          {c: add}
-     | Expr Minus Term
+     | left=Expr Minus right=Term
          {c: subtract}
-     | Term
+     | value=Term
          {c: pass}
      ;
-Term : Term Mul Factor
+Term : left=Term Mul right=Factor
          {c: multiply}
-     | Term Div Factor
+     | left=Term Div right=Factor
          {c: divide}
-     | Factor
+     | value=Factor
          {c: pass}
      ;
-Factor : Number
+Factor : token=Number
            {c: number}
-       | LParen Expr RParen
+       | LParen value=Expr RParen
            {c: group}
-       | Minus Factor
+       | Minus value=Factor
            {c: negate}
        ;

@@ -17,15 +17,29 @@ import (
 )
 
 var reducers = calc.ReducerMap{
-	calc.SemanticActionStart:    reducePass,
-	calc.SemanticActionPass:     reducePass,
-	calc.SemanticActionNumber:   reduceNumber,
-	calc.SemanticActionGroup:    reduceGroup,
-	calc.SemanticActionNegate:   reduceNegate,
-	calc.SemanticActionAdd:      reduceBinary(func(left, right float64) float64 { return left + right }),
-	calc.SemanticActionSubtract: reduceBinary(func(left, right float64) float64 { return left - right }),
-	calc.SemanticActionMultiply: reduceBinary(func(left, right float64) float64 { return left * right }),
-	calc.SemanticActionDivide:   reduceDivide,
+	calc.SemanticActionStart: calc.TypedStart(func(ctx calc.StartReduction) (float64, error) {
+		return ctx.Value, nil
+	}),
+	calc.SemanticActionPass: calc.TypedPass(func(ctx calc.PassReduction) (float64, error) {
+		return ctx.Value, nil
+	}),
+	calc.SemanticActionNumber: calc.TypedNumber(reduceNumber),
+	calc.SemanticActionGroup: calc.TypedGroup(func(ctx calc.GroupReduction) (float64, error) {
+		return ctx.Value, nil
+	}),
+	calc.SemanticActionNegate: calc.TypedNegate(func(ctx calc.NegateReduction) (float64, error) {
+		return -ctx.Value, nil
+	}),
+	calc.SemanticActionAdd: calc.TypedAdd(func(ctx calc.AddReduction) (float64, error) {
+		return ctx.Left + ctx.Right, nil
+	}),
+	calc.SemanticActionSubtract: calc.TypedSubtract(func(ctx calc.SubtractReduction) (float64, error) {
+		return ctx.Left - ctx.Right, nil
+	}),
+	calc.SemanticActionMultiply: calc.TypedMultiply(func(ctx calc.MultiplyReduction) (float64, error) {
+		return ctx.Left * ctx.Right, nil
+	}),
+	calc.SemanticActionDivide: calc.TypedDivide(reduceDivide),
 }
 
 // Reduce evaluates one calculator grammar reduction.
@@ -33,83 +47,17 @@ func Reduce(ctx calc.Reduction) (calc.Value, error) {
 	return reducers.Reduce(ctx)
 }
 
-func reducePass(ctx calc.Reduction) (calc.Value, error) {
-	return NumberArg(ctx, 0)
-}
-
-func reduceNumber(ctx calc.Reduction) (calc.Value, error) {
-	lexeme, err := LexemeArg(ctx, 0)
+func reduceNumber(ctx calc.NumberReduction) (float64, error) {
+	value, err := strconv.ParseFloat(ctx.Token.Text, 64)
 	if err != nil {
-		return nil, err
-	}
-	value, err := strconv.ParseFloat(lexeme.Text, 64)
-	if err != nil {
-		return nil, fmt.Errorf("rule %d number %q: %w", ctx.Rule, lexeme.Text, err)
+		return 0, fmt.Errorf("rule %d number %q: %w", ctx.Reduction.Rule, ctx.Token.Text, err)
 	}
 	return value, nil
 }
 
-func reduceGroup(ctx calc.Reduction) (calc.Value, error) {
-	return NumberArg(ctx, 1)
-}
-
-func reduceNegate(ctx calc.Reduction) (calc.Value, error) {
-	value, err := NumberArg(ctx, 1)
-	if err != nil {
-		return nil, err
+func reduceDivide(ctx calc.DivideReduction) (float64, error) {
+	if ctx.Right == 0 {
+		return 0, fmt.Errorf("rule %d action %q: division by zero", ctx.Reduction.Rule, ctx.Reduction.Action)
 	}
-	return -value, nil
-}
-
-func reduceBinary(op func(left float64, right float64) float64) calc.ReductionHandler {
-	return func(ctx calc.Reduction) (calc.Value, error) {
-		left, err := NumberArg(ctx, 0)
-		if err != nil {
-			return nil, err
-		}
-		right, err := NumberArg(ctx, 2)
-		if err != nil {
-			return nil, err
-		}
-		return op(left, right), nil
-	}
-}
-
-func reduceDivide(ctx calc.Reduction) (calc.Value, error) {
-	left, err := NumberArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	right, err := NumberArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	if right == 0 {
-		return nil, fmt.Errorf("rule %d action %q: division by zero", ctx.Rule, ctx.Action)
-	}
-	return left / right, nil
-}
-
-// NumberArg returns a float64 reduction argument.
-func NumberArg(ctx calc.Reduction, index int) (float64, error) {
-	if index < 0 || index >= len(ctx.Values) {
-		return 0, fmt.Errorf("rule %d action %q missing numeric argument %d", ctx.Rule, ctx.Action, index+1)
-	}
-	value, ok := ctx.Values[index].(float64)
-	if !ok {
-		return 0, fmt.Errorf("rule %d action %q argument %d has type %T, want float64", ctx.Rule, ctx.Action, index+1, ctx.Values[index])
-	}
-	return value, nil
-}
-
-// LexemeArg returns a generated scanner lexeme reduction argument.
-func LexemeArg(ctx calc.Reduction, index int) (calc.Lexeme, error) {
-	if index < 0 || index >= len(ctx.Values) {
-		return calc.Lexeme{}, fmt.Errorf("rule %d action %q missing lexeme argument %d", ctx.Rule, ctx.Action, index+1)
-	}
-	lexeme, ok := ctx.Values[index].(calc.Lexeme)
-	if !ok {
-		return calc.Lexeme{}, fmt.Errorf("rule %d action %q argument %d has type %T, want Lexeme", ctx.Rule, ctx.Action, index+1, ctx.Values[index])
-	}
-	return lexeme, nil
+	return ctx.Left / ctx.Right, nil
 }

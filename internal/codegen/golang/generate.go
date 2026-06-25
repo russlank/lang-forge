@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	goparser "go/parser"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/russlank/lang-forge/internal/action"
 	"github.com/russlank/lang-forge/internal/diagnostics"
 	"github.com/russlank/lang-forge/internal/lex"
 	"github.com/russlank/lang-forge/internal/parse"
@@ -71,8 +73,12 @@ func Generate(input Input, outDir string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateSemanticTypes(input.Spec.Semantics, "go"); err != nil {
+		return err
+	}
 	tokens := tokenNames(input)
-	actions := semanticActions(input.ParseTable.Rules, "go")
+	actionManifest := action.Build(input.Grammar, input.Spec.Semantics, "go")
+	actions := semanticActionsFromNames(actionManifest.Names())
 	manifest := Manifest{
 		Tool:         version.Name,
 		Version:      version.Version,
@@ -93,6 +99,9 @@ func Generate(input Input, outDir string) error {
 	if err := writeJSON(filepath.Join(outDir, "langforge.manifest.json"), manifest); err != nil {
 		return err
 	}
+	if err := writeJSON(filepath.Join(outDir, "langforge.actions.json"), actionManifest); err != nil {
+		return err
+	}
 	if err := writeJSON(filepath.Join(outDir, "langforge.tables.json"), Summary{Spec: input.Spec, Lexer: input.DFA, Grammar: input.Grammar, ParseTable: input.ParseTable}); err != nil {
 		return err
 	}
@@ -102,8 +111,20 @@ func Generate(input Input, outDir string) error {
 	if err := writeGoFile(filepath.Join(outDir, "scanner.go"), renderScanner(pkg, input.Spec.SourceFile, input.DFA, tokens)); err != nil {
 		return err
 	}
-	if err := writeGoFile(filepath.Join(outDir, "parser.go"), renderParser(pkg, "parser.go", input.Spec, input.ParseTable, tokens, actions)); err != nil {
+	if err := writeGoFile(filepath.Join(outDir, "parser.go"), renderParser(pkg, "parser.go", input.Spec, input.ParseTable, tokens, actions, actionManifest)); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateSemanticTypes(semantics spec.SemanticSpec, target string) error {
+	for _, semanticType := range semantics.Types {
+		if semanticType.Target != target {
+			continue
+		}
+		if _, err := goparser.ParseExpr(semanticType.Type); err != nil {
+			return fmt.Errorf("invalid Go semantic type %q for %s: %w", semanticType.Type, semanticType.Symbol, err)
+		}
 	}
 	return nil
 }
@@ -209,8 +230,9 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 	return b.String()
 }
 
-func renderParserImports(b *strings.Builder, mode spec.SemanticActionMode, includes []spec.SemanticInclude) {
-	if mode != spec.SemanticModeInline || len(includes) == 0 {
+func renderParserImports(b *strings.Builder, mode spec.SemanticActionMode, includes []spec.SemanticInclude, actionManifest action.Manifest) {
+	includes = requiredParserIncludes(mode, includes, actionManifest)
+	if len(includes) == 0 {
 		b.WriteString("import \"fmt\"\n\n")
 		return
 	}
@@ -225,16 +247,58 @@ func renderParserImports(b *strings.Builder, mode spec.SemanticActionMode, inclu
 	b.WriteString(")\n\n")
 }
 
+func requiredParserIncludes(mode spec.SemanticActionMode, includes []spec.SemanticInclude, actionManifest action.Manifest) []spec.SemanticInclude {
+	if mode == spec.SemanticModeInline {
+		return includes
+	}
+	var required []spec.SemanticInclude
+	for _, include := range includes {
+		qualifier := include.Alias
+		if qualifier == "" {
+			qualifier = filepath.Base(include.Path)
+		}
+		if qualifier == "" || qualifier == "_" || qualifier == "." {
+			continue
+		}
+		needle := qualifier + "."
+		used := false
+		for _, semanticAction := range actionManifest.Actions {
+			if strings.Contains(semanticAction.ReturnType, needle) {
+				used = true
+			}
+			for _, rule := range semanticAction.Rules {
+				for _, operand := range rule.RHS {
+					if strings.Contains(operand.Type, needle) {
+						used = true
+					}
+				}
+			}
+		}
+		if used {
+			required = append(required, include)
+		}
+	}
+	return required
+}
+
 func semanticActions(rules []parse.Rule, target string) []SemanticAction {
 	seen := map[string]bool{}
-	usedConstants := map[string]int{"SemanticActionNone": 1}
-	var out []SemanticAction
+	var names []string
 	for _, rule := range rules {
 		name := strings.TrimSpace(rule.Actions[target])
 		if name == "" || seen[name] {
 			continue
 		}
 		seen[name] = true
+		names = append(names, name)
+	}
+	return semanticActionsFromNames(names)
+}
+
+func semanticActionsFromNames(names []string) []SemanticAction {
+	usedConstants := map[string]int{"SemanticActionNone": 1}
+	out := make([]SemanticAction, 0, len(names))
+	for _, name := range names {
 		id := len(out) + 1
 		out = append(out, SemanticAction{
 			ID:       id,
@@ -342,7 +406,7 @@ func renderSemanticActionDeclarations(b *strings.Builder, actions []SemanticActi
 	b.WriteString("func LookupSemanticAction(name string) (SemanticAction, bool) {\n\taction, ok := semanticActionByName[name]\n\treturn action, ok\n}\n\n")
 }
 
-func renderParser(pkg string, generatedFile string, project *spec.Spec, table *parse.Table, tokens []string, actions []SemanticAction) string {
+func renderParser(pkg string, generatedFile string, project *spec.Spec, table *parse.Table, tokens []string, actions []SemanticAction, actionManifest action.Manifest) string {
 	var b strings.Builder
 	source := ""
 	if project != nil {
@@ -355,7 +419,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	}
 	goMode := semantics.ModeFor("go")
 	goIncludes := semantics.IncludesFor("go")
-	renderParserImports(&b, goMode, goIncludes)
+	renderParserImports(&b, goMode, goIncludes, actionManifest)
 	actionIDs := semanticActionIDs(actions)
 	b.WriteString("// Parser recognizes the generated grammar over scanner lexemes.\n")
 	b.WriteString("//\n// Parser instances are safe for concurrent Parse and ParseValue calls when\n// the installed Reducer is also safe for concurrent use.\n")
@@ -364,7 +428,9 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("type Value any\n\n")
 	renderSemanticActionDeclarations(&b, actions)
 	b.WriteString("// Reduction describes one grammar rule reduction.\n")
-	b.WriteString("type Reduction struct {\n\tRule int\n\tLHS string\n\tRHS []string\n\tActionID SemanticAction\n\tAction string\n\tValues []Value\n}\n\n")
+	b.WriteString("type Reduction struct {\n\tRule int\n\tLHS string\n\tRHS []string\n\tLabels []string\n\tActionID SemanticAction\n\tAction string\n\tValues []Value\n}\n\n")
+	b.WriteString("// ValueFor returns the semantic value associated with a named RHS label.\n")
+	b.WriteString("func (r Reduction) ValueFor(label string) (Value, error) {\n\tfor index, candidate := range r.Labels {\n\t\tif candidate == label {\n\t\t\tif index >= len(r.Values) { return nil, fmt.Errorf(\"rule %d action %q label %q has no semantic value\", r.Rule, r.Action, label) }\n\t\t\treturn r.Values[index], nil\n\t\t}\n\t}\n\treturn nil, fmt.Errorf(\"rule %d action %q has no RHS label %q\", r.Rule, r.Action, label)\n}\n\n")
 	b.WriteString("// SemanticActionMode records how generated parser action text is handled.\n")
 	b.WriteString("const SemanticActionMode = " + fmt.Sprintf("%q", string(goMode)) + "\n\n")
 	b.WriteString("// SemanticInclude describes a handwritten package or library declared by the spec.\n")
@@ -381,8 +447,11 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("type ReductionHandler func(Reduction) (Value, error)\n\n")
 	b.WriteString("// ReducerMap dispatches reductions by generated semantic action ID.\n")
 	b.WriteString("type ReducerMap map[SemanticAction]ReductionHandler\n\n")
+	b.WriteString("// ValidateCoverage reports missing and unknown semantic action handlers.\n")
+	b.WriteString("func (m ReducerMap) ValidateCoverage() error {\n\tvar missing []string\n\tfor action := SemanticAction(1); int(action) < len(semanticActionNames); action++ {\n\t\tif _, ok := m[action]; !ok { missing = append(missing, action.String()) }\n\t}\n\tfirstUnknown, hasUnknown := 0, false\n\tfor action := range m {\n\t\tif action <= SemanticActionNone || int(action) >= len(semanticActionNames) {\n\t\t\tif !hasUnknown || int(action) < firstUnknown { firstUnknown, hasUnknown = int(action), true }\n\t\t}\n\t}\n\tif len(missing) == 0 && !hasUnknown { return nil }\n\tif hasUnknown { return fmt.Errorf(\"semantic reducer coverage mismatch: missing=%v firstUnknown=%d\", missing, firstUnknown) }\n\treturn fmt.Errorf(\"semantic reducer coverage mismatch: missing=%v\", missing)\n}\n\n")
 	b.WriteString("// Reduce dispatches ctx to the handler registered for ctx.ActionID.\n")
 	b.WriteString("func (m ReducerMap) Reduce(ctx Reduction) (Value, error) {\n\thandler, ok := m[ctx.ActionID]\n\tif !ok { return nil, fmt.Errorf(\"no reducer registered for action %s\", ctx.ActionID) }\n\treturn handler(ctx)\n}\n\n")
+	renderTypedReductionContexts(&b, actionManifest, actions)
 	b.WriteString("// ReducerFunc adapts a function to the Reducer interface.\n")
 	b.WriteString("type ReducerFunc func(Reduction) (Value, error)\n\n")
 	b.WriteString("// Reduce calls f(ctx).\n")
@@ -398,7 +467,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("// ParseValue recognizes input and returns the final reduced semantic value.\n")
 	b.WriteString("func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }\n\n")
 	b.WriteString("// ParseWithReducer recognizes input using reducer for target-tagged grammar actions.\n")
-	b.WriteString("func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) { return NewParser(WithReducer(reducer)).ParseValue(input) }\n\n")
+	b.WriteString("func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {\n\tif validator, ok := reducer.(interface{ ValidateCoverage() error }); ok {\n\t\tif err := validator.ValidateCoverage(); err != nil { return nil, err }\n\t}\n\treturn NewParser(WithReducer(reducer)).ParseValue(input)\n}\n\n")
 	b.WriteString("// Parse recognizes input using this parser instance.\n")
 	b.WriteString("func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }\n\n")
 	b.WriteString("// ParseValue recognizes input using this parser instance and returns the final semantic value.\n")
@@ -408,7 +477,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		b.WriteString("\tif rule.action != SemanticActionNone {\n\t\treturn reduceInline(ctx)\n\t}\n")
 	}
 	b.WriteString("\treturn defaultReduce(values), nil\n}\n\n")
-	b.WriteString("func reductionContext(ruleID int, rule parserRule, values []Value) Reduction {\n\treturn Reduction{Rule: ruleID, LHS: rule.lhs, RHS: append([]string(nil), rule.rhs...), ActionID: rule.action, Action: rule.action.String(), Values: append([]Value(nil), values...)}\n}\n\n")
+	b.WriteString("func reductionContext(ruleID int, rule parserRule, values []Value) Reduction {\n\treturn Reduction{Rule: ruleID, LHS: rule.lhs, RHS: append([]string(nil), rule.rhs...), Labels: append([]string(nil), rule.labels...), ActionID: rule.action, Action: rule.action.String(), Values: append([]Value(nil), values...)}\n}\n\n")
 	if goMode == spec.SemanticModeInline {
 		renderInlineReducers(&b, generatedFile, table)
 	}
@@ -420,7 +489,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	}
 	b.WriteString("\tdefault:\n\t\treturn \"ERROR\"\n\t}\n}\n\n")
 	b.WriteString("type parserAction struct { kind string; state int; rule int }\n")
-	b.WriteString("type parserRule struct { lhs string; rhs []string; size int; action SemanticAction }\n\n")
+	b.WriteString("type parserRule struct { lhs string; rhs []string; labels []string; size int; action SemanticAction }\n\n")
 	b.WriteString("var parserActions = map[int]map[string]parserAction{\n")
 	actionStates := sortedActionStates(table.Actions)
 	for _, state := range actionStates {
@@ -449,10 +518,89 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		if comment := sourceComment(rule.Span); comment != "" {
 			b.WriteString("\t" + comment + "\n")
 		}
-		b.WriteString(fmt.Sprintf("\t%d: {lhs: %q, rhs: %s, size: %d, action: %s},\n", rule.ID, rule.LHS, renderStringSlice(rule.RHS), len(rule.RHS), semanticActionExpr(rule.Actions["go"], actionIDs)))
+		b.WriteString(fmt.Sprintf("\t%d: {lhs: %q, rhs: %s, labels: %s, size: %d, action: %s},\n", rule.ID, rule.LHS, renderStringSlice(rule.RHS), renderStringSlice(rule.Labels), len(rule.RHS), semanticActionExpr(rule.Actions["go"], actionIDs)))
 	}
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, actions []SemanticAction) {
+	if len(manifest.Actions) == 0 {
+		return
+	}
+	constants := semanticActionIDs(actions)
+	b.WriteString("// semanticValueAs reads and type-checks one named reduction value.\n")
+	b.WriteString("func semanticValueAs[T any](ctx Reduction, label string) (T, error) {\n\tvar zero T\n\tvalue, err := ctx.ValueFor(label)\n\tif err != nil { return zero, err }\n\ttyped, ok := value.(T)\n\tif !ok { return zero, fmt.Errorf(\"rule %d action %q label %q has type %T, want %T\", ctx.Rule, ctx.Action, label, value, zero) }\n\treturn typed, nil\n}\n\n")
+	for _, semanticAction := range manifest.Actions {
+		if !semanticAction.Typed || len(semanticAction.Rules) == 0 {
+			continue
+		}
+		constant := constants[semanticAction.Name]
+		if constant == "" {
+			continue
+		}
+		suffix := strings.TrimPrefix(constant, "SemanticAction")
+		contextType := suffix + "Reduction"
+		handlerType := suffix + "Handler"
+		constructor := "New" + contextType
+		adapter := "Typed" + suffix
+		fields := typedFields(semanticAction.Rules[0])
+
+		b.WriteString(fmt.Sprintf("// %s is the generated typed context for the %q semantic action.\n", contextType, semanticAction.Name))
+		b.WriteString("type " + contextType + " struct {\n\tReduction Reduction\n")
+		for _, field := range fields {
+			b.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, field.Type))
+		}
+		b.WriteString("}\n\n")
+		b.WriteString(fmt.Sprintf("// %s validates and converts an untyped reduction context.\n", constructor))
+		b.WriteString(fmt.Sprintf("func %s(ctx Reduction) (%s, error) {\n", constructor, contextType))
+		b.WriteString(fmt.Sprintf("\tif ctx.ActionID != %s { return %s{}, fmt.Errorf(\"typed context %s requires action %%s, got %%s\", %s, ctx.ActionID) }\n", constant, contextType, contextType, constant))
+		b.WriteString(fmt.Sprintf("\tresult := %s{Reduction: ctx}\n", contextType))
+		for _, field := range fields {
+			b.WriteString(fmt.Sprintf("\t%s, err := semanticValueAs[%s](ctx, %q)\n", field.Local, field.Type, field.Label))
+			b.WriteString(fmt.Sprintf("\tif err != nil { return %s{}, err }\n", contextType))
+			b.WriteString(fmt.Sprintf("\tresult.%s = %s\n", field.Name, field.Local))
+		}
+		b.WriteString("\treturn result, nil\n}\n\n")
+		b.WriteString(fmt.Sprintf("// %s handles one typed %q reduction.\n", handlerType, semanticAction.Name))
+		b.WriteString(fmt.Sprintf("type %s func(%s) (%s, error)\n\n", handlerType, contextType, semanticAction.ReturnType))
+		b.WriteString(fmt.Sprintf("// %s adapts a typed handler to ReductionHandler.\n", adapter))
+		b.WriteString(fmt.Sprintf("func %s(handler %s) ReductionHandler {\n", adapter, handlerType))
+		b.WriteString(fmt.Sprintf("\treturn func(ctx Reduction) (Value, error) {\n\t\ttyped, err := %s(ctx)\n\t\tif err != nil { return nil, err }\n\t\treturn handler(typed)\n\t}\n}\n\n", constructor))
+	}
+}
+
+type typedField struct {
+	Label string
+	Name  string
+	Local string
+	Type  string
+}
+
+func typedFields(rule action.Rule) []typedField {
+	used := map[string]int{}
+	var fields []typedField
+	for _, operand := range rule.RHS {
+		if operand.Label == "" {
+			continue
+		}
+		base := exportedIdentifierSuffix(operand.Label)
+		if base == "" {
+			base = "Value"
+		}
+		used[base]++
+		name := base
+		if used[base] > 1 {
+			name = fmt.Sprintf("%s%d", base, used[base])
+		}
+		fields = append(fields, typedField{
+			Label: operand.Label,
+			Name:  name,
+			Local: "value" + name,
+			Type:  operand.Type,
+		})
+	}
+	return fields
 }
 
 func renderInlineReducers(b *strings.Builder, generatedFile string, table *parse.Table) {

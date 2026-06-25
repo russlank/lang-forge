@@ -101,6 +101,8 @@ algorithm-selection guidance, see [Parser Algorithms](parser-algorithms.md).
 `lang-forge generate --target go` writes:
 
 - `langforge.manifest.json`: deterministic metadata for CI and auditing.
+- `langforge.actions.json`: semantic actions, normalized rules, RHS labels,
+  and target semantic types.
 - `langforge.tables.json`: full source model and generated tables.
 - `tokens.go`: token constants and string names.
 - `scanner.go`: generated scanner runtime and DFA tables.
@@ -117,6 +119,10 @@ while `ParseValue` and `ParseWithReducer` maintain a semantic value stack and
 dispatch target-tagged rule actions to user reducers. Generated parsers expose
 `SemanticAction` IDs, source action labels, and `ReducerMap` so reducers can
 dispatch by enum-like constants while keeping readable diagnostics.
+Named RHS labels and `%semantic go type` declarations additionally generate
+typed action contexts and adapters when an action has one consistent
+signature. `ReducerMap` coverage validation catches missing and unknown
+handlers before the standard `ParseWithReducer` path parses input.
 `%semantic go` directives record handwritten semantic dependencies in
 manifests and table JSON. When `%semantic go mode inline` is selected,
 generated `parser.go` imports declared Go packages and emits a `reduceInline`
@@ -130,6 +136,8 @@ references: table metadata gets source comments, and inline Go snippets get
 `lang-forge generate --target csharp` writes:
 
 - `langforge.manifest.json`: deterministic metadata for CI and auditing.
+- `langforge.actions.json`: semantic actions, normalized rules, RHS labels,
+  and target semantic types.
 - `langforge.tables.json`: full source model and generated tables.
 - `Tokens.g.cs`: token enum and grammar-name helpers.
 - `Scanner.g.cs`: generated scanner runtime and DFA tables.
@@ -148,6 +156,8 @@ handwritten code can dispatch through `ReducerMap`.
 `lang-forge generate --target c` writes:
 
 - `langforge.manifest.json`: deterministic metadata for CI and auditing.
+- `langforge.actions.json`: semantic actions, normalized rules, RHS labels,
+  and target semantic types.
 - `langforge.tables.json`: full source model and generated tables.
 - `tokens.h`: token enum and token-name helper declaration.
 - `scanner.h` and `scanner.c`: generated scanner runtime and DFA tables.
@@ -168,6 +178,8 @@ generated `*_lexeme` records.
 `lang-forge generate --target cpp` writes:
 
 - `langforge.manifest.json`: deterministic metadata for CI and auditing.
+- `langforge.actions.json`: semantic actions, normalized rules, RHS labels,
+  and target semantic types.
 - `langforge.tables.json`: full source model and generated tables.
 - `tokens.hpp`: strongly typed token enum and token-name helper.
 - `scanner.hpp` and `scanner.cpp`: generated scanner runtime and DFA tables.

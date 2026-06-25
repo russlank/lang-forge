@@ -46,6 +46,7 @@ S : A B {c: pair.value} ;
 	}
 
 	for _, name := range []string{
+		"langforge.actions.json",
 		"langforge.manifest.json",
 		"langforge.tables.json",
 		"tokens.h",
@@ -63,6 +64,12 @@ S : A B {c: pair.value} ;
 	for _, fragment := range []string{`"target": "c"`, `"prefix": "calc_demo"`, `"CALC_DEMO_ACTION_PAIR_VALUE"`} {
 		if !strings.Contains(manifest, fragment) {
 			t.Fatalf("manifest missing %q:\n%s", fragment, manifest)
+		}
+	}
+	actionManifest := readGeneratedFile(t, out, "langforge.actions.json")
+	for _, fragment := range []string{`"name": "pair.value"`, `"lhs": "S"`, `"symbol": "A"`} {
+		if !strings.Contains(actionManifest, fragment) {
+			t.Fatalf("action manifest missing %q:\n%s", fragment, actionManifest)
 		}
 	}
 

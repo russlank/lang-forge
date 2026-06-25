@@ -1,6 +1,10 @@
 %target cpp
 %package LangForge::Examples::Calc::Generated
 %semantic cpp mode reducer
+%semantic cpp type S double
+%semantic cpp type Expr double
+%semantic cpp type Term double
+%semantic cpp type Factor double
 %start S
 %token Number Plus Minus Mul Div LParen RParen
 
@@ -18,25 +22,25 @@ NUMBER     => token(Number);
 [1-32]+    => skip;
 
 %% parser
-S : Expr {cpp: start} ;
-Expr : Expr Plus Term
+S : value=Expr {cpp: start} ;
+Expr : left=Expr Plus right=Term
          {cpp: add}
-     | Expr Minus Term
+     | left=Expr Minus right=Term
          {cpp: subtract}
-     | Term
+     | value=Term
          {cpp: pass}
      ;
-Term : Term Mul Factor
+Term : left=Term Mul right=Factor
          {cpp: multiply}
-     | Term Div Factor
+     | left=Term Div right=Factor
          {cpp: divide}
-     | Factor
+     | value=Factor
          {cpp: pass}
      ;
-Factor : Number
+Factor : token=Number
            {cpp: number}
-       | LParen Expr RParen
+       | LParen value=Expr RParen
            {cpp: group}
-       | Minus Factor
+       | Minus value=Factor
            {cpp: negate}
        ;

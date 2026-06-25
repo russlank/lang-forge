@@ -1,6 +1,10 @@
 %target csharp
 %package LangForge.Examples.Calc.Generated
 %semantic csharp mode reducer
+%semantic csharp type S double
+%semantic csharp type Expr double
+%semantic csharp type Term double
+%semantic csharp type Factor double
 %token Number Plus Minus Mul Div LParen RParen
 %start S
 
@@ -18,17 +22,17 @@ NUMBER => token(Number);
 [1-32]+ => skip;
 
 %% parser
-S : Expr {csharp: start}
+S : value=Expr {csharp: start}
   ;
-Expr : Expr Plus Term {csharp: add}
-  | Expr Minus Term {csharp: subtract}
-  | Term {csharp: pass}
+Expr : left=Expr Plus right=Term {csharp: add}
+  | left=Expr Minus right=Term {csharp: subtract}
+  | value=Term {csharp: pass}
   ;
-Term : Term Mul Factor {csharp: multiply}
-  | Term Div Factor {csharp: divide}
-  | Factor {csharp: pass}
+Term : left=Term Mul right=Factor {csharp: multiply}
+  | left=Term Div right=Factor {csharp: divide}
+  | value=Factor {csharp: pass}
   ;
-Factor : Number {csharp: number}
-  | LParen Expr RParen {csharp: group}
-  | Minus Factor {csharp: negate}
+Factor : token=Number {csharp: number}
+  | LParen value=Expr RParen {csharp: group}
+  | Minus value=Factor {csharp: negate}
   ;

@@ -132,6 +132,9 @@ func mergeSemantics(lexSemantics, yaccSemantics SemanticSpec) SemanticSpec {
 		}
 		out.Modes = modes
 	}
+	if len(lexSemantics.Types) > 0 {
+		out.Types = append(append([]SemanticType(nil), lexSemantics.Types...), out.Types...)
+	}
 	return out
 }
 
@@ -195,7 +198,7 @@ func parseDirective(spec *Spec, line string, span diagnostics.Span, diags *diagn
 
 func parseSemanticDirective(spec *Spec, fields []string, span diagnostics.Span, diags *diagnostics.List) {
 	if len(fields) < 3 {
-		diags.AddError("LF140", "%semantic expects `target mode reducer|inline` or `target import [alias] path`", span)
+		diags.AddError("LF140", "%semantic expects `target mode reducer|inline`, `target import [alias] path`, or `target type Symbol TargetType`", span)
 		return
 	}
 	target := strings.ToLower(fields[0])
@@ -223,8 +226,35 @@ func parseSemanticDirective(spec *Spec, fields []string, span diagnostics.Span, 
 		if ok {
 			spec.Semantics.Includes = append(spec.Semantics.Includes, include)
 		}
+	case "type":
+		if len(fields) < 4 {
+			diags.AddError("LF146", "%semantic type expects `target type Nonterminal TargetType`", span)
+			return
+		}
+		symbol := fields[2]
+		if !identRE.MatchString(symbol) {
+			diags.AddError("LF147", "invalid semantic type symbol `"+symbol+"`", span)
+			return
+		}
+		typeName := strings.TrimSpace(strings.Join(fields[3:], " "))
+		if typeName == "" {
+			diags.AddError("LF148", "semantic target type must not be empty", span)
+			return
+		}
+		for _, existing := range spec.Semantics.Types {
+			if existing.Target == target && existing.Symbol == symbol {
+				diags.AddError("LF149", fmt.Sprintf("duplicate semantic type for target `%s` and symbol `%s`", target, symbol), span)
+				return
+			}
+		}
+		spec.Semantics.Types = append(spec.Semantics.Types, SemanticType{
+			Target: target,
+			Symbol: symbol,
+			Type:   typeName,
+			Span:   span,
+		})
 	default:
-		diags.AddError("LF140", "unknown %semantic command `"+fields[1]+"`; expected mode or import", span)
+		diags.AddError("LF140", "unknown %semantic command `"+fields[1]+"`; expected mode, import, or type", span)
 	}
 }
 
@@ -517,19 +547,52 @@ func parseRuleStatement(stmt string, span diagnostics.Span, diags *diagnostics.L
 		altText := strings.TrimSpace(part)
 		actions := map[string]string{}
 		altText, actions = extractActionBlocks(altText)
-		symbols := strings.Fields(altText)
+		symbols, labels, ok := parseAlternativeSymbols(altText, name, span, diags)
+		if !ok {
+			return RuleSpec{}, false
+		}
 		if len(symbols) == 1 && (symbols[0] == "e" || symbols[0] == "ε" || symbols[0] == "%empty") {
 			symbols = nil
+			labels = nil
 		}
-		for _, sym := range symbols {
-			if !identRE.MatchString(sym) {
-				diags.AddError("LF133", fmt.Sprintf("invalid grammar symbol `%s` in rule `%s`", sym, name), span)
-				return RuleSpec{}, false
-			}
-		}
-		rule.Alternatives = append(rule.Alternatives, Alternative{Symbols: symbols, Actions: actions, Span: span})
+		rule.Alternatives = append(rule.Alternatives, Alternative{Symbols: symbols, Labels: labels, Actions: actions, Span: span})
 	}
 	return rule, true
+}
+
+func parseAlternativeSymbols(text, ruleName string, span diagnostics.Span, diags *diagnostics.List) ([]string, []string, bool) {
+	fields := strings.Fields(text)
+	symbols := make([]string, 0, len(fields))
+	labels := make([]string, 0, len(fields))
+	seenLabels := map[string]bool{}
+	for _, field := range fields {
+		label := ""
+		symbol := field
+		if strings.Contains(field, "=") {
+			var ok bool
+			label, symbol, ok = strings.Cut(field, "=")
+			if !ok || label == "" || symbol == "" || strings.Contains(symbol, "=") {
+				diags.AddError("LF134", fmt.Sprintf("invalid labeled symbol `%s` in rule `%s`; expected label=Symbol", field, ruleName), span)
+				return nil, nil, false
+			}
+			if !identRE.MatchString(label) {
+				diags.AddError("LF134", fmt.Sprintf("invalid RHS label `%s` in rule `%s`", label, ruleName), span)
+				return nil, nil, false
+			}
+			if seenLabels[label] {
+				diags.AddError("LF135", fmt.Sprintf("duplicate RHS label `%s` in rule `%s`", label, ruleName), span)
+				return nil, nil, false
+			}
+			seenLabels[label] = true
+		}
+		if !identRE.MatchString(symbol) && symbol != "ε" && symbol != "%empty" {
+			diags.AddError("LF133", fmt.Sprintf("invalid grammar symbol `%s` in rule `%s`", symbol, ruleName), span)
+			return nil, nil, false
+		}
+		symbols = append(symbols, symbol)
+		labels = append(labels, label)
+	}
+	return symbols, labels, true
 }
 
 func extractActionBlocks(text string) (string, map[string]string) {

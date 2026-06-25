@@ -66,6 +66,9 @@ internal sealed record BinaryExpr(string Op, Expr Left, Expr Right) : Expr;
 /// <summary>Built-in single-argument function call.</summary>
 internal sealed record CallExpr(string Name, Expr Arg) : Expr;
 
+/// <summary>One deferred right-hand operation used while folding an expression.</summary>
+internal sealed record BinaryTail(string Op, Expr Right);
+
 /// <summary>RGB color used by the renderer and PNG writer.</summary>
 internal readonly record struct ColorRgb(byte R, byte G, byte B)
 {

@@ -1,6 +1,28 @@
 %target c
 %package draw
 %semantic c mode reducer
+%semantic c type Program draw_program *
+%semantic c type Statements draw_statement_list *
+%semantic c type StatementTail draw_statement_list *
+%semantic c type Statement draw_statement *
+%semantic c type CanvasStatement draw_statement *
+%semantic c type BackgroundStatement draw_statement *
+%semantic c type StyleStatement draw_statement *
+%semantic c type DefinitionStatement draw_statement *
+%semantic c type DrawStatement draw_statement *
+%semantic c type FigureReference draw_figure_ref *
+%semantic c type FigureBlock draw_figure_block *
+%semantic c type Figures draw_statement_list *
+%semantic c type FigureTail draw_statement_list *
+%semantic c type Figure draw_statement *
+%semantic c type Primitive draw_statement *
+%semantic c type ColorValue draw_color *
+%semantic c type Expr draw_expr *
+%semantic c type ExprTail draw_binary_tail_list *
+%semantic c type Term draw_expr *
+%semantic c type TermTail draw_binary_tail_list *
+%semantic c type Unary draw_expr *
+%semantic c type Primary draw_expr *
 %start Program
 %token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
 
@@ -49,134 +71,134 @@ BLOCK_COMMENT => skip;
 [1-32]+      => skip;
 
 %% parser
-Program : Statements
+Program : statements=Statements
             {c: program}
         ;
 
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {c: statements}
            ;
-StatementTail : Semi Statement StatementTail
-                  {c: statement_tail.more}
+StatementTail : Semi head=Statement tail=StatementTail
+                  {c: statementTail.more}
               | Semi
-                  {c: statement_tail.empty}
+                  {c: statementTail.empty}
               | %empty
-                  {c: statement_tail.empty}
+                  {c: statementTail.empty}
               ;
 
-Statement : CanvasStatement
+Statement : value=CanvasStatement
               {c: pass}
-          | BackgroundStatement
+          | value=BackgroundStatement
               {c: pass}
-          | StyleStatement
+          | value=StyleStatement
               {c: pass}
-          | DefinitionStatement
+          | value=DefinitionStatement
               {c: pass}
-          | DrawStatement
+          | value=DrawStatement
               {c: pass}
-          | Primitive
+          | value=Primitive
               {c: pass}
           ;
 
-CanvasStatement : Canvas Expr Comma Expr
+CanvasStatement : Canvas width=Expr Comma height=Expr
                     {c: canvas}
                 ;
-BackgroundStatement : Background ColorValue
+BackgroundStatement : Background color=ColorValue
                         {c: background}
                     ;
-StyleStatement : Stroke ColorValue
+StyleStatement : Stroke color=ColorValue
                    {c: stroke}
-               | Fill ColorValue
+               | Fill color=ColorValue
                    {c: fill}
                | Fill None
                    {c: fill.none}
-               | Width Expr
+               | Width value=Expr
                    {c: width}
                ;
-DefinitionStatement : Ident Assign Expr
+DefinitionStatement : name=Ident Assign value=Expr
                         {c: assign}
-                    | Ident Assign FigureBlock
-                        {c: define_figure}
+                    | name=Ident Assign figure=FigureBlock
+                        {c: defineFigure}
                     ;
-DrawStatement : Draw FigureReference
+DrawStatement : Draw target=FigureReference
                   {c: draw}
-              | RepDraw Expr FigureReference
+              | RepDraw count=Expr target=FigureReference
                   {c: repdraw}
               ;
-FigureReference : Ident
-                    {c: figure_ref.named}
-                | FigureBlock
-                    {c: figure_ref.inline}
+FigureReference : name=Ident
+                    {c: figureRef.named}
+                | figure=FigureBlock
+                    {c: figureRef.inline}
                 ;
 
-FigureBlock : LParen Figures RParen
+FigureBlock : LParen statements=Figures RParen
                 {c: figureBlock}
             ;
-Figures : Figure FigureTail
+Figures : head=Figure tail=FigureTail
             {c: figures}
         ;
-FigureTail : Semi Figure FigureTail
-               {c: figure_tail.more}
+FigureTail : Semi head=Figure tail=FigureTail
+               {c: figureTail.more}
            | Semi
-               {c: figure_tail.empty}
+               {c: figureTail.empty}
            | %empty
-               {c: figure_tail.empty}
+               {c: figureTail.empty}
            ;
 
-Figure : StyleStatement
+Figure : value=StyleStatement
            {c: pass}
-       | DefinitionStatement
+       | value=DefinitionStatement
            {c: pass}
-       | DrawStatement
+       | value=DrawStatement
            {c: pass}
-       | Primitive
+       | value=Primitive
            {c: pass}
        ;
-Primitive : Point Expr Comma Expr
+Primitive : Point x=Expr Comma y=Expr
               {c: primitive.point}
-          | Line Expr Comma Expr Comma Expr Comma Expr
+          | Line x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {c: primitive.line}
-          | Box Expr Comma Expr Comma Expr Comma Expr
+          | Box x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {c: primitive.box}
-          | Circle Expr Comma Expr Comma Expr
+          | Circle cx=Expr Comma cy=Expr Comma radius=Expr
               {c: primitive.circle}
           ;
 
-ColorValue : Color
+ColorValue : literal=Color
                {c: color}
            ;
 
-Expr : Term ExprTail
+Expr : left=Term tail=ExprTail
          {c: expr}
      ;
-ExprTail : Plus Term ExprTail
-             {c: expr_tail.add}
-         | Minus Term ExprTail
-             {c: expr_tail.subtract}
+ExprTail : Plus right=Term tail=ExprTail
+             {c: exprTail.add}
+         | Minus right=Term tail=ExprTail
+             {c: exprTail.subtract}
          | %empty
-             {c: expr_tail.empty}
+             {c: exprTail.empty}
          ;
-Term : Unary TermTail
+Term : left=Unary tail=TermTail
          {c: term}
      ;
-TermTail : Star Unary TermTail
-             {c: term_tail.multiply}
-         | Slash Unary TermTail
-             {c: term_tail.divide}
+TermTail : Star right=Unary tail=TermTail
+             {c: termTail.multiply}
+         | Slash right=Unary tail=TermTail
+             {c: termTail.divide}
          | %empty
-             {c: term_tail.empty}
+             {c: termTail.empty}
          ;
-Unary : Minus Unary
+Unary : Minus operand=Unary
           {c: unary.negate}
-      | Primary
-          {c: pass}
+      | value=Primary
+          {c: expr.pass}
       ;
-Primary : Number
+Primary : token=Number
             {c: number}
-        | Ident
+        | name=Ident
             {c: variable}
-        | Func LParen Expr RParen
+        | function=Func LParen argument=Expr RParen
             {c: call}
-        | LParen Expr RParen
+        | LParen value=Expr RParen
             {c: group}
         ;

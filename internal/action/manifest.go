@@ -102,8 +102,6 @@ func buildRule(grammar *parse.Grammar, semantics spec.SemanticSpec, target strin
 	switch {
 	case rule.ReturnType == "":
 		rule.TypeIssue = "missing semantic type for result nonterminal " + grammarRule.LHS
-	case !hasLabels(rule.RHS):
-		rule.TypeIssue = "rule has no named RHS labels"
 	default:
 		for _, operand := range rule.RHS {
 			if operand.Label != "" && operand.Type == "" {
@@ -150,15 +148,6 @@ func contextSignature(rule Rule) string {
 		}
 	}
 	return strings.Join(parts, "\x00")
-}
-
-func hasLabels(operands []Operand) bool {
-	for _, operand := range operands {
-		if operand.Label != "" {
-			return true
-		}
-	}
-	return false
 }
 
 func terminalType(target string) string {

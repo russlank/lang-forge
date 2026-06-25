@@ -36,6 +36,20 @@ typedef struct draw_expr {
     struct draw_expr *arg;
 } draw_expr;
 
+/** One deferred right-hand operation used while folding an expression. */
+typedef struct draw_binary_tail {
+    char op;
+    draw_expr *right;
+    struct draw_binary_tail *next;
+} draw_binary_tail;
+
+/** Ordered deferred operations for one expression or term. */
+typedef struct draw_binary_tail_list {
+    draw_binary_tail *head;
+    draw_binary_tail *tail;
+    size_t count;
+} draw_binary_tail_list;
+
 /** Kinds of executable DRAW statements. */
 typedef enum draw_statement_kind {
     DRAW_STMT_CANVAS,

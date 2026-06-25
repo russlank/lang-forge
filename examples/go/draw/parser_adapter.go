@@ -12,14 +12,15 @@ import (
 
 // Parse converts source text into a DRAW AST using the generated parser.
 //
-// This file is handwritten adapter code. The generated scanner/parser itself
-// lives under examples/go/draw/generated and is recreated by the Makefile.
+// This file is handwritten adapter code. Grammar labels and semantic type
+// declarations let the generated package expose typed contexts, so this layer
+// contains no positional reduction indexes or semantic value casts.
 func Parse(source string) (*Program, error) {
 	lexemes, err := drawgenerated.Tokenize(source)
 	if err != nil {
 		return nil, err
 	}
-	value, err := drawgenerated.ParseWithReducer(lexemes, drawgenerated.ReducerFunc(drawReduce))
+	value, err := drawgenerated.ParseWithReducer(lexemes, drawReducers)
 	if err != nil {
 		return nil, err
 	}
@@ -30,446 +31,227 @@ func Parse(source string) (*Program, error) {
 	return program, nil
 }
 
-type binaryTail struct {
-	op    string
-	right Expr
-}
-
 var drawReducers = drawgenerated.ReducerMap{
-	drawgenerated.SemanticActionProgram:            reduceProgram,
-	drawgenerated.SemanticActionStatements:         reduceStatementList,
-	drawgenerated.SemanticActionFigures:            reduceStatementList,
-	drawgenerated.SemanticActionStatementTailMore:  reduceStatementTailMore,
-	drawgenerated.SemanticActionFigureTailMore:     reduceStatementTailMore,
-	drawgenerated.SemanticActionStatementTailEmpty: reduceEmptyStatements,
-	drawgenerated.SemanticActionFigureTailEmpty:    reduceEmptyStatements,
-	drawgenerated.SemanticActionPass:               reducePass,
-	drawgenerated.SemanticActionCanvas:             reduceCanvas,
-	drawgenerated.SemanticActionBackground:         reduceBackground,
-	drawgenerated.SemanticActionStroke:             reduceStroke,
-	drawgenerated.SemanticActionFill:               reduceFill,
-	drawgenerated.SemanticActionFillNone:           reduceFillNone,
-	drawgenerated.SemanticActionWidth:              reduceWidth,
-	drawgenerated.SemanticActionAssign:             reduceAssign,
-	drawgenerated.SemanticActionDefineFigure:       reduceDefineFigure,
-	drawgenerated.SemanticActionDraw:               reduceDraw,
-	drawgenerated.SemanticActionRepdraw:            reduceRepdraw,
-	drawgenerated.SemanticActionFigureRefNamed:     reduceNamedFigureRef,
-	drawgenerated.SemanticActionFigureRefInline:    reduceInlineFigureRef,
-	drawgenerated.SemanticActionFigureBlock:        reduceFigureBlock,
-	drawgenerated.SemanticActionPrimitivePoint:     reducePrimitivePoint,
-	drawgenerated.SemanticActionPrimitiveLine:      reducePrimitiveLine,
-	drawgenerated.SemanticActionPrimitiveBox:       reducePrimitiveBox,
-	drawgenerated.SemanticActionPrimitiveCircle:    reducePrimitiveCircle,
-	drawgenerated.SemanticActionColor:              reduceColor,
-	drawgenerated.SemanticActionExpr:               reduceBinaryExpression,
-	drawgenerated.SemanticActionTerm:               reduceBinaryExpression,
-	drawgenerated.SemanticActionExprTailAdd:        reduceExprTailAdd,
-	drawgenerated.SemanticActionExprTailSubtract:   reduceExprTailSubtract,
-	drawgenerated.SemanticActionExprTailEmpty:      reduceEmptyBinaryTail,
-	drawgenerated.SemanticActionTermTailEmpty:      reduceEmptyBinaryTail,
-	drawgenerated.SemanticActionTermTailMultiply:   reduceTermTailMultiply,
-	drawgenerated.SemanticActionTermTailDivide:     reduceTermTailDivide,
-	drawgenerated.SemanticActionUnaryNegate:        reduceUnaryNegate,
-	drawgenerated.SemanticActionNumber:             reduceNumber,
-	drawgenerated.SemanticActionVariable:           reduceVariable,
-	drawgenerated.SemanticActionCall:               reduceCall,
-	drawgenerated.SemanticActionGroup:              reduceGroup,
+	drawgenerated.SemanticActionProgram:            drawgenerated.TypedProgram(reduceProgram),
+	drawgenerated.SemanticActionStatements:         drawgenerated.TypedStatements(reduceStatements),
+	drawgenerated.SemanticActionStatementTailMore:  drawgenerated.TypedStatementTailMore(reduceStatementTailMore),
+	drawgenerated.SemanticActionStatementTailEmpty: drawgenerated.TypedStatementTailEmpty(reduceStatementTailEmpty),
+	drawgenerated.SemanticActionPass:               drawgenerated.TypedPass(reducePass),
+	drawgenerated.SemanticActionCanvas:             drawgenerated.TypedCanvas(reduceCanvas),
+	drawgenerated.SemanticActionBackground:         drawgenerated.TypedBackground(reduceBackground),
+	drawgenerated.SemanticActionStroke:             drawgenerated.TypedStroke(reduceStroke),
+	drawgenerated.SemanticActionFill:               drawgenerated.TypedFill(reduceFill),
+	drawgenerated.SemanticActionFillNone:           drawgenerated.TypedFillNone(reduceFillNone),
+	drawgenerated.SemanticActionWidth:              drawgenerated.TypedWidth(reduceWidth),
+	drawgenerated.SemanticActionAssign:             drawgenerated.TypedAssign(reduceAssign),
+	drawgenerated.SemanticActionDefineFigure:       drawgenerated.TypedDefineFigure(reduceDefineFigure),
+	drawgenerated.SemanticActionDraw:               drawgenerated.TypedDraw(reduceDraw),
+	drawgenerated.SemanticActionRepdraw:            drawgenerated.TypedRepdraw(reduceRepdraw),
+	drawgenerated.SemanticActionFigureRefNamed:     drawgenerated.TypedFigureRefNamed(reduceNamedFigureRef),
+	drawgenerated.SemanticActionFigureRefInline:    drawgenerated.TypedFigureRefInline(reduceInlineFigureRef),
+	drawgenerated.SemanticActionFigureBlock:        drawgenerated.TypedFigureBlock(reduceFigureBlock),
+	drawgenerated.SemanticActionFigures:            drawgenerated.TypedFigures(reduceFigures),
+	drawgenerated.SemanticActionFigureTailMore:     drawgenerated.TypedFigureTailMore(reduceFigureTailMore),
+	drawgenerated.SemanticActionFigureTailEmpty:    drawgenerated.TypedFigureTailEmpty(reduceFigureTailEmpty),
+	drawgenerated.SemanticActionPrimitivePoint:     drawgenerated.TypedPrimitivePoint(reducePrimitivePoint),
+	drawgenerated.SemanticActionPrimitiveLine:      drawgenerated.TypedPrimitiveLine(reducePrimitiveLine),
+	drawgenerated.SemanticActionPrimitiveBox:       drawgenerated.TypedPrimitiveBox(reducePrimitiveBox),
+	drawgenerated.SemanticActionPrimitiveCircle:    drawgenerated.TypedPrimitiveCircle(reducePrimitiveCircle),
+	drawgenerated.SemanticActionColor:              drawgenerated.TypedColor(reduceColor),
+	drawgenerated.SemanticActionExpr:               drawgenerated.TypedExpr(reduceExpr),
+	drawgenerated.SemanticActionExprTailAdd:        drawgenerated.TypedExprTailAdd(reduceExprTailAdd),
+	drawgenerated.SemanticActionExprTailSubtract:   drawgenerated.TypedExprTailSubtract(reduceExprTailSubtract),
+	drawgenerated.SemanticActionExprTailEmpty:      drawgenerated.TypedExprTailEmpty(reduceExprTailEmpty),
+	drawgenerated.SemanticActionTerm:               drawgenerated.TypedTerm(reduceTerm),
+	drawgenerated.SemanticActionTermTailMultiply:   drawgenerated.TypedTermTailMultiply(reduceTermTailMultiply),
+	drawgenerated.SemanticActionTermTailDivide:     drawgenerated.TypedTermTailDivide(reduceTermTailDivide),
+	drawgenerated.SemanticActionTermTailEmpty:      drawgenerated.TypedTermTailEmpty(reduceTermTailEmpty),
+	drawgenerated.SemanticActionUnaryNegate:        drawgenerated.TypedUnaryNegate(reduceUnaryNegate),
+	drawgenerated.SemanticActionExprPass:           drawgenerated.TypedExprPass(reduceExprPass),
+	drawgenerated.SemanticActionNumber:             drawgenerated.TypedNumber(reduceNumber),
+	drawgenerated.SemanticActionVariable:           drawgenerated.TypedVariable(reduceVariable),
+	drawgenerated.SemanticActionCall:               drawgenerated.TypedCall(reduceCall),
+	drawgenerated.SemanticActionGroup:              drawgenerated.TypedGroup(reduceGroup),
 }
 
-func drawReduce(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return drawReducers.Reduce(ctx)
+func reduceProgram(ctx drawgenerated.ProgramReduction) (*Program, error) {
+	return &Program{Statements: ctx.Statements}, nil
 }
 
-func reduceProgram(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	statements, err := statementSliceArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return &Program{Statements: statements}, nil
+func reduceStatements(ctx drawgenerated.StatementsReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
 }
 
-func reduceStatementList(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	statement, err := statementArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := statementSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Statement{statement}, tail...), nil
+func reduceStatementTailMore(ctx drawgenerated.StatementTailMoreReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
 }
 
-func reduceStatementTailMore(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	statement, err := statementArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := statementSliceArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Statement{statement}, tail...), nil
-}
-
-func reduceEmptyStatements(drawgenerated.Reduction) (drawgenerated.Value, error) {
+func reduceStatementTailEmpty(drawgenerated.StatementTailEmptyReduction) ([]Statement, error) {
 	return []Statement{}, nil
 }
 
-func reducePass(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return valueArg(ctx, 0)
+func reducePass(ctx drawgenerated.PassReduction) (Statement, error) {
+	return ctx.Value, nil
 }
 
-func reduceCanvas(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	width, err := exprArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	height, err := exprArg(ctx, 3)
-	if err != nil {
-		return nil, err
-	}
-	return CanvasStatement{Width: width, Height: height}, nil
+func reduceCanvas(ctx drawgenerated.CanvasReduction) (Statement, error) {
+	return CanvasStatement{Width: ctx.Width, Height: ctx.Height}, nil
 }
 
-func reduceBackground(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	c, err := colorArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return BackgroundStatement{Color: c}, nil
+func reduceBackground(ctx drawgenerated.BackgroundReduction) (Statement, error) {
+	return BackgroundStatement{Color: ctx.Color}, nil
 }
 
-func reduceStroke(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	c, err := colorArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return StrokeStatement{Color: c}, nil
+func reduceStroke(ctx drawgenerated.StrokeReduction) (Statement, error) {
+	return StrokeStatement{Color: ctx.Color}, nil
 }
 
-func reduceFill(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	c, err := colorArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return FillStatement{Color: c, Enabled: true}, nil
+func reduceFill(ctx drawgenerated.FillReduction) (Statement, error) {
+	return FillStatement{Color: ctx.Color, Enabled: true}, nil
 }
 
-func reduceFillNone(drawgenerated.Reduction) (drawgenerated.Value, error) {
+func reduceFillNone(drawgenerated.FillNoneReduction) (Statement, error) {
 	return FillStatement{Enabled: false}, nil
 }
 
-func reduceWidth(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	value, err := exprArg(ctx, 1)
+func reduceWidth(ctx drawgenerated.WidthReduction) (Statement, error) {
+	return WidthStatement{Value: ctx.Value}, nil
+}
+
+func reduceAssign(ctx drawgenerated.AssignReduction) (Statement, error) {
+	return AssignStatement{Name: ctx.Name.Text, Expr: ctx.Value}, nil
+}
+
+func reduceDefineFigure(ctx drawgenerated.DefineFigureReduction) (Statement, error) {
+	return DefineFigureStatement{Name: ctx.Name.Text, Figure: ctx.Figure}, nil
+}
+
+func reduceDraw(ctx drawgenerated.DrawReduction) (Statement, error) {
+	return DrawStatement{Target: ctx.Target}, nil
+}
+
+func reduceRepdraw(ctx drawgenerated.RepdrawReduction) (Statement, error) {
+	return RepDrawStatement{Count: ctx.Count, Target: ctx.Target}, nil
+}
+
+func reduceNamedFigureRef(ctx drawgenerated.FigureRefNamedReduction) (FigureRef, error) {
+	return NamedFigureRef{Name: ctx.Name.Text}, nil
+}
+
+func reduceInlineFigureRef(ctx drawgenerated.FigureRefInlineReduction) (FigureRef, error) {
+	return InlineFigureRef{Figure: ctx.Figure}, nil
+}
+
+func reduceFigureBlock(ctx drawgenerated.FigureBlockReduction) (FigureBlock, error) {
+	return FigureBlock{Statements: ctx.Statements}, nil
+}
+
+func reduceFigures(ctx drawgenerated.FiguresReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
+}
+
+func reduceFigureTailMore(ctx drawgenerated.FigureTailMoreReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
+}
+
+func reduceFigureTailEmpty(drawgenerated.FigureTailEmptyReduction) ([]Statement, error) {
+	return []Statement{}, nil
+}
+
+func reducePrimitivePoint(ctx drawgenerated.PrimitivePointReduction) (Statement, error) {
+	return PrimitiveStatement{Kind: "point", Args: []Expr{ctx.X, ctx.Y}}, nil
+}
+
+func reducePrimitiveLine(ctx drawgenerated.PrimitiveLineReduction) (Statement, error) {
+	return PrimitiveStatement{Kind: "line", Args: []Expr{ctx.X1, ctx.Y1, ctx.X2, ctx.Y2}}, nil
+}
+
+func reducePrimitiveBox(ctx drawgenerated.PrimitiveBoxReduction) (Statement, error) {
+	return PrimitiveStatement{Kind: "box", Args: []Expr{ctx.X1, ctx.Y1, ctx.X2, ctx.Y2}}, nil
+}
+
+func reducePrimitiveCircle(ctx drawgenerated.PrimitiveCircleReduction) (Statement, error) {
+	return PrimitiveStatement{Kind: "circle", Args: []Expr{ctx.Cx, ctx.Cy, ctx.Radius}}, nil
+}
+
+func reduceColor(ctx drawgenerated.ColorReduction) (Color, error) {
+	return parseHexColor(ctx.Literal.Text)
+}
+
+func reduceExpr(ctx drawgenerated.ExprReduction) (Expr, error) {
+	return foldBinary(ctx.Left, ctx.Tail), nil
+}
+
+func reduceExprTailAdd(ctx drawgenerated.ExprTailAddReduction) ([]BinaryTail, error) {
+	return prependBinaryTail("+", ctx.Right, ctx.Tail), nil
+}
+
+func reduceExprTailSubtract(ctx drawgenerated.ExprTailSubtractReduction) ([]BinaryTail, error) {
+	return prependBinaryTail("-", ctx.Right, ctx.Tail), nil
+}
+
+func reduceExprTailEmpty(drawgenerated.ExprTailEmptyReduction) ([]BinaryTail, error) {
+	return []BinaryTail{}, nil
+}
+
+func reduceTerm(ctx drawgenerated.TermReduction) (Expr, error) {
+	return foldBinary(ctx.Left, ctx.Tail), nil
+}
+
+func reduceTermTailMultiply(ctx drawgenerated.TermTailMultiplyReduction) ([]BinaryTail, error) {
+	return prependBinaryTail("*", ctx.Right, ctx.Tail), nil
+}
+
+func reduceTermTailDivide(ctx drawgenerated.TermTailDivideReduction) ([]BinaryTail, error) {
+	return prependBinaryTail("/", ctx.Right, ctx.Tail), nil
+}
+
+func reduceTermTailEmpty(drawgenerated.TermTailEmptyReduction) ([]BinaryTail, error) {
+	return []BinaryTail{}, nil
+}
+
+func reduceUnaryNegate(ctx drawgenerated.UnaryNegateReduction) (Expr, error) {
+	return UnaryExpr{Op: "-", X: ctx.Operand}, nil
+}
+
+func reduceExprPass(ctx drawgenerated.ExprPassReduction) (Expr, error) {
+	return ctx.Value, nil
+}
+
+func reduceNumber(ctx drawgenerated.NumberReduction) (Expr, error) {
+	value, err := strconv.ParseFloat(ctx.Token.Text, 64)
 	if err != nil {
-		return nil, err
-	}
-	return WidthStatement{Value: value}, nil
-}
-
-func reduceAssign(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	expr, err := exprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return AssignStatement{Name: name, Expr: expr}, nil
-}
-
-func reduceDefineFigure(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	figure, err := figureBlockArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return DefineFigureStatement{Name: name, Figure: figure}, nil
-}
-
-func reduceDraw(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	target, err := figureRefArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return DrawStatement{Target: target}, nil
-}
-
-func reduceRepdraw(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	count, err := exprArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	target, err := figureRefArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return RepDrawStatement{Count: count, Target: target}, nil
-}
-
-func reduceNamedFigureRef(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return NamedFigureRef{Name: name}, nil
-}
-
-func reduceInlineFigureRef(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	figure, err := figureBlockArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return InlineFigureRef{Figure: figure}, nil
-}
-
-func reduceFigureBlock(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	statements, err := statementSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return FigureBlock{Statements: statements}, nil
-}
-
-func reducePrimitivePoint(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return primitiveStatement(ctx, "point", 1, 3)
-}
-
-func reducePrimitiveLine(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return primitiveStatement(ctx, "line", 1, 3, 5, 7)
-}
-
-func reducePrimitiveBox(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return primitiveStatement(ctx, "box", 1, 3, 5, 7)
-}
-
-func reducePrimitiveCircle(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return primitiveStatement(ctx, "circle", 1, 3, 5)
-}
-
-func reduceColor(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	text, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return parseHexColor(text)
-}
-
-func reduceBinaryExpression(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	left, err := exprArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tails, err := binaryTailSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return foldBinary(left, tails), nil
-}
-
-func reduceExprTailAdd(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return binaryTailList(ctx, "+", 1, 2)
-}
-
-func reduceExprTailSubtract(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return binaryTailList(ctx, "-", 1, 2)
-}
-
-func reduceEmptyBinaryTail(drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return []binaryTail{}, nil
-}
-
-func reduceTermTailMultiply(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return binaryTailList(ctx, "*", 1, 2)
-}
-
-func reduceTermTailDivide(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return binaryTailList(ctx, "/", 1, 2)
-}
-
-func reduceUnaryNegate(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	expr, err := exprArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return UnaryExpr{Op: "-", X: expr}, nil
-}
-
-func reduceNumber(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	text, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	value, err := strconv.ParseFloat(text, 64)
-	if err != nil {
-		return nil, fmt.Errorf("rule %d invalid number %q: %w", ctx.Rule, text, err)
+		return nil, fmt.Errorf("rule %d invalid number %q: %w", ctx.Reduction.Rule, ctx.Token.Text, err)
 	}
 	return NumberExpr{Value: value}, nil
 }
 
-func reduceVariable(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return VariableExpr{Name: name}, nil
+func reduceVariable(ctx drawgenerated.VariableReduction) (Expr, error) {
+	return VariableExpr{Name: ctx.Name.Text}, nil
 }
 
-func reduceCall(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	arg, err := exprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return CallExpr{Name: name, Arg: arg}, nil
+func reduceCall(ctx drawgenerated.CallReduction) (Expr, error) {
+	return CallExpr{Name: ctx.Function.Text, Arg: ctx.Argument}, nil
 }
 
-func reduceGroup(ctx drawgenerated.Reduction) (drawgenerated.Value, error) {
-	return exprArg(ctx, 1)
+func reduceGroup(ctx drawgenerated.GroupReduction) (Expr, error) {
+	return ctx.Value, nil
 }
 
-func primitiveStatement(ctx drawgenerated.Reduction, kind string, indexes ...int) (drawgenerated.Value, error) {
-	args := make([]Expr, 0, len(indexes))
-	for _, index := range indexes {
-		expr, err := exprArg(ctx, index)
-		if err != nil {
-			return nil, err
-		}
-		args = append(args, expr)
-	}
-	return PrimitiveStatement{Kind: kind, Args: args}, nil
+func prependStatement(head Statement, tail []Statement) []Statement {
+	return append([]Statement{head}, tail...)
 }
 
-func binaryTailList(ctx drawgenerated.Reduction, op string, exprIndex int, tailIndex int) (drawgenerated.Value, error) {
-	expr, err := exprArg(ctx, exprIndex)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := binaryTailSliceArg(ctx, tailIndex)
-	if err != nil {
-		return nil, err
-	}
-	return append([]binaryTail{{op: op, right: expr}}, tail...), nil
+func prependBinaryTail(op string, right Expr, tail []BinaryTail) []BinaryTail {
+	return append([]BinaryTail{{Op: op, Right: right}}, tail...)
 }
 
-func foldBinary(left Expr, tails []binaryTail) Expr {
+func foldBinary(left Expr, tails []BinaryTail) Expr {
 	out := left
 	for _, tail := range tails {
-		out = BinaryExpr{Op: tail.op, Left: out, Right: tail.right}
+		out = BinaryExpr{Op: tail.Op, Left: out, Right: tail.Right}
 	}
 	return out
-}
-
-func valueArg(ctx drawgenerated.Reduction, index int) (drawgenerated.Value, error) {
-	if index < 0 || index >= len(ctx.Values) {
-		return nil, fmt.Errorf("rule %d action %q missing argument %d", ctx.Rule, ctx.Action, index+1)
-	}
-	return ctx.Values[index], nil
-}
-
-func lexemeTextArg(ctx drawgenerated.Reduction, index int) (string, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return "", err
-	}
-	lexeme, ok := value.(drawgenerated.Lexeme)
-	if !ok {
-		return "", fmt.Errorf("rule %d action %q argument %d has type %T, want Lexeme", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return lexeme.Text, nil
-}
-
-func statementArg(ctx drawgenerated.Reduction, index int) (Statement, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	statement, ok := value.(Statement)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want Statement", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return statement, nil
-}
-
-func statementSliceArg(ctx drawgenerated.Reduction, index int) ([]Statement, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	statements, ok := value.([]Statement)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []Statement", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return statements, nil
-}
-
-func exprArg(ctx drawgenerated.Reduction, index int) (Expr, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	expr, ok := value.(Expr)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want Expr", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return expr, nil
-}
-
-func binaryTailSliceArg(ctx drawgenerated.Reduction, index int) ([]binaryTail, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	tails, ok := value.([]binaryTail)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []binaryTail", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return tails, nil
-}
-
-func figureBlockArg(ctx drawgenerated.Reduction, index int) (FigureBlock, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return FigureBlock{}, err
-	}
-	figure, ok := value.(FigureBlock)
-	if !ok {
-		return FigureBlock{}, fmt.Errorf("rule %d action %q argument %d has type %T, want FigureBlock", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return figure, nil
-}
-
-func figureRefArg(ctx drawgenerated.Reduction, index int) (FigureRef, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	ref, ok := value.(FigureRef)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want FigureRef", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return ref, nil
-}
-
-func colorArg(ctx drawgenerated.Reduction, index int) (color.RGBA, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return color.RGBA{}, err
-	}
-	c, ok := value.(color.RGBA)
-	if !ok {
-		return color.RGBA{}, fmt.Errorf("rule %d action %q argument %d has type %T, want color.RGBA", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return c, nil
 }
 
 func parseHexColor(text string) (color.RGBA, error) {

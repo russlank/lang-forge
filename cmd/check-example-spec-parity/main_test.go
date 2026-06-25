@@ -113,3 +113,16 @@ func TestCheckFamilyReportsAllowlistedDifferences(t *testing.T) {
 		t.Fatalf("allowlisted mismatch failed: %v", err)
 	}
 }
+
+func TestNormalizeSpecPreservesNamedRHSLabels(t *testing.T) {
+	normalized, err := normalizeSpec(`%semantic go type Expr float64
+%% parser
+Expr : left=Expr Plus right=Term {go: add} ;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(normalized, "left=Expr") || !strings.Contains(normalized, "right=Term") {
+		t.Fatalf("normalized spec lost RHS labels: %s", normalized)
+	}
+}

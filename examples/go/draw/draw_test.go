@@ -83,6 +83,27 @@ func TestRejectsMalformedSource(t *testing.T) {
 	}
 }
 
+func TestDrawReducerCoverageIsComplete(t *testing.T) {
+	if err := drawReducers.ValidateCoverage(); err != nil {
+		t.Fatalf("DRAW reducer coverage: %v", err)
+	}
+}
+
+func TestDrawActionManifestIsFullyTyped(t *testing.T) {
+	manifest, err := os.ReadFile("generated/langforge.actions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(manifest, []byte(`"typed": false`)) || bytes.Contains(manifest, []byte(`"typeIssue"`)) {
+		t.Fatalf("DRAW action manifest contains an untyped action:\n%s", manifest)
+	}
+	for _, label := range []string{`"label": "width"`, `"label": "target"`, `"label": "right"`, `"name": "expr.pass"`} {
+		if !bytes.Contains(manifest, []byte(label)) {
+			t.Fatalf("DRAW action manifest missing %s", label)
+		}
+	}
+}
+
 func readSample(t *testing.T) string {
 	t.Helper()
 	data, err := os.ReadFile("sample.draw")

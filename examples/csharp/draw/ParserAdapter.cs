@@ -59,6 +59,7 @@ internal static class DrawParser
             SemanticAction.TermTailDivide => BinaryTailList("/", ctx, 1, 2),
             SemanticAction.TermTailEmpty => new List<BinaryTail>(),
             SemanticAction.UnaryNegate => new UnaryExpr("-", Arg<Expr>(ctx, 1, "operand")),
+            SemanticAction.ExprPass => Arg<Expr>(ctx, 0, "expression"),
             SemanticAction.Number => new NumberExpr(double.Parse(Text(ctx, 0, "number"), CultureInfo.InvariantCulture)),
             SemanticAction.Variable => new VariableExpr(Text(ctx, 0, "variable name")),
             SemanticAction.Call => new CallExpr(Text(ctx, 0, "function name"), Arg<Expr>(ctx, 2, "argument")),
@@ -135,6 +136,4 @@ internal static class DrawParser
             Convert.ToByte(text[3..5], 16),
             Convert.ToByte(text[5..7], 16));
     }
-
-    private sealed record BinaryTail(string Op, Expr Right);
 }

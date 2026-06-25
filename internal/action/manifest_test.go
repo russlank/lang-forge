@@ -66,7 +66,7 @@ func TestBuild_RejectsInconsistentSharedActionContext(t *testing.T) {
 	}
 }
 
-func TestBuild_ReportsMissingTypeAndLabels(t *testing.T) {
+func TestBuild_ReportsMissingResultType(t *testing.T) {
 	grammar := &parse.Grammar{
 		Terminals: map[string]bool{"Number": true},
 		Rules: []parse.Rule{
@@ -75,6 +75,24 @@ func TestBuild_ReportsMissingTypeAndLabels(t *testing.T) {
 	}
 	action := Build(grammar, spec.SemanticSpec{}, "go").Actions[0]
 	if action.Typed || action.TypeIssue == "" {
+		t.Fatalf("action = %#v", action)
+	}
+}
+
+func TestBuild_AllowsTypedContextWithoutLabeledOperands(t *testing.T) {
+	grammar := &parse.Grammar{
+		Terminals: map[string]bool{"Semi": true},
+		Rules: []parse.Rule{
+			{ID: 1, LHS: "Tail", RHS: []string{"Semi"}, Actions: map[string]string{"go": "tail.empty"}},
+			{ID: 2, LHS: "Tail", Actions: map[string]string{"go": "tail.empty"}},
+		},
+	}
+	semantics := spec.SemanticSpec{Types: []spec.SemanticType{
+		{Target: "go", Symbol: "Tail", Type: "[]Item"},
+	}}
+
+	action := Build(grammar, semantics, "go").Actions[0]
+	if !action.Typed || !action.ConsistentContext || action.TypeIssue != "" {
 		t.Fatalf("action = %#v", action)
 	}
 }

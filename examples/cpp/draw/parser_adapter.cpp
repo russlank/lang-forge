@@ -266,6 +266,9 @@ draw::ReducerMap make_reducers() {
         {draw::SemanticAction::UnaryNegate, [](const draw::Reduction& ctx) -> draw::Value {
             return unary_expr('-', value_arg<ExprPtr>(ctx, 1, "operand"));
         }},
+        {draw::SemanticAction::ExprPass, [](const draw::Reduction& ctx) -> draw::Value {
+            return value_arg<ExprPtr>(ctx, 0, "expression");
+        }},
         {draw::SemanticAction::Number, [](const draw::Reduction& ctx) -> draw::Value {
             return number_expr(std::stod(text_arg(ctx, 0, "number")));
         }},

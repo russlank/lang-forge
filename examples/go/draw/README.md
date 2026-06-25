@@ -21,6 +21,7 @@ handwritten example code:
 |---|---|
 | `draw.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
+| `model/` | Dependency-only AST types shared by generated contexts and handwritten code |
 | `parser_adapter.go` | Handwritten adapter that calls `ParseWithReducer` and builds the AST |
 | `render.go` | Handwritten renderer that turns the AST into pixels |
 | `cmd/draw-demo` | Handwritten command-line demo |
@@ -28,8 +29,21 @@ handwritten example code:
 Action blocks in `draw.lf`, such as `{go: canvas}` or
 `{go: figureRef.inline}`, are reducer labels. LangForge does not know how to
 draw a canvas or figure. It recognizes the grammar rule and exposes generated
-action IDs such as `SemanticActionCanvas` plus the rule values; the adapter
-uses a generated `ReducerMap` to build the drawing AST.
+action IDs such as `SemanticActionCanvas`.
+
+The grammar now labels semantic RHS values, for example
+`width=Expr`, `height=Expr`, and `target=FigureReference`, and declares every
+nonterminal result type with `%semantic go type`. LangForge therefore
+generates typed contexts such as `CanvasReduction`, `RepdrawReduction`, and
+`PrimitiveCircleReduction`. The adapter uses fields such as `ctx.Width`,
+`ctx.Target`, and `ctx.Radius`; it contains no positional semantic indexes or
+value casts.
+
+`model/` keeps the AST independent from both the generated parser and the
+handwritten renderer. This cycle-free dependency shape is useful for real
+compilers whose generated contexts need to mention application AST types.
+The generated `ReducerMap` is coverage-validated before parsing, and tests
+also require every action in `langforge.actions.json` to be fully typed.
 
 Files that import `generated` use the Go build tag
 `//go:build langforge_generated`. The Makefile generates the package first and

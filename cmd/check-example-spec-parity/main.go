@@ -26,7 +26,7 @@ type allowedDifference struct {
 var actionTagPattern = regexp.MustCompile(`\{(?:go|csharp|c|cpp):`)
 
 func main() {
-	familyFlag := flag.String("family", "all", "example family to check: all or calc")
+	familyFlag := flag.String("family", "all", "example family to check: all, calc, or draw")
 	flag.Parse()
 
 	families := []exampleFamily{
@@ -37,6 +37,15 @@ func main() {
 				"examples/csharp/calc/calc.lf",
 				"examples/c/calc/calc.lf",
 				"examples/cpp/calc/calc.lf",
+			},
+		},
+		{
+			Name: "draw",
+			Specs: []string{
+				"examples/go/draw/draw.lf",
+				"examples/csharp/draw/draw.lf",
+				"examples/c/draw/draw.lf",
+				"examples/cpp/draw/draw.lf",
 			},
 		},
 	}

@@ -31,3 +31,9 @@ make test
 
 Generated files live under `Generated/` and use `.g.cs` filenames. Build
 outputs, generated PNG files, and demo logs are ignored.
+
+The grammar uses the same named RHS labels and action names as the Go, C, and
+C++ DRAW specs. Target-specific C# semantic types are recorded in
+`Generated/langforge.actions.json`. The handwritten adapter still uses the
+current C# boxed reducer API; generated C# typed contexts and coverage helpers
+are tracked as backend-parity work.

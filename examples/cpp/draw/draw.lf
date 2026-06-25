@@ -1,6 +1,28 @@
 %target cpp
 %package LangForge::Examples::Draw::Generated
 %semantic cpp mode reducer
+%semantic cpp type Program lfdraw::ProgramPtr
+%semantic cpp type Statements lfdraw::StatementList
+%semantic cpp type StatementTail lfdraw::StatementList
+%semantic cpp type Statement lfdraw::StatementPtr
+%semantic cpp type CanvasStatement lfdraw::StatementPtr
+%semantic cpp type BackgroundStatement lfdraw::StatementPtr
+%semantic cpp type StyleStatement lfdraw::StatementPtr
+%semantic cpp type DefinitionStatement lfdraw::StatementPtr
+%semantic cpp type DrawStatement lfdraw::StatementPtr
+%semantic cpp type FigureReference lfdraw::FigureRefPtr
+%semantic cpp type FigureBlock lfdraw::FigureBlockPtr
+%semantic cpp type Figures lfdraw::StatementList
+%semantic cpp type FigureTail lfdraw::StatementList
+%semantic cpp type Figure lfdraw::StatementPtr
+%semantic cpp type Primitive lfdraw::StatementPtr
+%semantic cpp type ColorValue lfdraw::Color
+%semantic cpp type Expr lfdraw::ExprPtr
+%semantic cpp type ExprTail lfdraw::TailList
+%semantic cpp type Term lfdraw::ExprPtr
+%semantic cpp type TermTail lfdraw::TailList
+%semantic cpp type Unary lfdraw::ExprPtr
+%semantic cpp type Primary lfdraw::ExprPtr
 %start Program
 %token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
 
@@ -49,134 +71,134 @@ BLOCK_COMMENT => skip;
 [1-32]+      => skip;
 
 %% parser
-Program : Statements
+Program : statements=Statements
             {cpp: program}
         ;
 
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {cpp: statements}
            ;
-StatementTail : Semi Statement StatementTail
-                  {cpp: statement_tail.more}
+StatementTail : Semi head=Statement tail=StatementTail
+                  {cpp: statementTail.more}
               | Semi
-                  {cpp: statement_tail.empty}
+                  {cpp: statementTail.empty}
               | %empty
-                  {cpp: statement_tail.empty}
+                  {cpp: statementTail.empty}
               ;
 
-Statement : CanvasStatement
+Statement : value=CanvasStatement
               {cpp: pass}
-          | BackgroundStatement
+          | value=BackgroundStatement
               {cpp: pass}
-          | StyleStatement
+          | value=StyleStatement
               {cpp: pass}
-          | DefinitionStatement
+          | value=DefinitionStatement
               {cpp: pass}
-          | DrawStatement
+          | value=DrawStatement
               {cpp: pass}
-          | Primitive
+          | value=Primitive
               {cpp: pass}
           ;
 
-CanvasStatement : Canvas Expr Comma Expr
+CanvasStatement : Canvas width=Expr Comma height=Expr
                     {cpp: canvas}
                 ;
-BackgroundStatement : Background ColorValue
+BackgroundStatement : Background color=ColorValue
                         {cpp: background}
                     ;
-StyleStatement : Stroke ColorValue
+StyleStatement : Stroke color=ColorValue
                    {cpp: stroke}
-               | Fill ColorValue
+               | Fill color=ColorValue
                    {cpp: fill}
                | Fill None
                    {cpp: fill.none}
-               | Width Expr
+               | Width value=Expr
                    {cpp: width}
                ;
-DefinitionStatement : Ident Assign Expr
+DefinitionStatement : name=Ident Assign value=Expr
                         {cpp: assign}
-                    | Ident Assign FigureBlock
-                        {cpp: define_figure}
+                    | name=Ident Assign figure=FigureBlock
+                        {cpp: defineFigure}
                     ;
-DrawStatement : Draw FigureReference
+DrawStatement : Draw target=FigureReference
                   {cpp: draw}
-              | RepDraw Expr FigureReference
+              | RepDraw count=Expr target=FigureReference
                   {cpp: repdraw}
               ;
-FigureReference : Ident
-                    {cpp: figure_ref.named}
-                | FigureBlock
-                    {cpp: figure_ref.inline}
+FigureReference : name=Ident
+                    {cpp: figureRef.named}
+                | figure=FigureBlock
+                    {cpp: figureRef.inline}
                 ;
 
-FigureBlock : LParen Figures RParen
+FigureBlock : LParen statements=Figures RParen
                 {cpp: figureBlock}
             ;
-Figures : Figure FigureTail
+Figures : head=Figure tail=FigureTail
             {cpp: figures}
         ;
-FigureTail : Semi Figure FigureTail
-               {cpp: figure_tail.more}
+FigureTail : Semi head=Figure tail=FigureTail
+               {cpp: figureTail.more}
            | Semi
-               {cpp: figure_tail.empty}
+               {cpp: figureTail.empty}
            | %empty
-               {cpp: figure_tail.empty}
+               {cpp: figureTail.empty}
            ;
 
-Figure : StyleStatement
+Figure : value=StyleStatement
            {cpp: pass}
-       | DefinitionStatement
+       | value=DefinitionStatement
            {cpp: pass}
-       | DrawStatement
+       | value=DrawStatement
            {cpp: pass}
-       | Primitive
+       | value=Primitive
            {cpp: pass}
        ;
-Primitive : Point Expr Comma Expr
+Primitive : Point x=Expr Comma y=Expr
               {cpp: primitive.point}
-          | Line Expr Comma Expr Comma Expr Comma Expr
+          | Line x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {cpp: primitive.line}
-          | Box Expr Comma Expr Comma Expr Comma Expr
+          | Box x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {cpp: primitive.box}
-          | Circle Expr Comma Expr Comma Expr
+          | Circle cx=Expr Comma cy=Expr Comma radius=Expr
               {cpp: primitive.circle}
           ;
 
-ColorValue : Color
+ColorValue : literal=Color
                {cpp: color}
            ;
 
-Expr : Term ExprTail
+Expr : left=Term tail=ExprTail
          {cpp: expr}
      ;
-ExprTail : Plus Term ExprTail
-             {cpp: expr_tail.add}
-         | Minus Term ExprTail
-             {cpp: expr_tail.subtract}
+ExprTail : Plus right=Term tail=ExprTail
+             {cpp: exprTail.add}
+         | Minus right=Term tail=ExprTail
+             {cpp: exprTail.subtract}
          | %empty
-             {cpp: expr_tail.empty}
+             {cpp: exprTail.empty}
          ;
-Term : Unary TermTail
+Term : left=Unary tail=TermTail
          {cpp: term}
      ;
-TermTail : Star Unary TermTail
-             {cpp: term_tail.multiply}
-         | Slash Unary TermTail
-             {cpp: term_tail.divide}
+TermTail : Star right=Unary tail=TermTail
+             {cpp: termTail.multiply}
+         | Slash right=Unary tail=TermTail
+             {cpp: termTail.divide}
          | %empty
-             {cpp: term_tail.empty}
+             {cpp: termTail.empty}
          ;
-Unary : Minus Unary
+Unary : Minus operand=Unary
           {cpp: unary.negate}
-      | Primary
-          {cpp: pass}
+      | value=Primary
+          {cpp: expr.pass}
       ;
-Primary : Number
+Primary : token=Number
             {cpp: number}
-        | Ident
+        | name=Ident
             {cpp: variable}
-        | Func LParen Expr RParen
+        | function=Func LParen argument=Expr RParen
             {cpp: call}
-        | LParen Expr RParen
+        | LParen value=Expr RParen
             {cpp: group}
         ;

@@ -6,18 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct draw_binary_tail {
-    char op;
-    draw_expr *right;
-    struct draw_binary_tail *next;
-} draw_binary_tail;
-
-typedef struct draw_binary_tail_list {
-    draw_binary_tail *head;
-    draw_binary_tail *tail;
-    size_t count;
-} draw_binary_tail_list;
-
 static void *draw_alloc(draw_context *ctx, size_t size, draw_error *error, const char *what) {
     void *ptr = demo_arena_alloc(&ctx->arena, size);
     if (ptr == NULL) {
@@ -294,11 +282,11 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
     case DRAW_ACTION_STATEMENTS:
     case DRAW_ACTION_FIGURES:
         return draw_statement_list_prepend(draw, error, draw_arg_statement(ctx, 0, "statement", error), draw_arg_statement_list(ctx, 1, "tail statements", error));
-    case DRAW_ACTION_STATEMENT_TAIL_MORE:
-    case DRAW_ACTION_FIGURE_TAIL_MORE:
+    case DRAW_ACTION_STATEMENTTAIL_MORE:
+    case DRAW_ACTION_FIGURETAIL_MORE:
         return draw_statement_list_prepend(draw, error, draw_arg_statement(ctx, 1, "statement", error), draw_arg_statement_list(ctx, 2, "tail statements", error));
-    case DRAW_ACTION_STATEMENT_TAIL_EMPTY:
-    case DRAW_ACTION_FIGURE_TAIL_EMPTY:
+    case DRAW_ACTION_STATEMENTTAIL_EMPTY:
+    case DRAW_ACTION_FIGURETAIL_EMPTY:
         return draw_statement_list_empty(draw, error);
     case DRAW_ACTION_PASS:
         return draw_arg_value(ctx, 0, "pass-through value", error);
@@ -353,7 +341,7 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
         }
         return statement;
     }
-    case DRAW_ACTION_DEFINE_FIGURE: {
+    case DRAW_ACTION_DEFINEFIGURE: {
         draw_statement *statement = draw_statement_new(draw, error, DRAW_STMT_DEFINE_FIGURE);
         if (statement != NULL) {
             statement->name = draw_copy_arg_text(draw, ctx, 0, "figure name", error);
@@ -377,7 +365,7 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
         }
         return statement;
     }
-    case DRAW_ACTION_FIGURE_REF_NAMED: {
+    case DRAW_ACTION_FIGUREREF_NAMED: {
         draw_figure_ref *ref = (draw_figure_ref *)draw_alloc(draw, sizeof(draw_figure_ref), error, "figure reference");
         if (ref != NULL) {
             ref->kind = DRAW_FIGURE_NAMED;
@@ -385,7 +373,7 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
         }
         return ref;
     }
-    case DRAW_ACTION_FIGURE_REF_INLINE: {
+    case DRAW_ACTION_FIGUREREF_INLINE: {
         draw_figure_ref *ref = (draw_figure_ref *)draw_alloc(draw, sizeof(draw_figure_ref), error, "figure reference");
         if (ref != NULL) {
             ref->kind = DRAW_FIGURE_INLINE;
@@ -414,19 +402,21 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
         return draw_fold_binary(draw, error, draw_arg_expr(ctx, 0, "left expression", error), draw_arg_tail_list(ctx, 1, "expression tail", error));
     case DRAW_ACTION_TERM:
         return draw_fold_binary(draw, error, draw_arg_expr(ctx, 0, "left term", error), draw_arg_tail_list(ctx, 1, "term tail", error));
-    case DRAW_ACTION_EXPR_TAIL_ADD:
+    case DRAW_ACTION_EXPRTAIL_ADD:
         return draw_tail_list_prepend(draw, error, '+', draw_arg_expr(ctx, 1, "right expression", error), draw_arg_tail_list(ctx, 2, "tail expressions", error));
-    case DRAW_ACTION_EXPR_TAIL_SUBTRACT:
+    case DRAW_ACTION_EXPRTAIL_SUBTRACT:
         return draw_tail_list_prepend(draw, error, '-', draw_arg_expr(ctx, 1, "right expression", error), draw_arg_tail_list(ctx, 2, "tail expressions", error));
-    case DRAW_ACTION_TERM_TAIL_MULTIPLY:
+    case DRAW_ACTION_TERMTAIL_MULTIPLY:
         return draw_tail_list_prepend(draw, error, '*', draw_arg_expr(ctx, 1, "right term", error), draw_arg_tail_list(ctx, 2, "tail terms", error));
-    case DRAW_ACTION_TERM_TAIL_DIVIDE:
+    case DRAW_ACTION_TERMTAIL_DIVIDE:
         return draw_tail_list_prepend(draw, error, '/', draw_arg_expr(ctx, 1, "right term", error), draw_arg_tail_list(ctx, 2, "tail terms", error));
-    case DRAW_ACTION_EXPR_TAIL_EMPTY:
-    case DRAW_ACTION_TERM_TAIL_EMPTY:
+    case DRAW_ACTION_EXPRTAIL_EMPTY:
+    case DRAW_ACTION_TERMTAIL_EMPTY:
         return draw_tail_list_empty(draw, error);
     case DRAW_ACTION_UNARY_NEGATE:
         return draw_expr_unary(draw, error, '-', draw_arg_expr(ctx, 1, "unary operand", error));
+    case DRAW_ACTION_EXPR_PASS:
+        return draw_arg_value(ctx, 0, "expression", error);
     case DRAW_ACTION_NUMBER: {
         char *text = draw_copy_arg_text(draw, ctx, 0, "number", error);
         return text == NULL ? NULL : draw_expr_number(draw, error, strtod(text, NULL));

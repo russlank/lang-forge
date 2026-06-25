@@ -1,6 +1,29 @@
 %target go
 %package drawgenerated
 %semantic go mode reducer
+%semantic go import drawmodel "github.com/russlank/lang-forge/examples/go/draw/model"
+%semantic go type Program *drawmodel.Program
+%semantic go type Statements []drawmodel.Statement
+%semantic go type StatementTail []drawmodel.Statement
+%semantic go type Statement drawmodel.Statement
+%semantic go type CanvasStatement drawmodel.Statement
+%semantic go type BackgroundStatement drawmodel.Statement
+%semantic go type StyleStatement drawmodel.Statement
+%semantic go type DefinitionStatement drawmodel.Statement
+%semantic go type DrawStatement drawmodel.Statement
+%semantic go type FigureReference drawmodel.FigureRef
+%semantic go type FigureBlock drawmodel.FigureBlock
+%semantic go type Figures []drawmodel.Statement
+%semantic go type FigureTail []drawmodel.Statement
+%semantic go type Figure drawmodel.Statement
+%semantic go type Primitive drawmodel.Statement
+%semantic go type ColorValue drawmodel.Color
+%semantic go type Expr drawmodel.Expr
+%semantic go type ExprTail []drawmodel.BinaryTail
+%semantic go type Term drawmodel.Expr
+%semantic go type TermTail []drawmodel.BinaryTail
+%semantic go type Unary drawmodel.Expr
+%semantic go type Primary drawmodel.Expr
 %start Program
 %token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
 
@@ -49,14 +72,14 @@ BLOCK_COMMENT => skip;
 [1-32]+      => skip;
 
 %% parser
-Program : Statements
+Program : statements=Statements
             {go: program}
         ;
 
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {go: statements}
            ;
-StatementTail : Semi Statement StatementTail
+StatementTail : Semi head=Statement tail=StatementTail
                   {go: statementTail.more}
               | Semi
                   {go: statementTail.empty}
@@ -64,58 +87,58 @@ StatementTail : Semi Statement StatementTail
                   {go: statementTail.empty}
               ;
 
-Statement : CanvasStatement
+Statement : value=CanvasStatement
               {go: pass}
-          | BackgroundStatement
+          | value=BackgroundStatement
               {go: pass}
-          | StyleStatement
+          | value=StyleStatement
               {go: pass}
-          | DefinitionStatement
+          | value=DefinitionStatement
               {go: pass}
-          | DrawStatement
+          | value=DrawStatement
               {go: pass}
-          | Primitive
+          | value=Primitive
               {go: pass}
           ;
 
-CanvasStatement : Canvas Expr Comma Expr
+CanvasStatement : Canvas width=Expr Comma height=Expr
                     {go: canvas}
                 ;
-BackgroundStatement : Background ColorValue
+BackgroundStatement : Background color=ColorValue
                         {go: background}
                     ;
-StyleStatement : Stroke ColorValue
+StyleStatement : Stroke color=ColorValue
                    {go: stroke}
-               | Fill ColorValue
+               | Fill color=ColorValue
                    {go: fill}
                | Fill None
                    {go: fill.none}
-               | Width Expr
+               | Width value=Expr
                    {go: width}
                ;
-DefinitionStatement : Ident Assign Expr
+DefinitionStatement : name=Ident Assign value=Expr
                         {go: assign}
-                    | Ident Assign FigureBlock
+                    | name=Ident Assign figure=FigureBlock
                         {go: defineFigure}
                     ;
-DrawStatement : Draw FigureReference
+DrawStatement : Draw target=FigureReference
                   {go: draw}
-              | RepDraw Expr FigureReference
+              | RepDraw count=Expr target=FigureReference
                   {go: repdraw}
               ;
-FigureReference : Ident
+FigureReference : name=Ident
                     {go: figureRef.named}
-                | FigureBlock
+                | figure=FigureBlock
                     {go: figureRef.inline}
                 ;
 
-FigureBlock : LParen Figures RParen
+FigureBlock : LParen statements=Figures RParen
                 {go: figureBlock}
             ;
-Figures : Figure FigureTail
+Figures : head=Figure tail=FigureTail
             {go: figures}
         ;
-FigureTail : Semi Figure FigureTail
+FigureTail : Semi head=Figure tail=FigureTail
                {go: figureTail.more}
            | Semi
                {go: figureTail.empty}
@@ -123,60 +146,60 @@ FigureTail : Semi Figure FigureTail
                {go: figureTail.empty}
            ;
 
-Figure : StyleStatement
+Figure : value=StyleStatement
            {go: pass}
-       | DefinitionStatement
+       | value=DefinitionStatement
            {go: pass}
-       | DrawStatement
+       | value=DrawStatement
            {go: pass}
-       | Primitive
+       | value=Primitive
            {go: pass}
        ;
-Primitive : Point Expr Comma Expr
+Primitive : Point x=Expr Comma y=Expr
               {go: primitive.point}
-          | Line Expr Comma Expr Comma Expr Comma Expr
+          | Line x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {go: primitive.line}
-          | Box Expr Comma Expr Comma Expr Comma Expr
+          | Box x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {go: primitive.box}
-          | Circle Expr Comma Expr Comma Expr
+          | Circle cx=Expr Comma cy=Expr Comma radius=Expr
               {go: primitive.circle}
           ;
 
-ColorValue : Color
+ColorValue : literal=Color
                {go: color}
            ;
 
-Expr : Term ExprTail
+Expr : left=Term tail=ExprTail
          {go: expr}
      ;
-ExprTail : Plus Term ExprTail
+ExprTail : Plus right=Term tail=ExprTail
              {go: exprTail.add}
-         | Minus Term ExprTail
+         | Minus right=Term tail=ExprTail
              {go: exprTail.subtract}
          | %empty
              {go: exprTail.empty}
          ;
-Term : Unary TermTail
+Term : left=Unary tail=TermTail
          {go: term}
      ;
-TermTail : Star Unary TermTail
+TermTail : Star right=Unary tail=TermTail
              {go: termTail.multiply}
-         | Slash Unary TermTail
+         | Slash right=Unary tail=TermTail
              {go: termTail.divide}
          | %empty
              {go: termTail.empty}
          ;
-Unary : Minus Unary
+Unary : Minus operand=Unary
           {go: unary.negate}
-      | Primary
-          {go: pass}
+      | value=Primary
+          {go: expr.pass}
       ;
-Primary : Number
+Primary : token=Number
             {go: number}
-        | Ident
+        | name=Ident
             {go: variable}
-        | Func LParen Expr RParen
+        | function=Func LParen argument=Expr RParen
             {go: call}
-        | LParen Expr RParen
+        | LParen value=Expr RParen
             {go: group}
         ;

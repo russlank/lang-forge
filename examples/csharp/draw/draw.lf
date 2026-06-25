@@ -1,6 +1,28 @@
 %target csharp
 %package LangForge.Examples.Draw.Generated
 %semantic csharp mode reducer
+%semantic csharp type Program global::LangForge.Examples.Draw.DrawProgram
+%semantic csharp type Statements global::System.Collections.Generic.List<global::LangForge.Examples.Draw.Statement>
+%semantic csharp type StatementTail global::System.Collections.Generic.List<global::LangForge.Examples.Draw.Statement>
+%semantic csharp type Statement global::LangForge.Examples.Draw.Statement
+%semantic csharp type CanvasStatement global::LangForge.Examples.Draw.Statement
+%semantic csharp type BackgroundStatement global::LangForge.Examples.Draw.Statement
+%semantic csharp type StyleStatement global::LangForge.Examples.Draw.Statement
+%semantic csharp type DefinitionStatement global::LangForge.Examples.Draw.Statement
+%semantic csharp type DrawStatement global::LangForge.Examples.Draw.Statement
+%semantic csharp type FigureReference global::LangForge.Examples.Draw.FigureRef
+%semantic csharp type FigureBlock global::LangForge.Examples.Draw.FigureBlock
+%semantic csharp type Figures global::System.Collections.Generic.List<global::LangForge.Examples.Draw.Statement>
+%semantic csharp type FigureTail global::System.Collections.Generic.List<global::LangForge.Examples.Draw.Statement>
+%semantic csharp type Figure global::LangForge.Examples.Draw.Statement
+%semantic csharp type Primitive global::LangForge.Examples.Draw.Statement
+%semantic csharp type ColorValue global::LangForge.Examples.Draw.ColorRgb
+%semantic csharp type Expr global::LangForge.Examples.Draw.Expr
+%semantic csharp type ExprTail global::System.Collections.Generic.List<global::LangForge.Examples.Draw.BinaryTail>
+%semantic csharp type Term global::LangForge.Examples.Draw.Expr
+%semantic csharp type TermTail global::System.Collections.Generic.List<global::LangForge.Examples.Draw.BinaryTail>
+%semantic csharp type Unary global::LangForge.Examples.Draw.Expr
+%semantic csharp type Primary global::LangForge.Examples.Draw.Expr
 %start Program
 %token Canvas Background Stroke Fill None Width Draw RepDraw Circle Line Box Point Func Ident Number Color Plus Minus Star Slash LParen RParen Assign Comma Semi
 
@@ -49,14 +71,14 @@ BLOCK_COMMENT => skip;
 [1-32]+      => skip;
 
 %% parser
-Program : Statements
+Program : statements=Statements
             {csharp: program}
         ;
 
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {csharp: statements}
            ;
-StatementTail : Semi Statement StatementTail
+StatementTail : Semi head=Statement tail=StatementTail
                   {csharp: statementTail.more}
               | Semi
                   {csharp: statementTail.empty}
@@ -64,58 +86,58 @@ StatementTail : Semi Statement StatementTail
                   {csharp: statementTail.empty}
               ;
 
-Statement : CanvasStatement
+Statement : value=CanvasStatement
               {csharp: pass}
-          | BackgroundStatement
+          | value=BackgroundStatement
               {csharp: pass}
-          | StyleStatement
+          | value=StyleStatement
               {csharp: pass}
-          | DefinitionStatement
+          | value=DefinitionStatement
               {csharp: pass}
-          | DrawStatement
+          | value=DrawStatement
               {csharp: pass}
-          | Primitive
+          | value=Primitive
               {csharp: pass}
           ;
 
-CanvasStatement : Canvas Expr Comma Expr
+CanvasStatement : Canvas width=Expr Comma height=Expr
                     {csharp: canvas}
                 ;
-BackgroundStatement : Background ColorValue
+BackgroundStatement : Background color=ColorValue
                         {csharp: background}
                     ;
-StyleStatement : Stroke ColorValue
+StyleStatement : Stroke color=ColorValue
                    {csharp: stroke}
-               | Fill ColorValue
+               | Fill color=ColorValue
                    {csharp: fill}
                | Fill None
                    {csharp: fill.none}
-               | Width Expr
+               | Width value=Expr
                    {csharp: width}
                ;
-DefinitionStatement : Ident Assign Expr
+DefinitionStatement : name=Ident Assign value=Expr
                         {csharp: assign}
-                    | Ident Assign FigureBlock
+                    | name=Ident Assign figure=FigureBlock
                         {csharp: defineFigure}
                     ;
-DrawStatement : Draw FigureReference
+DrawStatement : Draw target=FigureReference
                   {csharp: draw}
-              | RepDraw Expr FigureReference
+              | RepDraw count=Expr target=FigureReference
                   {csharp: repdraw}
               ;
-FigureReference : Ident
+FigureReference : name=Ident
                     {csharp: figureRef.named}
-                | FigureBlock
+                | figure=FigureBlock
                     {csharp: figureRef.inline}
                 ;
 
-FigureBlock : LParen Figures RParen
+FigureBlock : LParen statements=Figures RParen
                 {csharp: figureBlock}
             ;
-Figures : Figure FigureTail
+Figures : head=Figure tail=FigureTail
             {csharp: figures}
         ;
-FigureTail : Semi Figure FigureTail
+FigureTail : Semi head=Figure tail=FigureTail
                {csharp: figureTail.more}
            | Semi
                {csharp: figureTail.empty}
@@ -123,60 +145,60 @@ FigureTail : Semi Figure FigureTail
                {csharp: figureTail.empty}
            ;
 
-Figure : StyleStatement
+Figure : value=StyleStatement
            {csharp: pass}
-       | DefinitionStatement
+       | value=DefinitionStatement
            {csharp: pass}
-       | DrawStatement
+       | value=DrawStatement
            {csharp: pass}
-       | Primitive
+       | value=Primitive
            {csharp: pass}
        ;
-Primitive : Point Expr Comma Expr
+Primitive : Point x=Expr Comma y=Expr
               {csharp: primitive.point}
-          | Line Expr Comma Expr Comma Expr Comma Expr
+          | Line x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {csharp: primitive.line}
-          | Box Expr Comma Expr Comma Expr Comma Expr
+          | Box x1=Expr Comma y1=Expr Comma x2=Expr Comma y2=Expr
               {csharp: primitive.box}
-          | Circle Expr Comma Expr Comma Expr
+          | Circle cx=Expr Comma cy=Expr Comma radius=Expr
               {csharp: primitive.circle}
           ;
 
-ColorValue : Color
+ColorValue : literal=Color
                {csharp: color}
            ;
 
-Expr : Term ExprTail
+Expr : left=Term tail=ExprTail
          {csharp: expr}
      ;
-ExprTail : Plus Term ExprTail
+ExprTail : Plus right=Term tail=ExprTail
              {csharp: exprTail.add}
-         | Minus Term ExprTail
+         | Minus right=Term tail=ExprTail
              {csharp: exprTail.subtract}
          | %empty
              {csharp: exprTail.empty}
          ;
-Term : Unary TermTail
+Term : left=Unary tail=TermTail
          {csharp: term}
      ;
-TermTail : Star Unary TermTail
+TermTail : Star right=Unary tail=TermTail
              {csharp: termTail.multiply}
-         | Slash Unary TermTail
+         | Slash right=Unary tail=TermTail
              {csharp: termTail.divide}
          | %empty
              {csharp: termTail.empty}
          ;
-Unary : Minus Unary
+Unary : Minus operand=Unary
           {csharp: unary.negate}
-      | Primary
-          {csharp: pass}
+      | value=Primary
+          {csharp: expr.pass}
       ;
-Primary : Number
+Primary : token=Number
             {csharp: number}
-        | Ident
+        | name=Ident
             {csharp: variable}
-        | Func LParen Expr RParen
+        | function=Func LParen argument=Expr RParen
             {csharp: call}
-        | LParen Expr RParen
+        | LParen value=Expr RParen
             {csharp: group}
         ;

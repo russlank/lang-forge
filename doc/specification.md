@@ -46,6 +46,9 @@ For a guided tour of how this file turns into scanner and parser tables, see
 | `%semantic go type Expr float64` | Declare the target-language semantic result type of a nonterminal. Replace `go` and `float64` with the target and its native type. Terminals remain generated `Lexeme` values. |
 | `%start Symbol` | Grammar start symbol. |
 | `%token A B C` | Declares parser terminals. |
+| `%alias Ident "identifier"` | Gives a terminal a human-readable name in parser diagnostics. |
+| `%group operator Plus Minus Star Slash` | Groups two or more simultaneously expected terminals under one diagnostic concept. |
+| `%hide-expected Comma Semi` | Omits low-value terminals from expected-token reports without changing parser behavior. |
 | `%type slr` | Build SLR tables. Useful for small/simple grammars and diagnostics. |
 | `%type lalr` | Build LALR(1) tables. This is the default when `%type` is omitted. |
 | `%type ielr` | Build conservative IELR(1) tables. Useful when LALR introduces a false merge conflict that canonical LR(1) avoids. |
@@ -127,6 +130,26 @@ Declare nonterminal result types for each generated target:
 The declaration describes the value returned when that nonterminal reduces.
 Tokens are deliberately not declared this way: shifted terminals are generated
 scanner `Lexeme` values preserving token text and source positions.
+
+### Error Recovery
+
+The reserved `error` symbol adds grammar-directed synchronization:
+
+```text
+Statement : Ident Assign Number Semi
+          | error Semi
+          ;
+```
+
+`error` is parser-only and must be followed by a synchronization terminal in
+the same alternative. It cannot be declared as a token, emitted by the
+scanner, used as a rule name, repeated in one alternative, or given an RHS
+label. Generated parsers collect source-rich diagnostics and discard tokens
+only until the synchronization production can continue.
+
+See [Parser Error Recovery](parser-error-recovery.md) for the runtime
+algorithm, reporting directives, target APIs, progress guarantee, and runnable
+example.
 
 Target-tagged semantic action blocks attach a reduction hook to a production
 alternative:

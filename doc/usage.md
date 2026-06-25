@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-usage-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-06-25`
 Owner: `Project maintainers`
 Scope: `CLI usage guide for the current LangForge implementation`
 
@@ -176,6 +176,13 @@ Generated parsers can be used in two semantic styles:
 Reducer mode is the default and is what the runnable examples use. See
 [Generated Code And Semantics](generated-code-and-semantics.md) for the full
 beginner-friendly explanation.
+
+Generated parsers also expose recovery-oriented APIs. `ParseRecovering`
+returns a possibly partial value, all syntax diagnostics, and an accepted
+flag. The established `Parse` and `ParseValue` entry points still fail when
+any syntax diagnostic is produced. Recovery is enabled by grammar alternatives
+such as `Statement : error Semi`; see
+[Parser Error Recovery](parser-error-recovery.md).
 
 ## Generate C# Output
 

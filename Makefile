@@ -105,6 +105,7 @@ examples-generate:
 	$(MAKE) -C examples/go/calc GO=$(GO) generate
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) generate
 	$(MAKE) -C examples/go/draw GO=$(GO) generate
+	$(MAKE) -C examples/go/parser-recovery GO=$(GO) generate
 	$(MAKE) -C examples/go/vehicle-report GO=$(GO) generate
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) generate
@@ -127,6 +128,7 @@ examples-run:
 	$(MAKE) -C examples/go/calc GO=$(GO) run
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) run
 	$(MAKE) -C examples/go/draw GO=$(GO) run
+	$(MAKE) -C examples/go/parser-recovery GO=$(GO) run
 	$(MAKE) -C examples/go/vehicle-report GO=$(GO) run
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) run
@@ -154,6 +156,7 @@ examples-test:
 	$(MAKE) -C examples/go/calc GO=$(GO) test
 	$(MAKE) -C examples/go/datakeeper GO=$(GO) test
 	$(MAKE) -C examples/go/draw GO=$(GO) test
+	$(MAKE) -C examples/go/parser-recovery GO=$(GO) test
 	$(MAKE) -C examples/go/vehicle-report GO=$(GO) test
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) test
@@ -187,6 +190,7 @@ examples-clean:
 	$(MAKE) -C examples/go/calc clean
 	$(MAKE) -C examples/go/datakeeper clean
 	$(MAKE) -C examples/go/draw clean
+	$(MAKE) -C examples/go/parser-recovery clean
 	$(MAKE) -C examples/go/vehicle-report clean
 	$(MAKE) -C examples/csharp/calc clean
 	$(MAKE) -C examples/csharp/datakeeper clean

@@ -2,8 +2,8 @@
 
 LangForge examples are organized by supported target language.
 
-- `go/calc`, `go/datakeeper`, `go/draw`, and `go/vehicle-report` are the
-  full Go generated examples.
+- `go/calc`, `go/datakeeper`, `go/draw`, `go/parser-recovery`, and
+  `go/vehicle-report` are the full Go generated examples.
 - `csharp/calc`, `csharp/datakeeper`, `csharp/draw`, and
   `csharp/vehicle-report` mirror the Go examples with generated C# output and
   handwritten C# reducers.

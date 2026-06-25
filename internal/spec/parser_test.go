@@ -151,6 +151,44 @@ S : %empty ;
 	}
 }
 
+func TestParseCombined_ParsesExpectedTokenReportingDirectives(t *testing.T) {
+	parsed, diags := ParseCombined([]byte(`%token Ident Number Plus Minus Star Slash Comma Semi
+%alias Ident "identifier"
+%alias Number "number literal"
+%group operator Plus Minus Star Slash
+%hide-expected Comma Semi
+%% parser
+S : Ident ;
+`), "expected-tokens.lf")
+	if diags.HasErrors() {
+		t.Fatalf("unexpected diagnostics: %v", diags)
+	}
+	reporting := parsed.Grammar.ExpectedTokens
+	if len(reporting.Aliases) != 2 || reporting.Aliases[1].Label != "number literal" {
+		t.Fatalf("aliases = %#v", reporting.Aliases)
+	}
+	if len(reporting.Groups) != 1 || reporting.Groups[0].Name != "operator" || len(reporting.Groups[0].Tokens) != 4 {
+		t.Fatalf("groups = %#v", reporting.Groups)
+	}
+	if len(reporting.Hidden) != 2 || reporting.Hidden[0].Token != "Comma" {
+		t.Fatalf("hidden = %#v", reporting.Hidden)
+	}
+}
+
+func TestParseCombined_RejectsMalformedExpectedTokenReportingDirectives(t *testing.T) {
+	for _, input := range []string{
+		"%alias Ident identifier\n%% parser\nS : %empty ;\n",
+		"%alias Ident \"\"\n%% parser\nS : %empty ;\n",
+		"%group operator Plus\n%% parser\nS : %empty ;\n",
+		"%group operator Plus Plus\n%% parser\nS : %empty ;\n",
+		"%hide-expected\n%% parser\nS : %empty ;\n",
+	} {
+		if _, diags := ParseCombined([]byte(input), "bad-expected-token.lf"); !diags.HasErrors() {
+			t.Fatalf("expected diagnostics for %q", input)
+		}
+	}
+}
+
 func TestParseYacc_SemanticDirectives(t *testing.T) {
 	parsed, diags := ParseYacc([]byte(`%semantic go mode reducer
 %semantic go import drawsem "example.test/drawsem"

@@ -38,6 +38,9 @@ Current implementation status:
 - validation for empty-matching lexer rules, token/nonterminal name collisions,
   parser conflicts, invalid Unicode scalar ranges, and unsupported scanner
   settings;
+- grammar-directed parser recovery with reserved `error` productions,
+  expected-token aliases/groups, structured diagnostics, and cross-target
+  recovery APIs;
 - language-grouped examples under `examples/go`, `examples/csharp`,
   `examples/c`, and `examples/cpp`;
 - copyable mini-compiler templates under `examples/templates` for Go, C#, C,
@@ -174,6 +177,7 @@ make docker-smoke
 - [Specification format](doc/specification.md)
 - [Generated code and semantics](doc/generated-code-and-semantics.md)
 - [Parser algorithms](doc/parser-algorithms.md)
+- [Parser error recovery](doc/parser-error-recovery.md)
 - [Examples](doc/examples.md)
 - [Example Template Guide](doc/example-template-guide.md)
 - [UCDT legacy inspiration](doc/ucdt-legacy-inspiration.md)

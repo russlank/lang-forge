@@ -227,6 +227,12 @@ RecoveryAction
 
 Add grammar-level recovery support.
 
+Current status: the first conservative recovery level is implemented. The
+reserved `error` symbol, explicit synchronization productions, aliases,
+groups, hidden expected tokens, structured cross-target results, and
+non-looping tests are available. Phrase/editor recovery heuristics and
+lookahead-correction refinement remain future work.
+
 Possible syntax:
 
 ```lf

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -475,6 +476,256 @@ func TestGeneratedScannerParserConcurrentUse(t *testing.T) {
 	run(t, out, goBin, "test", "./...")
 }
 
+func TestRunGenerate_GeneratedGoParserRecoversAndReportsExpectedTokens(t *testing.T) {
+	goBin := "/usr/local/go/bin/go"
+	if _, err := os.Stat(goBin); err != nil {
+		t.Skipf("go binary unavailable at %s", goBin)
+	}
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "recovery.lf")
+	writeFile(t, specPath, `%target go
+%package recovery
+%token Ident Number Assign Semi
+%alias Ident "identifier"
+%alias Number "number literal"
+%group value Ident Number
+%hide-expected Semi
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+IDENT => token(Ident);
+NUMBER => token(Number);
+"=" => token(Assign);
+";" => token(Semi);
+[1-32]+ => skip;
+%% parser
+Program : Statements ;
+Statements : Statement Statements | %empty ;
+Statement : Ident Assign Number Semi | error Semi ;
+`)
+	out := filepath.Join(dir, "generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "go", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	writeFile(t, filepath.Join(out, "recovery_test.go"), `package recovery
+
+import (
+	"errors"
+	"testing"
+)
+
+func TestRecoveryAndExpectedTokens(t *testing.T) {
+	tokens, err := Tokenize("x=y; y=2; z=; w=3;")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := ParseRecovering(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Accepted || len(result.Diagnostics) != 2 {
+		t.Fatalf("result = %#v", result)
+	}
+	first := result.Diagnostics[0]
+	if first.Unexpected != "Ident" || first.UnexpectedDisplay != "identifier" || first.StartLine != 1 || first.StartColumn != 3 {
+		t.Fatalf("first diagnostic = %#v", first)
+	}
+	if len(first.Expected) != 1 || first.Expected[0].Display != "number literal" {
+		t.Fatalf("expected tokens = %#v", first.Expected)
+	}
+	if first.Recovery.Kind != "recovered" || first.Recovery.Discarded != 1 {
+		t.Fatalf("recovery = %#v", first.Recovery)
+	}
+	_, err = ParseValue(tokens)
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) || len(parseErr.Diagnostics) != 2 {
+		t.Fatalf("ParseValue error = %#v", err)
+	}
+}
+
+func TestUnrecoverableInputTerminates(t *testing.T) {
+	tokens, err := Tokenize("=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := ParseRecovering(tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Accepted || len(result.Diagnostics) != 1 || result.Diagnostics[0].Recovery.Kind != "abort" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+`)
+	run(t, out, goBin, "mod", "init", "recovery")
+	run(t, out, goBin, "test", "./...")
+}
+
+func TestRunGenerate_GeneratedCParserRecoversAndReportsExpectedTokens(t *testing.T) {
+	cc, err := exec.LookPath("gcc")
+	if err != nil {
+		t.Skip("gcc unavailable")
+	}
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "recovery.lf")
+	writeFile(t, specPath, recoverySpec("c", "recovery"))
+	out := filepath.Join(dir, "generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "c", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	writeFile(t, filepath.Join(dir, "main.c"), `#include "generated/parser.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static int require(int condition, const char *message) {
+    if (!condition) {
+        fprintf(stderr, "%s\n", message);
+        return 0;
+    }
+    return 1;
+}
+
+int main(void) {
+    recovery_error error = {{0}};
+    recovery_lexeme *tokens = NULL;
+    size_t count = 0;
+    recovery_parse_result result;
+    recovery_parse_result_init(&result);
+    if (!recovery_tokenize("x=y; y=2; z=; w=3;", &tokens, &count, &error)) { return 1; }
+    if (!recovery_parse_recovering(tokens, count, &result, &error)) { return 2; }
+    if (!require(result.accepted && result.diagnostic_count == 2, "wrong recovery result")) { return 3; }
+    const recovery_parse_diagnostic *first = &result.diagnostics[0];
+    if (!require(strcmp(first->unexpected, "Ident") == 0 && strcmp(first->unexpected_display, "identifier") == 0 && first->start_column == 3, "wrong first diagnostic")) { return 4; }
+    if (!require(first->expected_count == 1 && strcmp(first->expected[0].display, "number literal") == 0, "wrong expected token")) { return 5; }
+    if (!require(strcmp(first->recovery, "recovered") == 0 && first->discarded == 1, "wrong recovery action")) { return 6; }
+    recovery_parse_result_free(&result);
+    if (recovery_parse(tokens, count, &error) || strstr(error.message, "parse error at 1:3") == NULL) { return 7; }
+    recovery_free_lexemes(tokens);
+
+    tokens = NULL;
+    count = 0;
+    if (!recovery_tokenize("=", &tokens, &count, &error)) { return 8; }
+    if (!recovery_parse_recovering(tokens, count, &result, &error)) { return 9; }
+    if (!require(!result.accepted && result.diagnostic_count == 1 && strcmp(result.diagnostics[0].recovery, "abort") == 0, "unrecoverable input did not terminate")) { return 10; }
+    recovery_parse_result_free(&result);
+    recovery_free_lexemes(tokens);
+    return 0;
+}
+`)
+	run(t, dir, cc, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic", "-Igenerated", "generated/scanner.c", "generated/parser.c", "main.c", "-o", "recovery-c")
+	run(t, dir, filepath.Join(dir, "recovery-c"))
+}
+
+func TestRunGenerate_GeneratedCppParserRecoversAndReportsExpectedTokens(t *testing.T) {
+	compilers := findCppCompilers()
+	if len(compilers) == 0 {
+		t.Skip("C++ compiler unavailable")
+	}
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "recovery.lf")
+	writeFile(t, specPath, recoverySpec("cpp", "Recovery::Generated"))
+	out := filepath.Join(dir, "generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "cpp", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	writeFile(t, filepath.Join(dir, "main.cpp"), `#include "generated/parser.hpp"
+
+#include <stdexcept>
+#include <string>
+
+using namespace Recovery::Generated;
+
+static void require(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+
+int main() {
+    const auto tokens = tokenize("x=y; y=2; z=; w=3;");
+    const auto result = parse_recovering(tokens);
+    require(result.accepted && result.diagnostics.size() == 2, "wrong recovery result");
+    const auto& first = result.diagnostics.front();
+    require(first.unexpected == "Ident" && first.unexpected_display == "identifier" && first.start_column == 3, "wrong first diagnostic");
+    require(first.expected.size() == 1 && first.expected.front().display == "number literal", "wrong expected token");
+    require(first.recovery.kind == "recovered" && first.recovery.discarded == 1, "wrong recovery action");
+    try {
+        parse(tokens);
+        throw std::runtime_error("compatibility parse should fail");
+    } catch (const ParseError& error) {
+        require(error.diagnostics().size() == 2, "wrong ParseError diagnostics");
+    }
+    const auto aborted = parse_recovering(tokenize("="));
+    require(!aborted.accepted && aborted.diagnostics.size() == 1 && aborted.diagnostics.front().recovery.kind == "abort", "unrecoverable input did not terminate");
+    return 0;
+}
+`)
+	for index, cxx := range compilers {
+		binary := fmt.Sprintf("recovery-cpp-%d", index)
+		run(t, dir, cxx, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-pedantic", "-Igenerated", "generated/scanner.cpp", "generated/parser.cpp", "main.cpp", "-o", binary)
+		run(t, dir, filepath.Join(dir, binary))
+	}
+}
+
+func TestRunGenerate_GeneratedCSharpParserRecoversAndReportsExpectedTokens(t *testing.T) {
+	dotnet, err := exec.LookPath("dotnet")
+	if err != nil {
+		t.Skip("dotnet unavailable")
+	}
+	dir := t.TempDir()
+	specPath := filepath.Join(dir, "recovery.lf")
+	writeFile(t, specPath, recoverySpec("csharp", "Recovery.Generated"))
+	out := filepath.Join(dir, "Generated")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "csharp", "--out", out}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	writeFile(t, filepath.Join(dir, "Recovery.csproj"), `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+`)
+	writeFile(t, filepath.Join(dir, "Program.cs"), `using Recovery.Generated;
+
+static void Require(bool condition, string message)
+{
+    if (!condition) throw new InvalidOperationException(message);
+}
+
+var tokens = Scanner.Tokenize("x=y; y=2; z=; w=3;");
+var result = Parser.ParseRecovering(tokens);
+Require(result.Accepted && result.Diagnostics.Count == 2, "wrong recovery result");
+var first = result.Diagnostics[0];
+Require(first.Unexpected == "Ident" && first.UnexpectedDisplay == "identifier" && first.StartColumn == 3, "wrong first diagnostic");
+Require(first.Expected.Count == 1 && first.Expected[0].Display == "number literal", "wrong expected token");
+Require(first.Recovery.Kind == "recovered" && first.Recovery.Discarded == 1, "wrong recovery action");
+try
+{
+    Parser.Parse(tokens);
+    throw new InvalidOperationException("compatibility parse should fail");
+}
+catch (ParseException error)
+{
+    Require(error.Diagnostics.Count == 2, "wrong ParseException diagnostics");
+}
+var aborted = Parser.ParseRecovering(Scanner.Tokenize("="));
+Require(!aborted.Accepted && aborted.Diagnostics.Count == 1 && aborted.Diagnostics[0].Recovery.Kind == "abort", "unrecoverable input did not terminate");
+`)
+	run(t, dir, dotnet, "run", "--project", "Recovery.csproj")
+}
+
 func TestRunGenerate_GeneratedCppScannerParserCompilesAndParses(t *testing.T) {
 	cxx, ok := findCppCompiler()
 	if !ok {
@@ -900,6 +1151,12 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 			t.Fatalf("generated C# file %s missing: %v", name, err)
 		}
 	}
+	parserSource := readFile(t, filepath.Join(out, "Parser.g.cs"))
+	for _, fragment := range []string{"record ParseResult", "class ParseException", "ParseRecovering"} {
+		if !strings.Contains(parserSource, fragment) {
+			t.Fatalf("generated C# parser missing %q:\n%s", fragment, parserSource)
+		}
+	}
 	for _, name := range []string{"Tokens.cs", "Scanner.cs", "Parser.cs"} {
 		if _, err := os.Stat(filepath.Join(out, name)); !os.IsNotExist(err) {
 			t.Fatalf("generated C# file %s should use .g.cs suffix; stat error = %v", name, err)
@@ -1057,13 +1314,24 @@ func run(t *testing.T, dir string, name string, args ...string) {
 }
 
 func findCppCompiler() (string, bool) {
-	for _, name := range []string{"g++", "c++", "clang++"} {
-		path, err := exec.LookPath(name)
-		if err == nil {
-			return path, true
-		}
+	compilers := findCppCompilers()
+	if len(compilers) > 0 {
+		return compilers[0], true
 	}
 	return "", false
+}
+
+func findCppCompilers() []string {
+	seen := map[string]bool{}
+	var compilers []string
+	for _, name := range []string{"g++", "clang++", "c++"} {
+		path, err := exec.LookPath(name)
+		if err == nil && !seen[path] {
+			seen[path] = true
+			compilers = append(compilers, path)
+		}
+	}
+	return compilers
 }
 
 func lr1ButNotSLRSpec(prefix string) string {
@@ -1078,6 +1346,29 @@ func lr1ButNotSLRSpec(prefix string) string {
 S : L Eq R | R ;
 L : Star R | ID ;
 R : L ;
+`
+}
+
+func recoverySpec(target, packageName string) string {
+	return `%target ` + target + `
+%package ` + packageName + `
+%token Ident Number Assign Semi
+%alias Ident "identifier"
+%alias Number "number literal"
+%group value Ident Number
+%hide-expected Semi
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+IDENT => token(Ident);
+NUMBER => token(Number);
+"=" => token(Assign);
+";" => token(Semi);
+[1-32]+ => skip;
+%% parser
+Program : Statements ;
+Statements : Statement Statements | %empty ;
+Statement : Ident Assign Number Semi | error Semi ;
 `
 }
 

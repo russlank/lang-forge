@@ -87,12 +87,23 @@ type State struct {
 
 // Table is the generated parser automaton and action/goto table.
 type Table struct {
-	Algorithm string                    `json:"algorithm"`
-	States    []State                   `json:"states"`
-	Actions   map[int]map[string]Action `json:"actions"`
-	Gotos     map[int]map[string]int    `json:"gotos"`
-	Conflicts []Conflict                `json:"conflicts,omitempty"`
-	Rules     []Rule                    `json:"rules"`
+	Algorithm     string                    `json:"algorithm"`
+	States        []State                   `json:"states"`
+	Actions       map[int]map[string]Action `json:"actions"`
+	Gotos         map[int]map[string]int    `json:"gotos"`
+	Conflicts     []Conflict                `json:"conflicts,omitempty"`
+	Rules         []Rule                    `json:"rules"`
+	Expected      map[int][]ExpectedToken   `json:"expected,omitempty"`
+	ErrorRecovery bool                      `json:"errorRecovery,omitempty"`
+}
+
+// ExpectedToken is one user-facing entry in a state's expected-token set.
+// Members contains exact grammar terminals when the display entry represents
+// a reporting group.
+type ExpectedToken struct {
+	Symbol  string   `json:"symbol,omitempty"`
+	Display string   `json:"display"`
+	Members []string `json:"members,omitempty"`
 }
 
 // Build constructs a parser table using the requested algorithm.
@@ -160,7 +171,7 @@ func BuildSLR(g *Grammar) *Table {
 			}
 		}
 	}
-	return table
+	return finalizeTable(table, aug)
 }
 
 func (t *Table) setAction(state int, symbol string, action Action, items itemSet) {
@@ -294,12 +305,72 @@ func augment(g *Grammar) *Grammar {
 	rules := []Rule{{ID: 0, LHS: start, RHS: []string{g.Start}}}
 	rules = append(rules, g.Rules...)
 	return &Grammar{
-		Start:        start,
-		Terminals:    terminals,
-		Nonterminals: nonterminals,
-		Rules:        rules,
-		Spans:        g.Spans,
+		Start:          start,
+		Terminals:      terminals,
+		Nonterminals:   nonterminals,
+		Rules:          rules,
+		Spans:          g.Spans,
+		ExpectedTokens: g.ExpectedTokens,
 	}
+}
+
+func finalizeTable(table *Table, grammar *Grammar) *Table {
+	table.Expected = map[int][]ExpectedToken{}
+	aliases := map[string]string{}
+	for _, alias := range grammar.ExpectedTokens.Aliases {
+		aliases[alias.Token] = alias.Label
+	}
+	hidden := map[string]bool{}
+	for _, token := range grammar.ExpectedTokens.Hidden {
+		hidden[token.Token] = true
+	}
+	for _, state := range table.States {
+		available := map[string]bool{}
+		for symbol := range table.Actions[state.ID] {
+			if symbol == Error {
+				table.ErrorRecovery = true
+				continue
+			}
+			if !hidden[symbol] {
+				available[symbol] = true
+			}
+		}
+		var expected []ExpectedToken
+		for _, group := range grammar.ExpectedTokens.Groups {
+			var members []string
+			for _, token := range group.Tokens {
+				if available[token] {
+					members = append(members, token)
+				}
+			}
+			if len(members) < 2 {
+				continue
+			}
+			expected = append(expected, ExpectedToken{Display: group.Name, Members: members})
+			for _, token := range members {
+				delete(available, token)
+			}
+		}
+		symbols := make([]string, 0, len(available))
+		for symbol := range available {
+			symbols = append(symbols, symbol)
+		}
+		sort.Strings(symbols)
+		for _, symbol := range symbols {
+			display := aliases[symbol]
+			if display == "" {
+				display = symbol
+				if symbol == EOF {
+					display = "end of input"
+				}
+			}
+			expected = append(expected, ExpectedToken{Symbol: symbol, Display: display})
+		}
+		if len(expected) > 0 {
+			table.Expected[state.ID] = expected
+		}
+	}
+	return table
 }
 
 func augmentedStart(start string) string {

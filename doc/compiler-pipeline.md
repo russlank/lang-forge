@@ -269,6 +269,12 @@ reducer. Calling `Parse` validates the token stream. Calling `ParseValue` or
 `ParseWithReducer` also carries a semantic value stack and dispatches
 target-tagged rule actions to user code.
 
+When the grammar contains a production such as `Statement : error Semi`, the
+same table contains a shift action for the reserved `error` terminal.
+Generated recovery APIs use that action to synchronize, collect expected-token
+diagnostics, and continue parsing. The runtime never invents grammar
+transitions: recovery follows actions created from explicit productions.
+
 Current C# generation writes:
 
 - `Tokens.g.cs`;

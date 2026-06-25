@@ -81,7 +81,7 @@ S : A B {cpp: pair.value} ;
 	}
 
 	parserHeader := readGeneratedFile(t, out, "parser.hpp")
-	for _, fragment := range []string{"enum class SemanticAction", "PairValue", "class ReducerMap"} {
+	for _, fragment := range []string{"enum class SemanticAction", "PairValue", "class ReducerMap", "struct ParseResult", "class ParseError", "parse_recovering"} {
 		if !strings.Contains(parserHeader, fragment) {
 			t.Fatalf("parser.hpp missing %q:\n%s", fragment, parserHeader)
 		}

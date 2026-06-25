@@ -185,9 +185,38 @@ type LexRule struct {
 
 // GrammarSpec contains parser settings and grammar productions.
 type GrammarSpec struct {
-	Start     string     `json:"start,omitempty"`
-	Algorithm string     `json:"algorithm,omitempty"`
-	Rules     []RuleSpec `json:"rules,omitempty"`
+	Start          string            `json:"start,omitempty"`
+	Algorithm      string            `json:"algorithm,omitempty"`
+	ExpectedTokens ExpectedTokenSpec `json:"expectedTokens,omitempty"`
+	Rules          []RuleSpec        `json:"rules,omitempty"`
+}
+
+// ExpectedTokenSpec controls how generated syntax diagnostics present parser
+// terminals. It does not change parser recognition or table construction.
+type ExpectedTokenSpec struct {
+	Aliases []ExpectedTokenAlias  `json:"aliases,omitempty"`
+	Groups  []ExpectedTokenGroup  `json:"groups,omitempty"`
+	Hidden  []HiddenExpectedToken `json:"hidden,omitempty"`
+}
+
+// ExpectedTokenAlias gives one terminal a human-readable diagnostic label.
+type ExpectedTokenAlias struct {
+	Token string           `json:"token"`
+	Label string           `json:"label"`
+	Span  diagnostics.Span `json:"span"`
+}
+
+// ExpectedTokenGroup combines related expected terminals under one label.
+type ExpectedTokenGroup struct {
+	Name   string           `json:"name"`
+	Tokens []string         `json:"tokens"`
+	Span   diagnostics.Span `json:"span"`
+}
+
+// HiddenExpectedToken suppresses one low-value terminal from diagnostic lists.
+type HiddenExpectedToken struct {
+	Token string           `json:"token"`
+	Span  diagnostics.Span `json:"span"`
 }
 
 // RuleSpec is a user-facing grammar production before normalization.

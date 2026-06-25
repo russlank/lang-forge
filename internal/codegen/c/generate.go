@@ -103,7 +103,7 @@ func Generate(input Input, outDir string) error {
 		"scanner.h": renderScannerHeader(prefix, input.Spec.SourceFile),
 		"scanner.c": renderScannerSource(prefix, input.Spec.SourceFile, input.DFA, tokens, tokenIDs),
 		"parser.h":  renderParserHeader(prefix, input.Spec.SourceFile, actions),
-		"parser.c":  renderParserSource(prefix, input.Spec.SourceFile, input.ParseTable, tokens, tokenIDs, actions),
+		"parser.c":  renderParserSource(prefix, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions),
 	}
 	for name, content := range files {
 		if err := writeFile(filepath.Join(outDir, name), content); err != nil {
@@ -426,14 +426,24 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("typedef void *" + prefix + "_value;\n\n")
 	b.WriteString("typedef struct " + prefix + "_reduction {\n    int rule;\n    const char *lhs;\n    const char **rhs;\n    size_t rhs_count;\n    " + prefix + "_semantic_action action_id;\n    const char *action;\n    " + prefix + "_value *values;\n} " + prefix + "_reduction;\n\n")
 	b.WriteString("typedef " + prefix + "_value (*" + prefix + "_reduce_fn)(const " + prefix + "_reduction *ctx, void *user, " + prefix + "_error *error);\n\n")
+	b.WriteString("/* One expected terminal or reporting group. */\n")
+	b.WriteString("typedef struct " + prefix + "_expected_token {\n    const char *symbol;\n    const char *display;\n    const char *const *members;\n    size_t member_count;\n} " + prefix + "_expected_token;\n\n")
+	b.WriteString("/* One source-rich parser syntax diagnostic. */\n")
+	b.WriteString("typedef struct " + prefix + "_parse_diagnostic {\n    int state;\n    const char *unexpected;\n    const char *unexpected_display;\n    const " + prefix + "_expected_token *expected;\n    size_t expected_count;\n    size_t start;\n    size_t end;\n    int start_line;\n    int start_column;\n    int end_line;\n    int end_column;\n    const char *recovery;\n    size_t discarded;\n} " + prefix + "_parse_diagnostic;\n\n")
+	b.WriteString("/* A possibly partial semantic value plus owned syntax diagnostics. */\n")
+	b.WriteString("typedef struct " + prefix + "_parse_result {\n    " + prefix + "_value value;\n    " + prefix + "_parse_diagnostic *diagnostics;\n    size_t diagnostic_count;\n    int accepted;\n} " + prefix + "_parse_result;\n\n")
 	b.WriteString("const char *" + prefix + "_semantic_action_name(" + prefix + "_semantic_action action);\n")
 	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("void " + prefix + "_parse_result_init(" + prefix + "_parse_result *result);\n")
+	b.WriteString("void " + prefix + "_parse_result_free(" + prefix + "_parse_result *result);\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
 	return b.String()
 }
 
-func renderParserSource(prefix string, source string, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction) string {
+func renderParserSource(prefix string, source string, project *spec.Spec, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction) string {
 	actionIDs := semanticActionIDs(actions)
 	var b strings.Builder
 	b.WriteString(cHeader(source, "parser.c"))
@@ -443,10 +453,13 @@ func renderParserSource(prefix string, source string, table *parse.Table, tokens
 	b.WriteString("typedef struct { size_t start; size_t count; } lf_row;\n")
 	b.WriteString("typedef struct { const char *symbol; int state; } lf_goto_entry;\n")
 	b.WriteString("typedef struct { int id; const char *lhs; const char **rhs; size_t rhs_count; " + prefix + "_semantic_action action; } lf_rule;\n\n")
+	b.WriteString("typedef struct { size_t start; size_t count; } lf_expected_row;\n")
+	b.WriteString("typedef struct { const char *symbol; const char *display; } lf_alias_entry;\n\n")
 	b.WriteString(renderActionName(prefix, actions))
 	b.WriteString(renderParserRules(prefix, table, actionIDs))
 	b.WriteString(renderParserActions(prefix, table))
 	b.WriteString(renderParserGotos(prefix, table))
+	b.WriteString(renderParserExpected(prefix, project, table))
 	b.WriteString(`
 static void lf_set_error(` + prefix + `_error *error, const char *message) {
     if (error != NULL) {
@@ -508,13 +521,98 @@ static int lf_push_value(` + prefix + `_value **values, size_t *count, size_t *c
     return 1;
 }
 
+static const char *lf_unexpected_display(const char *symbol) {
+    if (strcmp(symbol, "$") == 0) { return "end of input"; }
+    for (size_t i = 0; i < ` + prefix + `_alias_count; i++) {
+        if (strcmp(` + prefix + `_aliases[i].symbol, symbol) == 0) { return ` + prefix + `_aliases[i].display; }
+    }
+    return symbol;
+}
+
+static int lf_append_diagnostic(` + prefix + `_parse_result *result, int state, const char *unexpected, const ` + prefix + `_lexeme *tokens, size_t count, size_t pos, ` + prefix + `_error *error) {
+    size_t next_count = result->diagnostic_count + 1;
+    ` + prefix + `_parse_diagnostic *next = (` + prefix + `_parse_diagnostic *)realloc(result->diagnostics, next_count * sizeof(` + prefix + `_parse_diagnostic));
+    if (next == NULL) { lf_set_error(error, "out of memory"); return 0; }
+    result->diagnostics = next;
+    ` + prefix + `_parse_diagnostic *diagnostic = &result->diagnostics[result->diagnostic_count];
+    memset(diagnostic, 0, sizeof(*diagnostic));
+    diagnostic->state = state;
+    diagnostic->unexpected = unexpected;
+    diagnostic->unexpected_display = lf_unexpected_display(unexpected);
+    if (state >= 0 && (size_t)state < sizeof(` + prefix + `_expected_rows) / sizeof(` + prefix + `_expected_rows[0])) {
+        lf_expected_row row = ` + prefix + `_expected_rows[state];
+        diagnostic->expected = &` + prefix + `_expected_tokens[row.start];
+        diagnostic->expected_count = row.count;
+    }
+    if (pos < count) {
+        diagnostic->start = tokens[pos].start;
+        diagnostic->end = tokens[pos].end;
+        diagnostic->start_line = tokens[pos].start_line;
+        diagnostic->start_column = tokens[pos].start_column;
+        diagnostic->end_line = tokens[pos].end_line;
+        diagnostic->end_column = tokens[pos].end_column;
+    } else if (count > 0) {
+        diagnostic->start = tokens[count - 1].end;
+        diagnostic->end = tokens[count - 1].end;
+        diagnostic->start_line = tokens[count - 1].end_line;
+        diagnostic->start_column = tokens[count - 1].end_column;
+        diagnostic->end_line = tokens[count - 1].end_line;
+        diagnostic->end_column = tokens[count - 1].end_column;
+    } else {
+        diagnostic->start_line = diagnostic->end_line = 1;
+        diagnostic->start_column = diagnostic->end_column = 1;
+    }
+    diagnostic->recovery = "none";
+    result->diagnostic_count = next_count;
+    return 1;
+}
+
+static void lf_format_parse_error(` + prefix + `_error *error, const ` + prefix + `_parse_result *result) {
+    if (error == NULL || result->diagnostic_count == 0) { return; }
+    const ` + prefix + `_parse_diagnostic *diagnostic = &result->diagnostics[0];
+    snprintf(error->message, sizeof(error->message), "parse error at %d:%d: unexpected %s", diagnostic->start_line, diagnostic->start_column, diagnostic->unexpected_display);
+}
+
+void ` + prefix + `_parse_result_init(` + prefix + `_parse_result *result) {
+    if (result == NULL) { return; }
+    result->value = NULL;
+    result->diagnostics = NULL;
+    result->diagnostic_count = 0;
+    result->accepted = 0;
+}
+
+void ` + prefix + `_parse_result_free(` + prefix + `_parse_result *result) {
+    if (result == NULL) { return; }
+    free(result->diagnostics);
+    ` + prefix + `_parse_result_init(result);
+}
+
 int ` + prefix + `_parse(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_error *error) {
     return ` + prefix + `_parse_value(tokens, count, NULL, NULL, NULL, error);
 }
 
 int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+    ` + prefix + `_parse_result result = {0};
+    int ok = ` + prefix + `_parse_value_recovering(tokens, count, reducer, user, &result, error);
+    if (!ok) { ` + prefix + `_parse_result_free(&result); return 0; }
+    if (out != NULL) { *out = result.value; }
+    if (result.diagnostic_count != 0) {
+        lf_format_parse_error(error, &result);
+        ` + prefix + `_parse_result_free(&result);
+        return 0;
+    }
+    ` + prefix + `_parse_result_free(&result);
+    return 1;
+}
+
+int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering(tokens, count, NULL, NULL, result, error);
+}
+
+int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     lf_clear_error(error);
-    if (out != NULL) { *out = NULL; }
+    if (result == NULL) { lf_set_error(error, "parser result is required"); return 0; }
+    ` + prefix + `_parse_result_init(result);
     if (tokens == NULL && count != 0) { lf_set_error(error, "parser tokens are required"); return 0; }
     size_t state_capacity = 64, state_count = 0;
     size_t value_capacity = 64, value_count = 0;
@@ -523,15 +621,62 @@ int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *tokens, size_t count
     if (states == NULL || values == NULL) { free(states); free(values); lf_set_error(error, "out of memory"); return 0; }
     states[state_count++] = 0;
     size_t pos = 0;
+    int recovering = 0;
+    size_t active_diagnostic = 0;
+    int has_active_diagnostic = 0;
     while (1) {
         const char *lookahead = lf_lookahead(tokens, count, pos);
         const lf_action_entry *action = lf_find_action(states[state_count - 1], lookahead);
-        if (action == NULL) { free(states); free(values); lf_set_error(error, "parse error"); return 0; }
+        if (action == NULL) {
+            if (recovering == 0) {
+                if (!lf_append_diagnostic(result, states[state_count - 1], lookahead, tokens, count, pos, error)) { free(states); free(values); return 0; }
+                active_diagnostic = result->diagnostic_count - 1;
+                has_active_diagnostic = 1;
+                int recovered = 0;
+                while (state_count > 0) {
+                    const lf_action_entry *error_action = lf_find_action(states[state_count - 1], "error");
+                    if (error_action != NULL && error_action->kind == LF_ACT_SHIFT) {
+                        if (!lf_push_state(&states, &state_count, &state_capacity, error_action->state, error)) { free(states); free(values); return 0; }
+                        if (!lf_push_value(&values, &value_count, &value_capacity, NULL, error)) { free(states); free(values); return 0; }
+                        recovering = 3;
+                        result->diagnostics[active_diagnostic].recovery = "shift-error";
+                        recovered = 1;
+                        break;
+                    }
+                    if (state_count == 1) { break; }
+                    state_count--;
+                    if (value_count > 0) { value_count--; }
+                }
+                if (recovered) { continue; }
+                result->diagnostics[active_diagnostic].recovery = "abort";
+                result->value = value_count == 0 ? NULL : values[value_count - 1];
+                free(states);
+                free(values);
+                return 1;
+            }
+            if (strcmp(lookahead, "$") == 0) {
+                if (has_active_diagnostic) { result->diagnostics[active_diagnostic].recovery = "abort"; }
+                result->value = value_count == 0 ? NULL : values[value_count - 1];
+                free(states);
+                free(values);
+                return 1;
+            }
+            pos++;
+            if (has_active_diagnostic) { result->diagnostics[active_diagnostic].discarded++; }
+            continue;
+        }
         if (action->kind == LF_ACT_SHIFT) {
             if (pos >= count) { free(states); free(values); lf_set_error(error, "shift past end of input"); return 0; }
             if (!lf_push_state(&states, &state_count, &state_capacity, action->state, error)) { free(states); free(values); return 0; }
             if (!lf_push_value(&values, &value_count, &value_capacity, (` + prefix + `_value)&tokens[pos], error)) { free(states); free(values); return 0; }
             pos++;
+            if (recovering > 0) {
+                recovering--;
+                if (recovering == 0 && has_active_diagnostic) {
+                    result->diagnostics[active_diagnostic].recovery = "recovered";
+                    has_active_diagnostic = 0;
+                }
+            }
             continue;
         }
         if (action->kind == LF_ACT_REDUCE) {
@@ -563,7 +708,9 @@ int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *tokens, size_t count
             if (pos < count && !(tokens[pos].token == ` + tokenEOF(prefix) + ` && pos + 1 == count)) {
                 free(states); free(values); lf_set_error(error, "tokens after EOF"); return 0;
             }
-            if (out != NULL) { *out = value_count == 0 ? NULL : values[value_count - 1]; }
+            if (has_active_diagnostic) { result->diagnostics[active_diagnostic].recovery = "recovered"; }
+            result->value = value_count == 0 ? NULL : values[value_count - 1];
+            result->accepted = 1;
             free(states);
             free(values);
             return 1;
@@ -694,6 +841,65 @@ func renderParserGotos(prefix string, table *parse.Table) string {
 		b.WriteString(fmt.Sprintf("    {%d, %d},\n", rowStart[state.ID], rowCount[state.ID]))
 	}
 	b.WriteString("};\n\n")
+	return b.String()
+}
+
+func renderParserExpected(prefix string, project *spec.Spec, table *parse.Table) string {
+	var entries []string
+	rowStart := make([]int, len(table.States))
+	rowCount := make([]int, len(table.States))
+	var b strings.Builder
+	memberID := 0
+	for _, state := range table.States {
+		rowStart[state.ID] = len(entries)
+		for _, expected := range table.Expected[state.ID] {
+			memberName := "NULL"
+			if len(expected.Members) > 0 {
+				memberName = fmt.Sprintf("%s_expected_members_%d", prefix, memberID)
+				b.WriteString("static const char *" + memberName + "[] = {")
+				for _, member := range expected.Members {
+					b.WriteString(cString(member) + ", ")
+				}
+				b.WriteString("};\n")
+				memberID++
+			}
+			entries = append(entries, fmt.Sprintf("    {%s, %s, %s, %d},\n", cString(expected.Symbol), cString(expected.Display), memberName, len(expected.Members)))
+			rowCount[state.ID]++
+		}
+	}
+	if memberID > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString("static const " + prefix + "_expected_token " + prefix + "_expected_tokens[] = {\n")
+	if len(entries) == 0 {
+		b.WriteString("    {\"\", \"\", NULL, 0},\n")
+	} else {
+		for _, entry := range entries {
+			b.WriteString(entry)
+		}
+	}
+	b.WriteString("};\n\n")
+	b.WriteString("static const lf_expected_row " + prefix + "_expected_rows[] = {\n")
+	for _, state := range table.States {
+		b.WriteString(fmt.Sprintf("    {%d, %d},\n", rowStart[state.ID], rowCount[state.ID]))
+	}
+	if len(table.States) == 0 {
+		b.WriteString("    {0, 0},\n")
+	}
+	b.WriteString("};\n\n")
+
+	aliases := append([]spec.ExpectedTokenAlias(nil), project.Grammar.ExpectedTokens.Aliases...)
+	sort.SliceStable(aliases, func(i, j int) bool { return aliases[i].Token < aliases[j].Token })
+	b.WriteString("static const lf_alias_entry " + prefix + "_aliases[] = {\n")
+	if len(aliases) == 0 {
+		b.WriteString("    {\"\", \"\"},\n")
+	} else {
+		for _, alias := range aliases {
+			b.WriteString(fmt.Sprintf("    {%s, %s},\n", cString(alias.Token), cString(alias.Label)))
+		}
+	}
+	b.WriteString("};\n\n")
+	b.WriteString(fmt.Sprintf("static const size_t %s_alias_count = %d;\n\n", prefix, len(aliases)))
 	return b.String()
 }
 

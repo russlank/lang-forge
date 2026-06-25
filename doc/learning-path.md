@@ -101,7 +101,21 @@ Then read [Parser Algorithms](parser-algorithms.md).
 Goal: understand why a grammar can be LR(1) and LALR(1) but still fail under
 SLR.
 
-### 5. Study A Real DSL Flow
+### 5. Recover From Syntax Errors
+
+Run the recovery fixture:
+
+```sh
+make -C examples/go/parser-recovery run
+```
+
+Then read [Parser Error Recovery](parser-error-recovery.md).
+
+Goal: understand the reserved `error` symbol, synchronization terminals,
+expected-token diagnostics, cascade suppression, and the parser's progress
+guarantee.
+
+### 6. Study A Real DSL Flow
 
 Run the DataKeeper example:
 
@@ -118,7 +132,7 @@ Open:
 Goal: see a generated parser reducer build an AST, lower it to stack-machine
 instructions, and run a mock execution.
 
-### 6. Study A Visual DSL
+### 7. Study A Visual DSL
 
 Run the DRAW renderer:
 
@@ -135,7 +149,7 @@ Open:
 Goal: see a generated parser reducer build a visual DSL AST that becomes an
 interpreted model and visible output.
 
-### 7. Study A Migration-Shaped DSL
+### 8. Study A Migration-Shaped DSL
 
 Run the vehicle report example:
 
@@ -153,7 +167,7 @@ Goal: see how a Flex/Bison-style homework language can become a modern
 LangForge `.lf` spec with generated parser reductions, AST construction, and
 report output.
 
-### 8. Explore Legacy Inspiration
+### 9. Explore Legacy Inspiration
 
 Read [UCDT Legacy Inspiration](ucdt-legacy-inspiration.md), then validate a split
 fixture:

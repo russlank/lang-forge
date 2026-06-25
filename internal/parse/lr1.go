@@ -14,7 +14,7 @@ type lr1ItemSet map[LR1Item]bool
 func BuildCanonicalLR1(g *Grammar) *Table {
 	aug := augment(g)
 	states, transitions := canonicalLR1(aug)
-	return buildLR1Table(parseralgo.Canonical, aug, states, transitions)
+	return finalizeTable(buildLR1Table(parseralgo.Canonical, aug, states, transitions), aug)
 }
 
 // BuildLALR constructs a merged-core LALR(1) parser table.
@@ -55,7 +55,7 @@ func BuildLALR(g *Grammar) *Table {
 			transitions[from][sym] = to
 		}
 	}
-	return buildLR1Table(parseralgo.LALR, aug, merged, transitions)
+	return finalizeTable(buildLR1Table(parseralgo.LALR, aug, merged, transitions), aug)
 }
 
 // BuildIELR constructs a conservative IELR(1) parser table.
@@ -85,7 +85,7 @@ func BuildIELR(g *Grammar) *Table {
 	}
 
 	states, transitions := mergedLR1StatesAndTransitions(canonicalStates, canonicalTransitions, partitions, oldToPartition)
-	return buildLR1Table(parseralgo.IELR, aug, states, transitions)
+	return finalizeTable(buildLR1Table(parseralgo.IELR, aug, states, transitions), aug)
 }
 
 type lr1Partition struct {

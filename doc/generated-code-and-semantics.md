@@ -499,6 +499,28 @@ This is the same pattern used by the larger examples:
 - Vehicle report uses action labels to build a small AST, then renders a
   text/XML-like report.
 
+## Recovery Productions And Semantic Actions
+
+A recovery production can have an ordinary target action:
+
+```lf
+Statement : error Semi {go: recover.statement}
+```
+
+The action runs when the recovery rule reduces, just like any other grammar
+action. Do not label or depend on the semantic value of `error`; it is a
+control symbol rather than scanner input. Use labeled values after `error`, or
+application state owned by the reducer, to construct a placeholder AST node or
+record that a statement was skipped.
+
+Recovery diagnostics are separate from semantic reducer errors. A generated
+recovery API can return a partial semantic value together with syntax
+diagnostics, while an error returned or thrown by handwritten reducer code
+still stops parsing as an application failure.
+
+See [Parser Error Recovery](parser-error-recovery.md) for the complete runtime
+contract and target APIs.
+
 ## Mental Model
 
 Use this rule of thumb:

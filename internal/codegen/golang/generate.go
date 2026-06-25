@@ -426,6 +426,18 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("type Parser struct { reducer Reducer }\n\n")
 	b.WriteString("// Value is one semantic value shifted or reduced by the parser.\n")
 	b.WriteString("type Value any\n\n")
+	b.WriteString("// ExpectedToken describes one expected terminal or reporting group.\n")
+	b.WriteString("type ExpectedToken struct {\n\tSymbol string\n\tDisplay string\n\tMembers []string\n}\n\n")
+	b.WriteString("// RecoveryAction records how the parser handled one syntax error.\n")
+	b.WriteString("type RecoveryAction struct {\n\tKind string\n\tDiscarded int\n}\n\n")
+	b.WriteString("// ParseDiagnostic describes one syntax error and its source range.\n")
+	b.WriteString("type ParseDiagnostic struct {\n\tState int\n\tUnexpected string\n\tUnexpectedDisplay string\n\tExpected []ExpectedToken\n\tStart int\n\tEnd int\n\tStartLine int\n\tStartColumn int\n\tEndLine int\n\tEndColumn int\n\tRecovery RecoveryAction\n}\n\n")
+	b.WriteString("// ParseResult contains a possibly partial semantic value and all syntax diagnostics.\n")
+	b.WriteString("type ParseResult struct {\n\tValue Value\n\tDiagnostics []ParseDiagnostic\n\tAccepted bool\n}\n\n")
+	b.WriteString("// ParseError reports one or more syntax diagnostics from fail-fast-compatible APIs.\n")
+	b.WriteString("type ParseError struct { Diagnostics []ParseDiagnostic }\n\n")
+	b.WriteString("// Error formats the first syntax diagnostic and the total diagnostic count.\n")
+	b.WriteString("func (e *ParseError) Error() string {\n\tif e == nil || len(e.Diagnostics) == 0 { return \"parse error\" }\n\td := e.Diagnostics[0]\n\tmessage := fmt.Sprintf(\"parse error at %d:%d: unexpected %s\", d.StartLine, d.StartColumn, d.UnexpectedDisplay)\n\tif len(d.Expected) > 0 {\n\t\tnames := make([]string, len(d.Expected))\n\t\tfor i, expected := range d.Expected { names[i] = expected.Display }\n\t\tmessage += fmt.Sprintf(\"; expected %v\", names)\n\t}\n\tif len(e.Diagnostics) > 1 { message += fmt.Sprintf(\" (%d diagnostics)\", len(e.Diagnostics)) }\n\treturn message\n}\n\n")
 	renderSemanticActionDeclarations(&b, actions)
 	b.WriteString("// Reduction describes one grammar rule reduction.\n")
 	b.WriteString("type Reduction struct {\n\tRule int\n\tLHS string\n\tRHS []string\n\tLabels []string\n\tActionID SemanticAction\n\tAction string\n\tValues []Value\n}\n\n")
@@ -466,12 +478,16 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("func Parse(input []Lexeme) error { return NewParser().Parse(input) }\n\n")
 	b.WriteString("// ParseValue recognizes input and returns the final reduced semantic value.\n")
 	b.WriteString("func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }\n\n")
+	b.WriteString("// ParseRecovering recognizes input and returns all syntax diagnostics.\n")
+	b.WriteString("func ParseRecovering(input []Lexeme) (ParseResult, error) { return NewParser().ParseRecovering(input) }\n\n")
 	b.WriteString("// ParseWithReducer recognizes input using reducer for target-tagged grammar actions.\n")
 	b.WriteString("func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {\n\tif validator, ok := reducer.(interface{ ValidateCoverage() error }); ok {\n\t\tif err := validator.ValidateCoverage(); err != nil { return nil, err }\n\t}\n\treturn NewParser(WithReducer(reducer)).ParseValue(input)\n}\n\n")
 	b.WriteString("// Parse recognizes input using this parser instance.\n")
 	b.WriteString("func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }\n\n")
 	b.WriteString("// ParseValue recognizes input using this parser instance and returns the final semantic value.\n")
-	b.WriteString("func (p *Parser) ParseValue(input []Lexeme) (Value, error) {\n\tstates := []int{0}\n\tvalues := []Value{}\n\tpos := 0\n\tfor {\n\t\tlookahead, err := parserLookahead(input, pos)\n\t\tif err != nil { return nil, err }\n\t\taction, ok := parserActions[states[len(states)-1]][lookahead]\n\t\tif !ok { return nil, fmt.Errorf(\"parse error in state %d on %s\", states[len(states)-1], lookahead) }\n\t\tswitch action.kind {\n\t\tcase \"shift\":\n\t\t\tif pos >= len(input) { return nil, fmt.Errorf(\"shift past end of input in state %d\", states[len(states)-1]) }\n\t\t\tstates = append(states, action.state)\n\t\t\tvalues = append(values, input[pos])\n\t\t\tpos++\n\t\tcase \"reduce\":\n\t\t\trule := parserRules[action.rule]\n\t\t\tif len(states) < rule.size + 1 { return nil, fmt.Errorf(\"parser stack underflow reducing rule %d\", action.rule) }\n\t\t\tif len(values) < rule.size { return nil, fmt.Errorf(\"semantic value stack underflow reducing rule %d\", action.rule) }\n\t\t\trhs := append([]Value(nil), values[len(values)-rule.size:]...)\n\t\t\tvalues = values[:len(values)-rule.size]\n\t\t\tresult, err := p.reduce(action.rule, rule, rhs)\n\t\t\tif err != nil { return nil, err }\n\t\t\tstates = states[:len(states)-rule.size]\n\t\t\tgotoState, ok := parserGotos[states[len(states)-1]][rule.lhs]\n\t\t\tif !ok { return nil, fmt.Errorf(\"missing goto from state %d on %s\", states[len(states)-1], rule.lhs) }\n\t\t\tstates = append(states, gotoState)\n\t\t\tvalues = append(values, result)\n\t\tcase \"accept\":\n\t\t\tif len(values) == 0 { return nil, nil }\n\t\t\treturn values[len(values)-1], nil\n\t\tdefault:\n\t\t\treturn nil, fmt.Errorf(\"invalid parser action %q\", action.kind)\n\t\t}\n\t}\n}\n\n")
+	b.WriteString("func (p *Parser) ParseValue(input []Lexeme) (Value, error) {\n\tresult, err := p.ParseRecovering(input)\n\tif err != nil { return result.Value, err }\n\tif len(result.Diagnostics) > 0 { return result.Value, &ParseError{Diagnostics: result.Diagnostics} }\n\treturn result.Value, nil\n}\n\n")
+	b.WriteString("// ParseRecovering performs grammar-directed recovery and returns every syntax diagnostic.\n")
+	b.WriteString("func (p *Parser) ParseRecovering(input []Lexeme) (ParseResult, error) {\n\tstates := []int{0}\n\tvalues := []Value{}\n\tpos := 0\n\trecovering := 0\n\tactiveDiagnostic := -1\n\tresult := ParseResult{}\n\tfor {\n\t\tlookahead, err := parserLookahead(input, pos)\n\t\tif err != nil { result.Value = parserCurrentValue(values); return result, err }\n\t\taction, ok := parserActions[states[len(states)-1]][lookahead]\n\t\tif !ok {\n\t\t\tif recovering == 0 {\n\t\t\t\tresult.Diagnostics = append(result.Diagnostics, newParseDiagnostic(states[len(states)-1], lookahead, input, pos))\n\t\t\t\tactiveDiagnostic = len(result.Diagnostics) - 1\n\t\t\t\trecovered := false\n\t\t\t\tfor len(states) > 0 {\n\t\t\t\t\terrorAction, canShiftError := parserActions[states[len(states)-1]][\"error\"]\n\t\t\t\t\tif canShiftError && errorAction.kind == \"shift\" {\n\t\t\t\t\t\tstates = append(states, errorAction.state)\n\t\t\t\t\t\tvalues = append(values, parserErrorLexeme(input, pos))\n\t\t\t\t\t\trecovering = 3\n\t\t\t\t\t\tresult.Diagnostics[activeDiagnostic].Recovery.Kind = \"shift-error\"\n\t\t\t\t\t\trecovered = true\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tif len(states) == 1 { break }\n\t\t\t\t\tstates = states[:len(states)-1]\n\t\t\t\t\tif len(values) > 0 { values = values[:len(values)-1] }\n\t\t\t\t}\n\t\t\t\tif recovered { continue }\n\t\t\t\tresult.Diagnostics[activeDiagnostic].Recovery.Kind = \"abort\"\n\t\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\t\treturn result, nil\n\t\t\t}\n\t\t\tif lookahead == \"$\" {\n\t\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"abort\" }\n\t\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\t\treturn result, nil\n\t\t\t}\n\t\t\tpos++\n\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Discarded++ }\n\t\t\tcontinue\n\t\t}\n\t\tswitch action.kind {\n\t\tcase \"shift\":\n\t\t\tif pos >= len(input) { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"shift past end of input in state %d\", states[len(states)-1]) }\n\t\t\tstates = append(states, action.state)\n\t\t\tvalues = append(values, input[pos])\n\t\t\tpos++\n\t\t\tif recovering > 0 {\n\t\t\t\trecovering--\n\t\t\t\tif recovering == 0 && activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"recovered\"; activeDiagnostic = -1 }\n\t\t\t}\n\t\tcase \"reduce\":\n\t\t\trule := parserRules[action.rule]\n\t\t\tif len(states) < rule.size + 1 { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"parser stack underflow reducing rule %d\", action.rule) }\n\t\t\tif len(values) < rule.size { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"semantic value stack underflow reducing rule %d\", action.rule) }\n\t\t\trhs := append([]Value(nil), values[len(values)-rule.size:]...)\n\t\t\tvalues = values[:len(values)-rule.size]\n\t\t\tvalue, reduceErr := p.reduce(action.rule, rule, rhs)\n\t\t\tif reduceErr != nil { result.Value = parserCurrentValue(values); return result, reduceErr }\n\t\t\tstates = states[:len(states)-rule.size]\n\t\t\tgotoState, exists := parserGotos[states[len(states)-1]][rule.lhs]\n\t\t\tif !exists { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"missing goto from state %d on %s\", states[len(states)-1], rule.lhs) }\n\t\t\tstates = append(states, gotoState)\n\t\t\tvalues = append(values, value)\n\t\tcase \"accept\":\n\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"recovered\" }\n\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\tresult.Accepted = true\n\t\t\treturn result, nil\n\t\tdefault:\n\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\treturn result, fmt.Errorf(\"invalid parser action %q\", action.kind)\n\t\t}\n\t}\n}\n\n")
 	b.WriteString("func (p *Parser) reduce(ruleID int, rule parserRule, values []Value) (Value, error) {\n\tctx := reductionContext(ruleID, rule, values)\n\tif p.reducer != nil && rule.action != SemanticActionNone {\n\t\treturn p.reducer.Reduce(ctx)\n\t}\n")
 	if goMode == spec.SemanticModeInline {
 		b.WriteString("\tif rule.action != SemanticActionNone {\n\t\treturn reduceInline(ctx)\n\t}\n")
@@ -482,7 +498,12 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		renderInlineReducers(&b, generatedFile, table)
 	}
 	b.WriteString("func defaultReduce(values []Value) Value {\n\tswitch len(values) {\n\tcase 0:\n\t\treturn nil\n\tcase 1:\n\t\treturn values[0]\n\tdefault:\n\t\treturn append([]Value(nil), values...)\n\t}\n}\n\n")
+	b.WriteString("func parserCurrentValue(values []Value) Value {\n\tif len(values) == 0 { return nil }\n\treturn values[len(values)-1]\n}\n\n")
 	b.WriteString("func parserLookahead(input []Lexeme, pos int) (string, error) {\n\tif pos >= len(input) { return \"$\", nil }\n\tif input[pos].Token == TokenEOF {\n\t\tif pos != len(input)-1 { return \"\", fmt.Errorf(\"token after EOF at input index %d\", pos+1) }\n\t\treturn \"$\", nil\n\t}\n\treturn terminalName(input[pos].Token), nil\n}\n\n")
+	b.WriteString("func newParseDiagnostic(state int, unexpected string, input []Lexeme, pos int) ParseDiagnostic {\n\tlexeme := parserDiagnosticLexeme(input, pos)\n\texpected := append([]ExpectedToken(nil), parserExpected[state]...)\n\tfor index := range expected { expected[index].Members = append([]string(nil), expected[index].Members...) }\n\treturn ParseDiagnostic{State: state, Unexpected: unexpected, UnexpectedDisplay: parserUnexpectedDisplay(unexpected), Expected: expected, Start: lexeme.Start, End: lexeme.End, StartLine: lexeme.StartLine, StartColumn: lexeme.StartColumn, EndLine: lexeme.EndLine, EndColumn: lexeme.EndColumn}\n}\n\n")
+	b.WriteString("func parserDiagnosticLexeme(input []Lexeme, pos int) Lexeme {\n\tif pos < len(input) { return input[pos] }\n\tif len(input) == 0 { return Lexeme{Token: TokenEOF, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1} }\n\tlast := input[len(input)-1]\n\treturn Lexeme{Token: TokenEOF, Start: last.End, End: last.End, StartLine: last.EndLine, StartColumn: last.EndColumn, EndLine: last.EndLine, EndColumn: last.EndColumn}\n}\n\n")
+	b.WriteString("func parserErrorLexeme(input []Lexeme, pos int) Lexeme {\n\tlexeme := parserDiagnosticLexeme(input, pos)\n\tlexeme.Token = TokenError\n\tlexeme.Text = \"\"\n\tlexeme.Channel = \"\"\n\tlexeme.End = lexeme.Start\n\tlexeme.EndLine = lexeme.StartLine\n\tlexeme.EndColumn = lexeme.StartColumn\n\treturn lexeme\n}\n\n")
+	b.WriteString("func parserUnexpectedDisplay(symbol string) string {\n\tif symbol == \"$\" { return \"end of input\" }\n\tif display, ok := parserTokenAliases[symbol]; ok { return display }\n\treturn symbol\n}\n\n")
 	b.WriteString("func terminalName(tok Token) string {\n\tswitch tok {\n\tcase TokenEOF:\n\t\treturn \"$\"\n")
 	for _, tok := range tokens {
 		b.WriteString("\tcase Token" + tok + ":\n\t\treturn \"" + tok + "\"\n")
@@ -502,6 +523,11 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		b.WriteString("},\n")
 	}
 	b.WriteString("}\n\n")
+	b.WriteString("var parserTokenAliases = map[string]string{\n")
+	for _, alias := range project.Grammar.ExpectedTokens.Aliases {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", alias.Token, alias.Label))
+	}
+	b.WriteString("}\n\n")
 	b.WriteString("var parserGotos = map[int]map[string]int{\n")
 	gotoStates := sortedGotoStates(table.Gotos)
 	for _, state := range gotoStates {
@@ -509,6 +535,15 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		syms := sortedGotoSymbols(table.Gotos[state])
 		for _, sym := range syms {
 			b.WriteString(fmt.Sprintf("%q: %d,", sym, table.Gotos[state][sym]))
+		}
+		b.WriteString("},\n")
+	}
+	b.WriteString("}\n\n")
+	b.WriteString("var parserExpected = map[int][]ExpectedToken{\n")
+	for _, state := range sortedExpectedStates(table.Expected) {
+		b.WriteString(fmt.Sprintf("\t%d: {", state))
+		for _, expected := range table.Expected[state] {
+			b.WriteString(fmt.Sprintf("{Symbol: %q, Display: %q, Members: %s},", expected.Symbol, expected.Display, renderStringSlice(expected.Members)))
 		}
 		b.WriteString("},\n")
 	}
@@ -834,5 +869,14 @@ func sortedGotoSymbols(in map[string]int) []string {
 		out = append(out, sym)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func sortedExpectedStates(in map[int][]parse.ExpectedToken) []int {
+	out := make([]int, 0, len(in))
+	for state := range in {
+		out = append(out, state)
+	}
+	sort.Ints(out)
 	return out
 }

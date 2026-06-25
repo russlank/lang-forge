@@ -195,6 +195,41 @@ func TestBuild_NormalizesAlgorithmToLALRDefault(t *testing.T) {
 	}
 }
 
+func TestFinalizeTableBuildsDeterministicExpectedTokensAndRecoveryFlag(t *testing.T) {
+	grammar := &Grammar{ExpectedTokens: spec.ExpectedTokenSpec{
+		Aliases: []spec.ExpectedTokenAlias{{Token: "Ident", Label: "identifier"}},
+		Groups:  []spec.ExpectedTokenGroup{{Name: "operator", Tokens: []string{"Plus", "Minus", "Star"}}},
+		Hidden:  []spec.HiddenExpectedToken{{Token: "Semi"}},
+	}}
+	table := &Table{
+		States: []State{{ID: 0}},
+		Actions: map[int]map[string]Action{0: {
+			Error:   {Kind: ActionShift, State: 1},
+			"Ident": {Kind: ActionShift, State: 2},
+			"Minus": {Kind: ActionShift, State: 3},
+			"Plus":  {Kind: ActionShift, State: 4},
+			"Semi":  {Kind: ActionShift, State: 5},
+			EOF:     {Kind: ActionAccept},
+		}},
+	}
+
+	finalizeTable(table, grammar)
+
+	if !table.ErrorRecovery {
+		t.Fatal("expected recovery flag")
+	}
+	got := table.Expected[0]
+	if len(got) != 3 {
+		t.Fatalf("expected = %#v", got)
+	}
+	if got[0].Display != "operator" || len(got[0].Members) != 2 {
+		t.Fatalf("grouped expected token = %#v", got[0])
+	}
+	if got[1].Display != "end of input" || got[2].Display != "identifier" {
+		t.Fatalf("individual expected tokens = %#v", got[1:])
+	}
+}
+
 func calcSpec() spec.Spec {
 	return spec.Spec{
 		Tokens: []spec.TokenDecl{

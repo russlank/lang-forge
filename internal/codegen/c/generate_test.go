@@ -81,7 +81,7 @@ S : A B {c: pair.value} ;
 	}
 
 	parserHeader := readGeneratedFile(t, out, "parser.h")
-	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PAIR_VALUE"} {
+	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PAIR_VALUE", "calc_demo_parse_result", "calc_demo_parse_recovering", "calc_demo_parse_result_free"} {
 		if !strings.Contains(parserHeader, fragment) {
 			t.Fatalf("parser.h missing %q:\n%s", fragment, parserHeader)
 		}

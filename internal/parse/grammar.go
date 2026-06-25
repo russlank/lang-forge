@@ -9,16 +9,21 @@ import (
 	"github.com/russlank/lang-forge/internal/spec"
 )
 
-// EOF is the internal terminal name used for parser end-of-input.
-const EOF = "$"
+const (
+	// EOF is the internal terminal name used for parser end-of-input.
+	EOF = "$"
+	// Error is the reserved parser-only terminal shifted during syntax recovery.
+	Error = "error"
+)
 
 // Grammar is the normalized parser grammar used by table construction.
 type Grammar struct {
-	Start        string
-	Terminals    map[string]bool
-	Nonterminals map[string]bool
-	Rules        []Rule
-	Spans        map[string]diagnostics.Span
+	Start          string
+	Terminals      map[string]bool
+	Nonterminals   map[string]bool
+	Rules          []Rule
+	Spans          map[string]diagnostics.Span
+	ExpectedTokens spec.ExpectedTokenSpec
 }
 
 // Rule is one normalized grammar production.
@@ -35,18 +40,35 @@ type Rule struct {
 func FromSpec(s spec.Spec) (*Grammar, diagnostics.List) {
 	var diags diagnostics.List
 	g := &Grammar{
-		Start:        s.Grammar.Start,
-		Terminals:    map[string]bool{EOF: true},
-		Nonterminals: map[string]bool{},
-		Spans:        map[string]diagnostics.Span{},
+		Start:          s.Grammar.Start,
+		Terminals:      map[string]bool{EOF: true, Error: true},
+		Nonterminals:   map[string]bool{},
+		Spans:          map[string]diagnostics.Span{},
+		ExpectedTokens: s.Grammar.ExpectedTokens,
 	}
 	for _, tok := range s.Tokens {
+		if tok.Name == Error {
+			diags.AddError("LF307", "`error` is reserved for parser recovery and must not be declared with %token", tok.Span)
+			continue
+		}
 		g.Terminals[tok.Name] = true
 	}
 	for _, name := range s.TokenNames() {
+		if name == Error {
+			continue
+		}
 		g.Terminals[name] = true
 	}
+	for _, rule := range s.Lexer.Rules {
+		if rule.Action.Kind == spec.ActionToken && rule.Action.Token == Error {
+			diags.AddError("LF307", "`error` is reserved for parser recovery and cannot be emitted by the scanner", rule.Span)
+		}
+	}
 	for _, rule := range s.Grammar.Rules {
+		if rule.Name == Error {
+			diags.AddError("LF308", "`error` is reserved for parser recovery and cannot be a rule name", rule.Span)
+			continue
+		}
 		if g.Nonterminals[rule.Name] {
 			// Multiple declarations are merged by appending alternatives.
 		}
@@ -84,12 +106,40 @@ func FromSpec(s spec.Spec) (*Grammar, diagnostics.List) {
 			diags.AddError("LF305", "semantic type references undefined nonterminal `"+semanticType.Symbol+"`", semanticType.Span)
 		}
 	}
+	validateExpectedTokenSpec(g, &diags)
 	nextID := 1
 	for _, rule := range s.Grammar.Rules {
+		if rule.Name == Error {
+			continue
+		}
 		for _, alt := range rule.Alternatives {
-			for _, sym := range alt.Symbols {
+			errorCount := 0
+			errorIndex := -1
+			for index, sym := range alt.Symbols {
 				if !g.Terminals[sym] && !g.Nonterminals[sym] {
 					diags.AddError("LF302", fmt.Sprintf("undefined grammar symbol `%s` in rule `%s`", sym, rule.Name), alt.Span)
+				}
+				if sym == Error {
+					errorCount++
+					errorIndex = index
+					if index < len(alt.Labels) && alt.Labels[index] != "" {
+						diags.AddError("LF313", "reserved `error` symbol cannot have a named RHS label", alt.Span)
+					}
+				}
+			}
+			if errorCount > 1 {
+				diags.AddError("LF314", "a recovery alternative may contain reserved `error` only once", alt.Span)
+			}
+			if errorIndex >= 0 {
+				hasSynchronizationTerminal := false
+				for _, symbol := range alt.Symbols[errorIndex+1:] {
+					if g.Terminals[symbol] && symbol != Error {
+						hasSynchronizationTerminal = true
+						break
+					}
+				}
+				if !hasSynchronizationTerminal {
+					diags.AddError("LF315", "reserved `error` must be followed by a synchronization terminal in the same alternative", alt.Span)
 				}
 			}
 			g.Rules = append(g.Rules, Rule{
@@ -104,6 +154,40 @@ func FromSpec(s spec.Spec) (*Grammar, diagnostics.List) {
 		}
 	}
 	return g, diags
+}
+
+func validateExpectedTokenSpec(g *Grammar, diags *diagnostics.List) {
+	for _, alias := range g.ExpectedTokens.Aliases {
+		if alias.Token == Error || !g.Terminals[alias.Token] {
+			diags.AddError("LF309", "expected-token alias references undefined or reserved terminal `"+alias.Token+"`", alias.Span)
+		}
+	}
+	grouped := map[string]string{}
+	for _, group := range g.ExpectedTokens.Groups {
+		for _, token := range group.Tokens {
+			if token == Error || !g.Terminals[token] {
+				diags.AddError("LF310", "expected-token group `"+group.Name+"` references undefined or reserved terminal `"+token+"`", group.Span)
+				continue
+			}
+			if previous := grouped[token]; previous != "" {
+				diags.AddError("LF311", "terminal `"+token+"` belongs to expected-token groups `"+previous+"` and `"+group.Name+"`", group.Span)
+				continue
+			}
+			grouped[token] = group.Name
+		}
+	}
+	hidden := map[string]bool{}
+	for _, hiddenToken := range g.ExpectedTokens.Hidden {
+		token := hiddenToken.Token
+		if token == Error || !g.Terminals[token] {
+			diags.AddError("LF312", "hidden expected token references undefined or reserved terminal `"+token+"`", hiddenToken.Span)
+			continue
+		}
+		if hidden[token] {
+			continue
+		}
+		hidden[token] = true
+	}
 }
 
 // Nullable returns the set of nonterminals that can derive the empty string.

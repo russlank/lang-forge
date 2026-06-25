@@ -191,8 +191,105 @@ func parseDirective(spec *Spec, line string, span diagnostics.Span, diags *diagn
 		}
 	case "%semantic":
 		parseSemanticDirective(spec, fields[1:], span, diags)
+	case "%alias":
+		parseExpectedAliasDirective(spec, line, span, diags)
+	case "%group":
+		parseExpectedGroupDirective(spec, fields[1:], span, diags)
+	case "%hide-expected":
+		parseHiddenExpectedDirective(spec, fields[1:], span, diags)
 	default:
 		diags.AddError("LF100", "unknown directive `"+fields[0]+"`", span)
+	}
+}
+
+func parseExpectedAliasDirective(spec *Spec, line string, span diagnostics.Span, diags *diagnostics.List) {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, strings.Fields(line)[0]))
+	separator := strings.IndexFunc(rest, unicode.IsSpace)
+	if separator < 0 {
+		diags.AddError("LF150", "%alias expects `Token \"human-readable label\"`", span)
+		return
+	}
+	token := strings.TrimSpace(rest[:separator])
+	quoted := strings.TrimSpace(rest[separator:])
+	if !identRE.MatchString(token) || quoted == "" {
+		diags.AddError("LF150", "%alias expects `Token \"human-readable label\"`", span)
+		return
+	}
+	label, err := strconv.Unquote(quoted)
+	if err != nil || strings.TrimSpace(label) == "" {
+		diags.AddError("LF151", "%alias label must be one non-empty quoted string", span)
+		return
+	}
+	for _, alias := range spec.Grammar.ExpectedTokens.Aliases {
+		if alias.Token == token {
+			diags.AddError("LF152", "duplicate expected-token alias for `"+token+"`", span)
+			return
+		}
+	}
+	spec.Grammar.ExpectedTokens.Aliases = append(spec.Grammar.ExpectedTokens.Aliases, ExpectedTokenAlias{
+		Token: token,
+		Label: label,
+		Span:  span,
+	})
+}
+
+func parseExpectedGroupDirective(spec *Spec, fields []string, span diagnostics.Span, diags *diagnostics.List) {
+	if len(fields) < 3 {
+		diags.AddError("LF153", "%group expects `name Token Token ...`", span)
+		return
+	}
+	name := fields[0]
+	if !identRE.MatchString(name) {
+		diags.AddError("LF154", "invalid expected-token group name `"+name+"`", span)
+		return
+	}
+	for _, group := range spec.Grammar.ExpectedTokens.Groups {
+		if group.Name == name {
+			diags.AddError("LF155", "duplicate expected-token group `"+name+"`", span)
+			return
+		}
+	}
+	seen := map[string]bool{}
+	tokens := make([]string, 0, len(fields)-1)
+	for _, token := range fields[1:] {
+		if !identRE.MatchString(token) {
+			diags.AddError("LF156", "invalid token `"+token+"` in expected-token group `"+name+"`", span)
+			return
+		}
+		if seen[token] {
+			diags.AddError("LF157", "duplicate token `"+token+"` in expected-token group `"+name+"`", span)
+			return
+		}
+		seen[token] = true
+		tokens = append(tokens, token)
+	}
+	spec.Grammar.ExpectedTokens.Groups = append(spec.Grammar.ExpectedTokens.Groups, ExpectedTokenGroup{
+		Name:   name,
+		Tokens: tokens,
+		Span:   span,
+	})
+}
+
+func parseHiddenExpectedDirective(spec *Spec, fields []string, span diagnostics.Span, diags *diagnostics.List) {
+	if len(fields) == 0 {
+		diags.AddError("LF158", "%hide-expected expects at least one token", span)
+		return
+	}
+	seen := map[string]bool{}
+	for _, token := range spec.Grammar.ExpectedTokens.Hidden {
+		seen[token.Token] = true
+	}
+	for _, token := range fields {
+		if !identRE.MatchString(token) {
+			diags.AddError("LF159", "invalid hidden expected token `"+token+"`", span)
+			continue
+		}
+		if seen[token] {
+			diags.AddError("LF160", "duplicate hidden expected token `"+token+"`", span)
+			continue
+		}
+		seen[token] = true
+		spec.Grammar.ExpectedTokens.Hidden = append(spec.Grammar.ExpectedTokens.Hidden, HiddenExpectedToken{Token: token, Span: span})
 	}
 }
 

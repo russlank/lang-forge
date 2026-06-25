@@ -123,6 +123,10 @@ Named RHS labels and `%semantic go type` declarations additionally generate
 typed action contexts and adapters when an action has one consistent
 signature. `ReducerMap` coverage validation catches missing and unknown
 handlers before the standard `ParseWithReducer` path parses input.
+`ParseRecovering` adds grammar-directed synchronization through the reserved
+`error` terminal and returns a possibly partial value, structured diagnostics,
+and an accepted flag. Expected-token entries are precomputed from parser action
+rows and preserve aliases, reporting groups, and exact grouped members.
 `%semantic go` directives record handwritten semantic dependencies in
 manifests and table JSON. When `%semantic go mode inline` is selected,
 generated `parser.go` imports declared Go packages and emits a `reduceInline`
@@ -130,6 +134,12 @@ switch for target-specific action code. Generated Go files also preserve source
 references: table metadata gets source comments, and inline Go snippets get
 `//line` directives so compiler diagnostics can point back to `.lf`, `.l`, or
 `.y` inputs.
+
+The C#, C, and C++ runtimes implement the same recovery state machine. C#
+returns `ParseResult` and throws `ParseException` from compatibility APIs; C++
+returns `ParseResult` and throws `ParseError`; C exposes an allocated
+`*_parse_result` released with `*_parse_result_free`. Recovery stacks and
+diagnostic collections remain local to each parse call.
 
 ## C# Backend
 

@@ -106,3 +106,44 @@ func TestFromSpec_ValidatesSemanticTypes(t *testing.T) {
 		t.Fatal("expected duplicate semantic type diagnostic")
 	}
 }
+
+func TestFromSpec_AcceptsReservedErrorSymbolAndValidatesReportingTokens(t *testing.T) {
+	parsed, specDiags := spec.ParseCombined([]byte(`%token Ident Semi
+%alias Ident "identifier"
+%hide-expected Semi
+%% parser
+Program : Statement ;
+Statement : Ident Semi | error Semi ;
+`), "recovery.lf")
+	if specDiags.HasErrors() {
+		t.Fatalf("spec diagnostics: %v", specDiags)
+	}
+	grammar, diags := FromSpec(*parsed)
+	if diags.HasErrors() {
+		t.Fatalf("grammar diagnostics: %v", diags)
+	}
+	if !grammar.Terminals[Error] {
+		t.Fatal("reserved error terminal is missing")
+	}
+}
+
+func TestFromSpec_RejectsReservedOrUnknownReportingSymbols(t *testing.T) {
+	for _, input := range []string{
+		"%token error\n%% parser\nS : %empty ;\n",
+		"%% lexer\n\"x\" => token(error);\n%% parser\nS : %empty ;\n",
+		"%token Semi\n%% parser\nS : error ;\n",
+		"%token Semi\n%% parser\nS : problem=error Semi ;\n",
+		"%token Semi\n%% parser\nS : error error Semi ;\n",
+		"%alias Missing \"missing\"\n%% parser\nS : %empty ;\n",
+		"%token A B\n%group values A Missing\n%% parser\nS : A ;\n",
+		"%hide-expected Missing\n%% parser\nS : %empty ;\n",
+	} {
+		parsed, specDiags := spec.ParseCombined([]byte(input), "bad-recovery.lf")
+		if specDiags.HasErrors() {
+			continue
+		}
+		if _, diags := FromSpec(*parsed); !diags.HasErrors() {
+			t.Fatalf("expected grammar diagnostics for %q", input)
+		}
+	}
+}

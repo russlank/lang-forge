@@ -34,31 +34,31 @@ BLOCK_COMMENT  => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : ParametersList CommandBlock
+Program : parameters=ParametersList block=CommandBlock
             {cpp: program.with_parameters}
-        | CommandBlock
+        | block=CommandBlock
             {cpp: program.no_parameters}
         ;
 
-ParametersList : Parameters ParametersDecl Semi
+ParametersList : Parameters params=ParametersDecl Semi
                    {cpp: parameters.list}
                ;
-ParametersDecl : Ident ParametersTail
+ParametersDecl : name=Ident tail=ParametersTail
                    {cpp: parameters.decl}
                ;
-ParametersTail : Comma Ident ParametersTail
+ParametersTail : Comma name=Ident tail=ParametersTail
                    {cpp: parameters.tail.more}
                | %empty
                    {cpp: parameters.tail.empty}
                ;
 
-CommandBlock : Begin Statements End
+CommandBlock : Begin statements=Statements End
                  {cpp: commandBlock}
              ;
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {cpp: statements}
            ;
-StatementTail : Semi Statement StatementTail
+StatementTail : Semi head=Statement tail=StatementTail
                   {cpp: statements.tail.more}
               | Semi
                   {cpp: statements.tail.empty}
@@ -66,42 +66,42 @@ StatementTail : Semi Statement StatementTail
                   {cpp: statements.tail.empty}
               ;
 
-Statement : AssignStatement
+Statement : value=AssignStatement
               {cpp: statement.pass}
-          | ReplaceStatement
+          | value=ReplaceStatement
               {cpp: statement.pass}
-          | RunSQLStatement
+          | value=RunSQLStatement
               {cpp: statement.pass}
-          | AddObjectStatement
+          | value=AddObjectStatement
               {cpp: statement.pass}
-          | RemoveObjectStatement
+          | value=RemoveObjectStatement
               {cpp: statement.pass}
-          | RunObjectsJobStatement
+          | value=RunObjectsJobStatement
               {cpp: statement.pass}
           ;
 
-AssignStatement : Ident Assign Value
+AssignStatement : name=Ident Assign value=Value
                     {cpp: assign}
                 ;
-ReplaceStatement : Replace LParen Ident Comma Value Comma Value RParen
+ReplaceStatement : Replace LParen target=Ident Comma old=Value Comma new=Value RParen
                      {cpp: replace}
                  ;
-RunSQLStatement : SQLRun LParen Value Comma Value RParen
+RunSQLStatement : SQLRun LParen instance=Value Comma script=Value RParen
                     {cpp: sqlrun}
                 ;
-AddObjectStatement : AddObject LParen Value Comma Value RParen
+AddObjectStatement : AddObject LParen parent=Value Comma xml=Value RParen
                        {cpp: add_object}
                    ;
-RemoveObjectStatement : RemoveObject LParen Value Comma Value RParen
+RemoveObjectStatement : RemoveObject LParen parent=Value Comma name=Value RParen
                           {cpp: remove_object}
                       ;
-RunObjectsJobStatement : RunObjectsJob LParen Value Comma Value Comma Value RParen
+RunObjectsJobStatement : RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
                            {cpp: run_objects_job}
                        ;
-Value : String
+Value : token=String
           {cpp: value.string}
-      | Number
+      | token=Number
           {cpp: value.number}
-      | Ident
+      | token=Ident
           {cpp: value.ident}
       ;

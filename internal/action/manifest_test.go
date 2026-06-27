@@ -1,6 +1,7 @@
 package action
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/russlank/lang-forge/internal/parse"
@@ -76,6 +77,92 @@ func TestBuild_ReportsMissingResultType(t *testing.T) {
 	action := Build(grammar, spec.SemanticSpec{}, "go").Actions[0]
 	if action.Typed || action.TypeIssue == "" {
 		t.Fatalf("action = %#v", action)
+	}
+}
+
+func TestBuild_ReportsMissingLabeledNonterminalType(t *testing.T) {
+	grammar := &parse.Grammar{
+		Terminals: map[string]bool{"Semi": true},
+		Rules: []parse.Rule{
+			{
+				ID:      1,
+				LHS:     "Expr",
+				RHS:     []string{"Term", "Semi"},
+				Labels:  []string{"value", ""},
+				Actions: map[string]string{"go": "expr"},
+			},
+		},
+	}
+	semantics := spec.SemanticSpec{Types: []spec.SemanticType{
+		{Target: "go", Symbol: "Expr", Type: "float64"},
+	}}
+
+	action := Build(grammar, semantics, "go").Actions[0]
+	if action.Typed || action.TypeIssue == "" || !strings.Contains(action.TypeIssue, "Term") {
+		t.Fatalf("action = %#v", action)
+	}
+	if got := action.Rules[0].RHS[0]; got.Label != "value" || got.Type != "" {
+		t.Fatalf("labeled nonterminal operand = %#v", got)
+	}
+}
+
+func TestBuild_AllowsUnlabeledNonterminalWithoutType(t *testing.T) {
+	grammar := &parse.Grammar{
+		Terminals: map[string]bool{"Semi": true},
+		Rules: []parse.Rule{
+			{
+				ID:      1,
+				LHS:     "Expr",
+				RHS:     []string{"Term", "Semi"},
+				Labels:  []string{"", ""},
+				Actions: map[string]string{"go": "expr.default"},
+			},
+		},
+	}
+	semantics := spec.SemanticSpec{Types: []spec.SemanticType{
+		{Target: "go", Symbol: "Expr", Type: "float64"},
+	}}
+
+	action := Build(grammar, semantics, "go").Actions[0]
+	if !action.Typed || action.TypeIssue != "" {
+		t.Fatalf("action = %#v", action)
+	}
+}
+
+func TestBuild_UsesTargetLexemeTypeForLabeledTerminals(t *testing.T) {
+	grammar := &parse.Grammar{
+		Terminals: map[string]bool{"Number": true},
+		Rules: []parse.Rule{
+			{
+				ID:      1,
+				LHS:     "Expr",
+				RHS:     []string{"Number"},
+				Labels:  []string{"token"},
+				Actions: map[string]string{"go": "number", "csharp": "number", "c": "number", "cpp": "number"},
+			},
+		},
+	}
+	for _, target := range []struct {
+		name string
+		want string
+	}{
+		{name: "go", want: "Lexeme"},
+		{name: "csharp", want: "Lexeme"},
+		{name: "cpp", want: "Lexeme"},
+		{name: "c", want: "lexeme"},
+	} {
+		t.Run(target.name, func(t *testing.T) {
+			semantics := spec.SemanticSpec{Types: []spec.SemanticType{
+				{Target: target.name, Symbol: "Expr", Type: "ExprType"},
+			}}
+			action := Build(grammar, semantics, target.name).Actions[0]
+			if !action.Typed {
+				t.Fatalf("action = %#v", action)
+			}
+			if got := action.Rules[0].RHS[0]; got.Type != target.want || got.Label != "token" {
+				t.Fatalf("operand = %#v, want type %q", got, target.want)
+			}
+		})
 	}
 }
 

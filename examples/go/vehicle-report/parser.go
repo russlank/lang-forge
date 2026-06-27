@@ -11,12 +11,17 @@ import (
 )
 
 // Parse converts vehicle-report source text into a Vehicle AST.
+//
+// The grammar declares named RHS labels and semantic result types. LangForge
+// uses those declarations to generate typed reducer contexts such as
+// VehicleReduction and FeatureReduction, keeping this adapter free from
+// positional semantic-value casts.
 func Parse(source string) (*Vehicle, error) {
 	lexemes, err := vehiclegen.Tokenize(source)
 	if err != nil {
 		return nil, err
 	}
-	value, err := vehiclegen.ParseWithReducer(lexemes, vehiclegen.ReducerFunc(vehicleReduce))
+	value, err := vehiclegen.ParseWithReducer(lexemes, vehicleReducers)
 	if err != nil {
 		return nil, err
 	}
@@ -28,284 +33,119 @@ func Parse(source string) (*Vehicle, error) {
 }
 
 var vehicleReducers = vehiclegen.ReducerMap{
-	vehiclegen.SemanticActionVehicle:          reduceVehicle,
-	vehiclegen.SemanticActionInfo:             reduceInfo,
-	vehiclegen.SemanticActionFieldModel:       reduceModelField,
-	vehiclegen.SemanticActionFieldLicense:     reduceLicenseField,
-	vehiclegen.SemanticActionFieldDistance:    reduceDistanceField,
-	vehiclegen.SemanticActionFieldFeatures:    reduceFeaturesField,
-	vehiclegen.SemanticActionFeatureItems:     reduceFeatureItems,
-	vehiclegen.SemanticActionFeatureEmpty:     reduceEmptyFeatures,
-	vehiclegen.SemanticActionFeatureTailMore:  reduceFeatureTailMore,
-	vehiclegen.SemanticActionFeatureTailEmpty: reduceEmptyFeatures,
-	vehiclegen.SemanticActionFeature:          reduceFeature,
-	vehiclegen.SemanticActionFieldRepairs:     reduceRepairsField,
-	vehiclegen.SemanticActionRepairItems:      reduceRepairItems,
-	vehiclegen.SemanticActionRepairEmpty:      reduceEmptyRepairs,
-	vehiclegen.SemanticActionRepairTailMore:   reduceRepairTailMore,
-	vehiclegen.SemanticActionRepairTailEmpty:  reduceEmptyRepairs,
-	vehiclegen.SemanticActionRepair:           reduceRepair,
+	vehiclegen.SemanticActionVehicle:          vehiclegen.TypedVehicle(reduceVehicle),
+	vehiclegen.SemanticActionInfo:             vehiclegen.TypedInfo(reduceInfo),
+	vehiclegen.SemanticActionFieldModel:       vehiclegen.TypedFieldModel(reduceModelField),
+	vehiclegen.SemanticActionFieldLicense:     vehiclegen.TypedFieldLicense(reduceLicenseField),
+	vehiclegen.SemanticActionFieldDistance:    vehiclegen.TypedFieldDistance(reduceDistanceField),
+	vehiclegen.SemanticActionFieldFeatures:    vehiclegen.TypedFieldFeatures(reduceFeaturesField),
+	vehiclegen.SemanticActionFeatureItems:     vehiclegen.TypedFeatureItems(reduceFeatureItems),
+	vehiclegen.SemanticActionFeatureEmpty:     vehiclegen.TypedFeatureEmpty(reduceFeatureEmpty),
+	vehiclegen.SemanticActionFeatureTailMore:  vehiclegen.TypedFeatureTailMore(reduceFeatureTailMore),
+	vehiclegen.SemanticActionFeatureTailEmpty: vehiclegen.TypedFeatureTailEmpty(reduceFeatureTailEmpty),
+	vehiclegen.SemanticActionFeature:          vehiclegen.TypedFeature(reduceFeature),
+	vehiclegen.SemanticActionFieldRepairs:     vehiclegen.TypedFieldRepairs(reduceRepairsField),
+	vehiclegen.SemanticActionRepairItems:      vehiclegen.TypedRepairItems(reduceRepairItems),
+	vehiclegen.SemanticActionRepairEmpty:      vehiclegen.TypedRepairEmpty(reduceRepairEmpty),
+	vehiclegen.SemanticActionRepairTailMore:   vehiclegen.TypedRepairTailMore(reduceRepairTailMore),
+	vehiclegen.SemanticActionRepairTailEmpty:  vehiclegen.TypedRepairTailEmpty(reduceRepairTailEmpty),
+	vehiclegen.SemanticActionRepair:           vehiclegen.TypedRepair(reduceRepair),
 }
 
-func vehicleReduce(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	return vehicleReducers.Reduce(ctx)
-}
-
-func reduceVehicle(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	info, err := infoArg(ctx, 3)
-	if err != nil {
-		return nil, err
-	}
+func reduceVehicle(ctx vehiclegen.VehicleReduction) (*Vehicle, error) {
+	info := ctx.Info
 	return &Vehicle{
-		Model:    info.model,
-		License:  info.license,
-		Distance: info.distance,
-		Features: info.features,
-		Repairs:  info.repairs,
+		Model:    info.Model,
+		License:  info.License,
+		Distance: info.Distance,
+		Features: info.Features,
+		Repairs:  info.Repairs,
 	}, nil
 }
 
-func reduceInfo(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	model, err := stringArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	license, err := stringArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	distance, err := intArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	features, err := featureSliceArg(ctx, 6)
-	if err != nil {
-		return nil, err
-	}
-	repairs, err := repairSliceArg(ctx, 8)
-	if err != nil {
-		return nil, err
-	}
-	return vehicleInfo{model: model, license: license, distance: distance, features: features, repairs: repairs}, nil
+func reduceInfo(ctx vehiclegen.InfoReduction) (vehicleInfo, error) {
+	return vehicleInfo{
+		Model:    ctx.Model,
+		License:  ctx.License,
+		Distance: ctx.Distance,
+		Features: ctx.Features,
+		Repairs:  ctx.Repairs,
+	}, nil
 }
 
-func reduceModelField(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	text, err := lexemeTextArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return decodeQuoted(text), nil
+func reduceModelField(ctx vehiclegen.FieldModelReduction) (string, error) {
+	return decodeQuoted(ctx.Literal.Text), nil
 }
 
-func reduceLicenseField(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	text, err := lexemeTextArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return decodeQuoted(text), nil
+func reduceLicenseField(ctx vehiclegen.FieldLicenseReduction) (string, error) {
+	return decodeQuoted(ctx.Literal.Text), nil
 }
 
-func reduceDistanceField(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	text, err := lexemeTextArg(ctx, 2)
+func reduceDistanceField(ctx vehiclegen.FieldDistanceReduction) (int, error) {
+	value, err := strconv.Atoi(ctx.Literal.Text)
 	if err != nil {
-		return nil, err
-	}
-	value, err := strconv.Atoi(text)
-	if err != nil {
-		return nil, fmt.Errorf("invalid distance %q: %w", text, err)
+		return 0, fmt.Errorf("rule %d invalid distance %q: %w", ctx.Reduction.Rule, ctx.Literal.Text, err)
 	}
 	return value, nil
 }
 
-func reduceFeaturesField(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	return featureSliceArg(ctx, 3)
+func reduceFeaturesField(ctx vehiclegen.FieldFeaturesReduction) ([]Feature, error) {
+	return ctx.Items, nil
 }
 
-func reduceFeatureItems(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	feature, err := featureArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := featureSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Feature{feature}, tail...), nil
+func reduceFeatureItems(ctx vehiclegen.FeatureItemsReduction) ([]Feature, error) {
+	return prependFeature(ctx.Head, ctx.Tail), nil
 }
 
-func reduceFeatureTailMore(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	feature, err := featureArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := featureSliceArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Feature{feature}, tail...), nil
-}
-
-func reduceEmptyFeatures(vehiclegen.Reduction) (vehiclegen.Value, error) {
+func reduceFeatureEmpty(vehiclegen.FeatureEmptyReduction) ([]Feature, error) {
 	return []Feature{}, nil
 }
 
-func reduceFeature(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	value, err := lexemeTextArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return Feature{Name: name, Value: decodeQuoted(value)}, nil
+func reduceFeatureTailMore(ctx vehiclegen.FeatureTailMoreReduction) ([]Feature, error) {
+	return prependFeature(ctx.Head, ctx.Tail), nil
 }
 
-func reduceRepairsField(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	return repairSliceArg(ctx, 3)
+func reduceFeatureTailEmpty(vehiclegen.FeatureTailEmptyReduction) ([]Feature, error) {
+	return []Feature{}, nil
 }
 
-func reduceRepairItems(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	repair, err := repairArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := repairSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Repair{repair}, tail...), nil
+func reduceFeature(ctx vehiclegen.FeatureReduction) (Feature, error) {
+	return Feature{Name: ctx.Name.Text, Value: decodeQuoted(ctx.Value.Text)}, nil
 }
 
-func reduceRepairTailMore(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	repair, err := repairArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := repairSliceArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Repair{repair}, tail...), nil
+func reduceRepairsField(ctx vehiclegen.FieldRepairsReduction) ([]Repair, error) {
+	return ctx.Items, nil
 }
 
-func reduceEmptyRepairs(vehiclegen.Reduction) (vehiclegen.Value, error) {
+func reduceRepairItems(ctx vehiclegen.RepairItemsReduction) ([]Repair, error) {
+	return prependRepair(ctx.Head, ctx.Tail), nil
+}
+
+func reduceRepairEmpty(vehiclegen.RepairEmptyReduction) ([]Repair, error) {
 	return []Repair{}, nil
 }
 
-func reduceRepair(ctx vehiclegen.Reduction) (vehiclegen.Value, error) {
-	date, err := lexemeTextArg(ctx, 3)
-	if err != nil {
-		return nil, err
-	}
-	description, err := lexemeTextArg(ctx, 7)
-	if err != nil {
-		return nil, err
-	}
-	return Repair{Date: decodeQuoted(date), Description: decodeQuoted(description)}, nil
+func reduceRepairTailMore(ctx vehiclegen.RepairTailMoreReduction) ([]Repair, error) {
+	return prependRepair(ctx.Head, ctx.Tail), nil
 }
 
-func valueArg(ctx vehiclegen.Reduction, index int) (vehiclegen.Value, error) {
-	if index < 0 || index >= len(ctx.Values) {
-		return nil, fmt.Errorf("rule %d action %q missing argument %d", ctx.Rule, ctx.Action, index+1)
-	}
-	return ctx.Values[index], nil
+func reduceRepairTailEmpty(vehiclegen.RepairTailEmptyReduction) ([]Repair, error) {
+	return []Repair{}, nil
 }
 
-func lexemeTextArg(ctx vehiclegen.Reduction, index int) (string, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return "", err
-	}
-	lexeme, ok := value.(vehiclegen.Lexeme)
-	if !ok {
-		return "", fmt.Errorf("rule %d action %q argument %d has type %T, want Lexeme", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return lexeme.Text, nil
+func reduceRepair(ctx vehiclegen.RepairReduction) (Repair, error) {
+	return Repair{
+		Date:        decodeQuoted(ctx.Date.Text),
+		Description: decodeQuoted(ctx.Description.Text),
+	}, nil
 }
 
-func stringArg(ctx vehiclegen.Reduction, index int) (string, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return "", err
-	}
-	text, ok := value.(string)
-	if !ok {
-		return "", fmt.Errorf("rule %d action %q argument %d has type %T, want string", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return text, nil
+func prependFeature(head Feature, tail []Feature) []Feature {
+	return append([]Feature{head}, tail...)
 }
 
-func intArg(ctx vehiclegen.Reduction, index int) (int, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return 0, err
-	}
-	number, ok := value.(int)
-	if !ok {
-		return 0, fmt.Errorf("rule %d action %q argument %d has type %T, want int", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return number, nil
-}
-
-func infoArg(ctx vehiclegen.Reduction, index int) (vehicleInfo, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return vehicleInfo{}, err
-	}
-	info, ok := value.(vehicleInfo)
-	if !ok {
-		return vehicleInfo{}, fmt.Errorf("rule %d action %q argument %d has type %T, want vehicleInfo", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return info, nil
-}
-
-func featureArg(ctx vehiclegen.Reduction, index int) (Feature, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return Feature{}, err
-	}
-	feature, ok := value.(Feature)
-	if !ok {
-		return Feature{}, fmt.Errorf("rule %d action %q argument %d has type %T, want Feature", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return feature, nil
-}
-
-func featureSliceArg(ctx vehiclegen.Reduction, index int) ([]Feature, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	features, ok := value.([]Feature)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []Feature", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return features, nil
-}
-
-func repairArg(ctx vehiclegen.Reduction, index int) (Repair, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return Repair{}, err
-	}
-	repair, ok := value.(Repair)
-	if !ok {
-		return Repair{}, fmt.Errorf("rule %d action %q argument %d has type %T, want Repair", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return repair, nil
-}
-
-func repairSliceArg(ctx vehiclegen.Reduction, index int) ([]Repair, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	repairs, ok := value.([]Repair)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []Repair", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return repairs, nil
+func prependRepair(head Repair, tail []Repair) []Repair {
+	return append([]Repair{head}, tail...)
 }
 
 func decodeQuoted(text string) string {

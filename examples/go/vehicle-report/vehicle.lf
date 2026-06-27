@@ -1,6 +1,20 @@
 %target go
 %package vehiclegen
 %semantic go mode reducer
+%semantic go import vehiclemodel "github.com/russlank/lang-forge/examples/go/vehicle-report/model"
+%semantic go type Program *vehiclemodel.Vehicle
+%semantic go type VehicleInfo vehiclemodel.Info
+%semantic go type ModelField string
+%semantic go type LicenseField string
+%semantic go type DistanceField int
+%semantic go type FeaturesField []vehiclemodel.Feature
+%semantic go type FeatureItems []vehiclemodel.Feature
+%semantic go type FeatureTail []vehiclemodel.Feature
+%semantic go type Feature vehiclemodel.Feature
+%semantic go type RepairsField []vehiclemodel.Repair
+%semantic go type RepairItems []vehiclemodel.Repair
+%semantic go type RepairTail []vehiclemodel.Repair
+%semantic go type Repair vehiclemodel.Repair
 %start Program
 %token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
 
@@ -38,54 +52,54 @@ LINE_COMMENT   => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : Car Assign LBrace VehicleInfo RBrace
+Program : Car Assign LBrace info=VehicleInfo RBrace
             {go: vehicle}
         ;
 
-VehicleInfo : ModelField Comma LicenseField Comma DistanceField Comma FeaturesField Comma RepairsField
+VehicleInfo : model=ModelField Comma license=LicenseField Comma distance=DistanceField Comma features=FeaturesField Comma repairs=RepairsField
                 {go: info}
             ;
 
-ModelField : Model Assign String
+ModelField : Model Assign literal=String
                {go: field.model}
            ;
-LicenseField : License Assign LicenseString
+LicenseField : License Assign literal=LicenseString
                  {go: field.license}
              ;
-DistanceField : Distance Assign Number
+DistanceField : Distance Assign literal=Number
                   {go: field.distance}
               ;
 
-FeaturesField : Features Assign LBrace FeatureItems RBrace
+FeaturesField : Features Assign LBrace items=FeatureItems RBrace
                   {go: field.features}
               ;
-FeatureItems : Feature FeatureTail
+FeatureItems : head=Feature tail=FeatureTail
                  {go: feature.items}
              | %empty
                  {go: feature.empty}
              ;
-FeatureTail : Comma Feature FeatureTail
+FeatureTail : Comma head=Feature tail=FeatureTail
                 {go: feature.tail.more}
             | %empty
                 {go: feature.tail.empty}
             ;
-Feature : Ident Assign String
+Feature : name=Ident Assign value=String
             {go: feature}
         ;
 
-RepairsField : Repairs Assign LBrace RepairItems RBrace
+RepairsField : Repairs Assign LBrace items=RepairItems RBrace
                  {go: field.repairs}
              ;
-RepairItems : Repair RepairTail
+RepairItems : head=Repair tail=RepairTail
                 {go: repair.items}
             | %empty
                 {go: repair.empty}
             ;
-RepairTail : Comma Repair RepairTail
+RepairTail : Comma head=Repair tail=RepairTail
                {go: repair.tail.more}
            | %empty
                {go: repair.tail.empty}
            ;
-Repair : LParen Date Assign DateString Comma Description Assign String RParen
+Repair : LParen Date Assign date=DateString Comma Description Assign description=String RParen
            {go: repair}
        ;

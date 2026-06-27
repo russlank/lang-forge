@@ -163,7 +163,7 @@ Open:
 - [examples/go/vehicle-report/parser.go](../examples/go/vehicle-report/parser.go)
 - [examples/go/vehicle-report/report.go](../examples/go/vehicle-report/report.go)
 
-Goal: see how a Flex/Bison-style homework language can become a modern
+Goal: see how a Flex/Bison-style exercise language can become a modern
 LangForge `.lf` spec with generated parser reductions, AST construction, and
 report output.
 

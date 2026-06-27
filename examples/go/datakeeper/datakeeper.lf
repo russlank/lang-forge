@@ -1,6 +1,22 @@
 %target go
 %package dksgenerated
 %semantic go mode reducer
+%semantic go import dksmodel "github.com/russlank/lang-forge/examples/go/datakeeper/model"
+%semantic go type Program *dksmodel.Script
+%semantic go type ParametersList []string
+%semantic go type ParametersDecl []string
+%semantic go type ParametersTail []string
+%semantic go type CommandBlock []dksmodel.Statement
+%semantic go type Statements []dksmodel.Statement
+%semantic go type StatementTail []dksmodel.Statement
+%semantic go type Statement dksmodel.Statement
+%semantic go type AssignStatement dksmodel.Statement
+%semantic go type ReplaceStatement dksmodel.Statement
+%semantic go type RunSQLStatement dksmodel.Statement
+%semantic go type AddObjectStatement dksmodel.Statement
+%semantic go type RemoveObjectStatement dksmodel.Statement
+%semantic go type RunObjectsJobStatement dksmodel.Statement
+%semantic go type Value dksmodel.ValueExpr
 %start Program
 %token Parameters Begin End Replace SQLRun AddObject RemoveObject RunObjectsJob Ident Number String Assign Comma Semi LParen RParen
 
@@ -34,31 +50,31 @@ BLOCK_COMMENT  => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : ParametersList CommandBlock
+Program : parameters=ParametersList block=CommandBlock
             {go: program.withParameters}
-        | CommandBlock
+        | block=CommandBlock
             {go: program.noParameters}
         ;
 
-ParametersList : Parameters ParametersDecl Semi
+ParametersList : Parameters params=ParametersDecl Semi
                    {go: parameters.list}
                ;
-ParametersDecl : Ident ParametersTail
+ParametersDecl : name=Ident tail=ParametersTail
                    {go: parameters.decl}
                ;
-ParametersTail : Comma Ident ParametersTail
+ParametersTail : Comma name=Ident tail=ParametersTail
                    {go: parameters.tail.more}
                | %empty
                    {go: parameters.tail.empty}
                ;
 
-CommandBlock : Begin Statements End
+CommandBlock : Begin statements=Statements End
                  {go: commandBlock}
              ;
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {go: statements}
            ;
-StatementTail : Semi Statement StatementTail
+StatementTail : Semi head=Statement tail=StatementTail
                   {go: statements.tail.more}
               | Semi
                   {go: statements.tail.empty}
@@ -66,42 +82,42 @@ StatementTail : Semi Statement StatementTail
                   {go: statements.tail.empty}
               ;
 
-Statement : AssignStatement
+Statement : value=AssignStatement
               {go: statement.pass}
-          | ReplaceStatement
+          | value=ReplaceStatement
               {go: statement.pass}
-          | RunSQLStatement
+          | value=RunSQLStatement
               {go: statement.pass}
-          | AddObjectStatement
+          | value=AddObjectStatement
               {go: statement.pass}
-          | RemoveObjectStatement
+          | value=RemoveObjectStatement
               {go: statement.pass}
-          | RunObjectsJobStatement
+          | value=RunObjectsJobStatement
               {go: statement.pass}
           ;
 
-AssignStatement : Ident Assign Value
+AssignStatement : name=Ident Assign value=Value
                     {go: assign}
                 ;
-ReplaceStatement : Replace LParen Ident Comma Value Comma Value RParen
+ReplaceStatement : Replace LParen target=Ident Comma old=Value Comma new=Value RParen
                      {go: replace}
                  ;
-RunSQLStatement : SQLRun LParen Value Comma Value RParen
+RunSQLStatement : SQLRun LParen instance=Value Comma script=Value RParen
                     {go: sqlrun}
                 ;
-AddObjectStatement : AddObject LParen Value Comma Value RParen
+AddObjectStatement : AddObject LParen parent=Value Comma xml=Value RParen
                        {go: addObject}
                    ;
-RemoveObjectStatement : RemoveObject LParen Value Comma Value RParen
+RemoveObjectStatement : RemoveObject LParen parent=Value Comma name=Value RParen
                           {go: removeObject}
                       ;
-RunObjectsJobStatement : RunObjectsJob LParen Value Comma Value Comma Value RParen
+RunObjectsJobStatement : RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
                            {go: runObjectsJob}
                        ;
-Value : String
+Value : token=String
           {go: value.string}
-      | Number
+      | token=Number
           {go: value.number}
-      | Ident
+      | token=Ident
           {go: value.ident}
       ;

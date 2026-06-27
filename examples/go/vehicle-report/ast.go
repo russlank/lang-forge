@@ -1,30 +1,14 @@
 package vehiclereport
 
-// Vehicle is the parsed vehicle description.
-type Vehicle struct {
-	Model    string
-	License  string
-	Distance int
-	Features []Feature
-	Repairs  []Repair
-}
+import vehiclemodel "github.com/russlank/lang-forge/examples/go/vehicle-report/model"
 
-// Feature is one named vehicle feature.
-type Feature struct {
-	Name  string
-	Value string
-}
+// The public package keeps the original type names as aliases while generated
+// typed reducer contexts and handwritten report code share the cycle-free model
+// package.
+type (
+	Vehicle = vehiclemodel.Vehicle
+	Feature = vehiclemodel.Feature
+	Repair  = vehiclemodel.Repair
 
-// Repair is one repair or service event.
-type Repair struct {
-	Date        string
-	Description string
-}
-
-type vehicleInfo struct {
-	model    string
-	license  string
-	distance int
-	features []Feature
-	repairs  []Repair
-}
+	vehicleInfo = vehiclemodel.Info
+)

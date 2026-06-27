@@ -23,10 +23,10 @@ type allowedDifference struct {
 	Reason   string
 }
 
-var actionTagPattern = regexp.MustCompile(`\{(?:go|csharp|c|cpp):`)
+var actionBlockPattern = regexp.MustCompile(`\{(?:go|csharp|c|cpp):[^}]*\}`)
 
 func main() {
-	familyFlag := flag.String("family", "all", "example family to check: all, calc, or draw")
+	familyFlag := flag.String("family", "all", "example family to check: all, calc, datakeeper, draw, or vehicle-report")
 	flag.Parse()
 
 	families := []exampleFamily{
@@ -46,6 +46,24 @@ func main() {
 				"examples/csharp/draw/draw.lf",
 				"examples/c/draw/draw.lf",
 				"examples/cpp/draw/draw.lf",
+			},
+		},
+		{
+			Name: "datakeeper",
+			Specs: []string{
+				"examples/go/datakeeper/datakeeper.lf",
+				"examples/csharp/datakeeper/datakeeper.lf",
+				"examples/c/datakeeper/datakeeper.lf",
+				"examples/cpp/datakeeper/datakeeper.lf",
+			},
+		},
+		{
+			Name: "vehicle-report",
+			Specs: []string{
+				"examples/go/vehicle-report/vehicle.lf",
+				"examples/csharp/vehicle-report/vehicle.lf",
+				"examples/c/vehicle-report/vehicle.lf",
+				"examples/cpp/vehicle-report/vehicle.lf",
 			},
 		},
 	}
@@ -135,7 +153,7 @@ func normalizeSpec(source string) (string, error) {
 		if shouldSkipDirective(line) {
 			continue
 		}
-		line = actionTagPattern.ReplaceAllString(line, "{ACTION:")
+		line = actionBlockPattern.ReplaceAllString(line, "{ACTION}")
 		if strings.HasPrefix(line, "%%") {
 			flushSection()
 			header, err := stripInsignificantWhitespace(line)
@@ -185,7 +203,13 @@ func stripInsignificantWhitespace(line string) (string, error) {
 	inString := false
 	inClass := false
 	escaped := false
+	escapedOutside := false
 	for _, r := range line {
+		if escapedOutside {
+			out.WriteRune(r)
+			escapedOutside = false
+			continue
+		}
 		if inString {
 			out.WriteRune(r)
 			if escaped {
@@ -214,6 +238,11 @@ func stripInsignificantWhitespace(line string) (string, error) {
 			if r == ']' {
 				inClass = false
 			}
+			continue
+		}
+		if r == '\\' {
+			out.WriteRune(r)
+			escapedOutside = true
 			continue
 		}
 		switch {

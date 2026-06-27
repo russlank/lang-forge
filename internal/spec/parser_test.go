@@ -195,7 +195,7 @@ func TestParseYacc_SemanticDirectives(t *testing.T) {
 %token A
 %start S
 %%
-S : A {go: makeS} ;
+S : value=A {go: makeS} ;
 `), "semantic.y")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
@@ -209,6 +209,9 @@ S : A {go: makeS} ;
 	}
 	if got := parsed.Grammar.Rules[0].Alternatives[0].Actions["go"]; got != "makeS" {
 		t.Fatalf("action = %q", got)
+	}
+	if got := parsed.Grammar.Rules[0].Alternatives[0].Labels; len(got) != 1 || got[0] != "value" {
+		t.Fatalf("labels = %#v", got)
 	}
 }
 

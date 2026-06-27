@@ -29,6 +29,30 @@ func TestParseSampleVehicle(t *testing.T) {
 	}
 }
 
+func TestReducerCoverageAndTypedActionManifest(t *testing.T) {
+	if err := vehicleReducers.ValidateCoverage(); err != nil {
+		t.Fatalf("vehicle reducer coverage: %v", err)
+	}
+	manifest, err := os.ReadFile("generated/langforge.actions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(manifest, []byte(`"typed": false`)) || bytes.Contains(manifest, []byte(`"typeIssue"`)) {
+		t.Fatalf("vehicle action manifest contains an untyped action:\n%s", manifest)
+	}
+	for _, want := range [][]byte{
+		[]byte(`"label": "info"`),
+		[]byte(`"label": "model"`),
+		[]byte(`"label": "features"`),
+		[]byte(`"label": "description"`),
+		[]byte(`"returnType": "*vehiclemodel.Vehicle"`),
+	} {
+		if !bytes.Contains(manifest, want) {
+			t.Fatalf("vehicle action manifest missing %s:\n%s", want, manifest)
+		}
+	}
+}
+
 func TestParseAcceptsEmptyListsAndLegacyReparationsName(t *testing.T) {
 	vehicle, err := Parse(`car = {
   model = "KIA",

@@ -15,13 +15,13 @@ NUMBER  => token(Number);
 [1-32]+ => skip;
 
 %% parser
-Program : Statements {cpp: program} ;
-Statements : Statement StatementsTail {cpp: statements} ;
-StatementsTail : Statement StatementsTail {cpp: statements_tail_more}
+Program : statements=Statements {cpp: program} ;
+Statements : head=Statement tail=StatementsTail {cpp: statements} ;
+StatementsTail : head=Statement tail=StatementsTail {cpp: statements_tail_more}
                | /* empty */ {cpp: statements_tail_empty}
                ;
-Statement : Print Expr Semi {cpp: print} ;
-Expr : Expr Plus Term {cpp: add}
-     | Term {cpp: pass}
+Statement : Print expr=Expr Semi {cpp: print} ;
+Expr : left=Expr Plus right=Term {cpp: add}
+     | value=Term {cpp: pass}
      ;
-Term : Number {cpp: number} ;
+Term : token=Number {cpp: number} ;

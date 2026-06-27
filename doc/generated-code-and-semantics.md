@@ -142,6 +142,11 @@ rules, RHS positions, optional labels, semantic types, and why an action could
 not receive one consistent typed context. This is the stable contract for
 tests, tooling, and future target-specific typed adapters.
 
+For larger Go examples, put AST/model types in a small dependency-only package
+when generated typed contexts need to reference them. DRAW, DataKeeper, and
+vehicle-report use this pattern so `generated/` can import the model package
+without importing the public package that already imports `generated/`.
+
 ## Why Reducer Mode Is The Default
 
 Reducer mode keeps generated code separate from application behavior.
@@ -492,12 +497,12 @@ if action is "subtract", return left - right
 
 This is the same pattern used by the larger examples:
 
-- DataKeeper uses action labels to build a script AST, then lowers that AST to
-  stack-machine instructions.
+- DataKeeper uses named action/RHS labels and Go typed contexts to build a
+  script AST, then lowers that AST to stack-machine instructions.
 - DRAW uses action labels to build a drawing AST, then interprets it into a
   PNG image.
-- Vehicle report uses action labels to build a small AST, then renders a
-  text/XML-like report.
+- Vehicle report uses named action/RHS labels and Go typed contexts to build a
+  small AST, then renders a text/XML-like report.
 
 ## Recovery Productions And Semantic Actions
 

@@ -50,6 +50,29 @@ func TestCompileAndRunSample(t *testing.T) {
 	}
 }
 
+func TestReducerCoverageAndTypedActionManifest(t *testing.T) {
+	if err := dataKeeperReducers.ValidateCoverage(); err != nil {
+		t.Fatalf("DataKeeper reducer coverage: %v", err)
+	}
+	manifest, err := os.ReadFile("generated/langforge.actions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(manifest, []byte(`"typed": false`)) || bytes.Contains(manifest, []byte(`"typeIssue"`)) {
+		t.Fatalf("DataKeeper action manifest contains an untyped action:\n%s", manifest)
+	}
+	for _, want := range [][]byte{
+		[]byte(`"label": "parameters"`),
+		[]byte(`"label": "block"`),
+		[]byte(`"label": "jobsTag"`),
+		[]byte(`"returnType": "*dksmodel.Script"`),
+	} {
+		if !bytes.Contains(manifest, want) {
+			t.Fatalf("DataKeeper action manifest missing %s:\n%s", want, manifest)
+		}
+	}
+}
+
 func TestParserHandlesCommentsTrailingSemicolonAndQuotedStrings(t *testing.T) {
 	source := `parameters Name;
 begin

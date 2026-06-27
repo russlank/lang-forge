@@ -113,21 +113,21 @@ func parse(source string) (program, error) {
 func reduce(ctx minigen.Reduction) (minigen.Value, error) {
 	switch ctx.ActionID {
 	case minigen.SemanticActionProgram:
-		return program{Statements: statementsArg(ctx, 0, "statements")}, nil
+		return program{Statements: statementsArg(ctx, "statements")}, nil
 	case minigen.SemanticActionStatements:
-		return prependStatement(statementArg(ctx, 0, "statement"), statementsArg(ctx, 1, "statement tail")), nil
+		return prependStatement(statementArg(ctx, "head"), statementsArg(ctx, "tail")), nil
 	case minigen.SemanticActionStatementsTailMore:
-		return prependStatement(statementArg(ctx, 0, "statement"), statementsArg(ctx, 1, "statement tail")), nil
+		return prependStatement(statementArg(ctx, "head"), statementsArg(ctx, "tail")), nil
 	case minigen.SemanticActionStatementsTailEmpty:
 		return []statement{}, nil
 	case minigen.SemanticActionPrint:
-		return statement{Expr: exprArg(ctx, 1, "print expression")}, nil
+		return statement{Expr: exprArg(ctx, "expr")}, nil
 	case minigen.SemanticActionAdd:
-		return addExpr{Left: exprArg(ctx, 0, "left operand"), Right: exprArg(ctx, 2, "right operand")}, nil
+		return addExpr{Left: exprArg(ctx, "left"), Right: exprArg(ctx, "right")}, nil
 	case minigen.SemanticActionPass:
-		return ctx.Values[0], nil
+		return valueArg(ctx, "value")
 	case minigen.SemanticActionNumber:
-		text := lexemeArg(ctx, 0, "number").Text
+		text := lexemeArg(ctx, "token").Text
 		value, err := strconv.Atoi(text)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number %q: %w", text, err)
@@ -141,31 +141,40 @@ func reduce(ctx minigen.Reduction) (minigen.Value, error) {
 	}
 }
 
-func arg[T any](ctx minigen.Reduction, index int, name string) T {
-	if index < 0 || index >= len(ctx.Values) {
-		panic(fmt.Sprintf("rule %d missing %s at argument %d", ctx.Rule, name, index+1))
+func valueArg(ctx minigen.Reduction, label string) (minigen.Value, error) {
+	value, err := ctx.ValueFor(label)
+	if err != nil {
+		return nil, err
 	}
-	value, ok := ctx.Values[index].(T)
+	return value, nil
+}
+
+func arg[T any](ctx minigen.Reduction, label string) T {
+	value, err := valueArg(ctx, label)
+	if err != nil {
+		panic(err)
+	}
+	typed, ok := value.(T)
 	if !ok {
-		panic(fmt.Sprintf("rule %d argument %d for %s has type %T", ctx.Rule, index+1, name, ctx.Values[index]))
+		panic(fmt.Sprintf("rule %d label %q has type %T", ctx.Rule, label, value))
 	}
-	return value
+	return typed
 }
 
-func lexemeArg(ctx minigen.Reduction, index int, name string) minigen.Lexeme {
-	return arg[minigen.Lexeme](ctx, index, name)
+func lexemeArg(ctx minigen.Reduction, label string) minigen.Lexeme {
+	return arg[minigen.Lexeme](ctx, label)
 }
 
-func exprArg(ctx minigen.Reduction, index int, name string) expr {
-	return arg[expr](ctx, index, name)
+func exprArg(ctx minigen.Reduction, label string) expr {
+	return arg[expr](ctx, label)
 }
 
-func statementArg(ctx minigen.Reduction, index int, name string) statement {
-	return arg[statement](ctx, index, name)
+func statementArg(ctx minigen.Reduction, label string) statement {
+	return arg[statement](ctx, label)
 }
 
-func statementsArg(ctx minigen.Reduction, index int, name string) []statement {
-	return arg[[]statement](ctx, index, name)
+func statementsArg(ctx minigen.Reduction, label string) []statement {
+	return arg[[]statement](ctx, label)
 }
 
 func prependStatement(head statement, tail []statement) []statement {

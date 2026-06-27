@@ -11,14 +11,15 @@ import (
 
 // Parse converts source text into a DataKeeper script AST.
 //
-// This file is handwritten adapter code. The generated scanner/parser itself
-// lives under examples/go/datakeeper/generated and is recreated by the Makefile.
+// The `.lf` grammar declares named RHS labels and semantic types. The generated
+// parser turns those declarations into typed reducer contexts, so this adapter
+// can describe each reduction in domain terms instead of numeric stack slots.
 func Parse(source string) (*Script, error) {
 	lexemes, err := dksgenerated.Tokenize(source)
 	if err != nil {
 		return nil, err
 	}
-	value, err := dksgenerated.ParseWithReducer(lexemes, dksgenerated.ReducerFunc(dataKeeperReduce))
+	value, err := dksgenerated.ParseWithReducer(lexemes, dataKeeperReducers)
 	if err != nil {
 		return nil, err
 	}
@@ -30,293 +31,118 @@ func Parse(source string) (*Script, error) {
 }
 
 var dataKeeperReducers = dksgenerated.ReducerMap{
-	dksgenerated.SemanticActionProgramWithParameters: reduceProgramWithParameters,
-	dksgenerated.SemanticActionProgramNoParameters:   reduceProgramNoParameters,
-	dksgenerated.SemanticActionParametersList:        reduceParametersList,
-	dksgenerated.SemanticActionParametersDecl:        reduceParametersDecl,
-	dksgenerated.SemanticActionParametersTailMore:    reduceParametersTailMore,
-	dksgenerated.SemanticActionParametersTailEmpty:   reduceEmptyStringSlice,
-	dksgenerated.SemanticActionCommandBlock:          reduceCommandBlock,
-	dksgenerated.SemanticActionStatements:            reduceStatements,
-	dksgenerated.SemanticActionStatementsTailMore:    reduceStatementsTailMore,
-	dksgenerated.SemanticActionStatementsTailEmpty:   reduceEmptyStatementSlice,
-	dksgenerated.SemanticActionStatementPass:         reducePass,
-	dksgenerated.SemanticActionAssign:                reduceAssign,
-	dksgenerated.SemanticActionReplace:               reduceReplace,
-	dksgenerated.SemanticActionSqlrun:                reduceRunSQL,
-	dksgenerated.SemanticActionAddObject:             reduceAddObject,
-	dksgenerated.SemanticActionRemoveObject:          reduceRemoveObject,
-	dksgenerated.SemanticActionRunObjectsJob:         reduceRunObjectsJob,
-	dksgenerated.SemanticActionValueString:           reduceStringValue,
-	dksgenerated.SemanticActionValueNumber:           reduceNumberValue,
-	dksgenerated.SemanticActionValueIdent:            reduceIdentifierValue,
+	dksgenerated.SemanticActionProgramWithParameters: dksgenerated.TypedProgramWithParameters(reduceProgramWithParameters),
+	dksgenerated.SemanticActionProgramNoParameters:   dksgenerated.TypedProgramNoParameters(reduceProgramNoParameters),
+	dksgenerated.SemanticActionParametersList:        dksgenerated.TypedParametersList(reduceParametersList),
+	dksgenerated.SemanticActionParametersDecl:        dksgenerated.TypedParametersDecl(reduceParametersDecl),
+	dksgenerated.SemanticActionParametersTailMore:    dksgenerated.TypedParametersTailMore(reduceParametersTailMore),
+	dksgenerated.SemanticActionParametersTailEmpty:   dksgenerated.TypedParametersTailEmpty(reduceEmptyStringSlice),
+	dksgenerated.SemanticActionCommandBlock:          dksgenerated.TypedCommandBlock(reduceCommandBlock),
+	dksgenerated.SemanticActionStatements:            dksgenerated.TypedStatements(reduceStatements),
+	dksgenerated.SemanticActionStatementsTailMore:    dksgenerated.TypedStatementsTailMore(reduceStatementsTailMore),
+	dksgenerated.SemanticActionStatementsTailEmpty:   dksgenerated.TypedStatementsTailEmpty(reduceEmptyStatementSlice),
+	dksgenerated.SemanticActionStatementPass:         dksgenerated.TypedStatementPass(reducePass),
+	dksgenerated.SemanticActionAssign:                dksgenerated.TypedAssign(reduceAssign),
+	dksgenerated.SemanticActionReplace:               dksgenerated.TypedReplace(reduceReplace),
+	dksgenerated.SemanticActionSqlrun:                dksgenerated.TypedSqlrun(reduceRunSQL),
+	dksgenerated.SemanticActionAddObject:             dksgenerated.TypedAddObject(reduceAddObject),
+	dksgenerated.SemanticActionRemoveObject:          dksgenerated.TypedRemoveObject(reduceRemoveObject),
+	dksgenerated.SemanticActionRunObjectsJob:         dksgenerated.TypedRunObjectsJob(reduceRunObjectsJob),
+	dksgenerated.SemanticActionValueString:           dksgenerated.TypedValueString(reduceStringValue),
+	dksgenerated.SemanticActionValueNumber:           dksgenerated.TypedValueNumber(reduceNumberValue),
+	dksgenerated.SemanticActionValueIdent:            dksgenerated.TypedValueIdent(reduceIdentifierValue),
 }
 
-func dataKeeperReduce(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	return dataKeeperReducers.Reduce(ctx)
+func reduceProgramWithParameters(ctx dksgenerated.ProgramWithParametersReduction) (*Script, error) {
+	return &Script{Parameters: ctx.Parameters, Statements: ctx.Block}, nil
 }
 
-func reduceProgramWithParameters(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	parameters, err := stringSliceArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	statements, err := statementSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return &Script{Parameters: parameters, Statements: statements}, nil
+func reduceProgramNoParameters(ctx dksgenerated.ProgramNoParametersReduction) (*Script, error) {
+	return &Script{Statements: ctx.Block}, nil
 }
 
-func reduceProgramNoParameters(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	statements, err := statementSliceArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return &Script{Statements: statements}, nil
+func reduceParametersList(ctx dksgenerated.ParametersListReduction) ([]string, error) {
+	return ctx.Params, nil
 }
 
-func reduceParametersList(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	return stringSliceArg(ctx, 1)
+func reduceParametersDecl(ctx dksgenerated.ParametersDeclReduction) ([]string, error) {
+	return prependString(ctx.Name.Text, ctx.Tail), nil
 }
 
-func reduceParametersDecl(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := stringSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return append([]string{name}, tail...), nil
+func reduceParametersTailMore(ctx dksgenerated.ParametersTailMoreReduction) ([]string, error) {
+	return prependString(ctx.Name.Text, ctx.Tail), nil
 }
 
-func reduceParametersTailMore(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := stringSliceArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return append([]string{name}, tail...), nil
-}
-
-func reduceEmptyStringSlice(dksgenerated.Reduction) (dksgenerated.Value, error) {
+func reduceEmptyStringSlice(dksgenerated.ParametersTailEmptyReduction) ([]string, error) {
 	return []string{}, nil
 }
 
-func reduceCommandBlock(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	return statementSliceArg(ctx, 1)
+func reduceCommandBlock(ctx dksgenerated.CommandBlockReduction) ([]Statement, error) {
+	return ctx.Statements, nil
 }
 
-func reduceStatements(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	statement, err := statementArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := statementSliceArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Statement{statement}, tail...), nil
+func reduceStatements(ctx dksgenerated.StatementsReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
 }
 
-func reduceStatementsTailMore(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	statement, err := statementArg(ctx, 1)
-	if err != nil {
-		return nil, err
-	}
-	tail, err := statementSliceArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return append([]Statement{statement}, tail...), nil
+func reduceStatementsTailMore(ctx dksgenerated.StatementsTailMoreReduction) ([]Statement, error) {
+	return prependStatement(ctx.Head, ctx.Tail), nil
 }
 
-func reduceEmptyStatementSlice(dksgenerated.Reduction) (dksgenerated.Value, error) {
+func reduceEmptyStatementSlice(dksgenerated.StatementsTailEmptyReduction) ([]Statement, error) {
 	return []Statement{}, nil
 }
 
-func reducePass(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	return valueArg(ctx, 0)
+func reducePass(ctx dksgenerated.StatementPassReduction) (Statement, error) {
+	return ctx.Value, nil
 }
 
-func reduceAssign(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	value, err := valueExprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	return AssignStatement{Name: name, Value: value}, nil
+func reduceAssign(ctx dksgenerated.AssignReduction) (Statement, error) {
+	return AssignStatement{Name: ctx.Name.Text, Value: ctx.Value}, nil
 }
 
-func reduceReplace(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	target, err := lexemeTextArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	oldValue, err := valueExprArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	newValue, err := valueExprArg(ctx, 6)
-	if err != nil {
-		return nil, err
-	}
-	return ReplaceStatement{Target: target, Old: oldValue, New: newValue}, nil
+func reduceReplace(ctx dksgenerated.ReplaceReduction) (Statement, error) {
+	return ReplaceStatement{Target: ctx.Target.Text, Old: ctx.Old, New: ctx.New}, nil
 }
 
-func reduceRunSQL(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	instance, err := valueExprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	script, err := valueExprArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	return RunSQLStatement{Instance: instance, Script: script}, nil
+func reduceRunSQL(ctx dksgenerated.SqlrunReduction) (Statement, error) {
+	return RunSQLStatement{Instance: ctx.Instance, Script: ctx.Script}, nil
 }
 
-func reduceAddObject(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	parent, err := valueExprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	xml, err := valueExprArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	return AddObjectStatement{Parent: parent, XML: xml}, nil
+func reduceAddObject(ctx dksgenerated.AddObjectReduction) (Statement, error) {
+	return AddObjectStatement{Parent: ctx.Parent, XML: ctx.Xml}, nil
 }
 
-func reduceRemoveObject(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	parent, err := valueExprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	name, err := valueExprArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	return RemoveObjectStatement{Parent: parent, Name: name}, nil
+func reduceRemoveObject(ctx dksgenerated.RemoveObjectReduction) (Statement, error) {
+	return RemoveObjectStatement{Parent: ctx.Parent, Name: ctx.Name}, nil
 }
 
-func reduceRunObjectsJob(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	parent, err := valueExprArg(ctx, 2)
-	if err != nil {
-		return nil, err
-	}
-	name, err := valueExprArg(ctx, 4)
-	if err != nil {
-		return nil, err
-	}
-	jobsTag, err := valueExprArg(ctx, 6)
-	if err != nil {
-		return nil, err
-	}
-	return RunObjectsJobStatement{Parent: parent, Name: name, JobsTag: jobsTag}, nil
+func reduceRunObjectsJob(ctx dksgenerated.RunObjectsJobReduction) (Statement, error) {
+	return RunObjectsJobStatement{Parent: ctx.Parent, Name: ctx.Name, JobsTag: ctx.JobsTag}, nil
 }
 
-func reduceStringValue(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	text, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	decoded, err := decodeStringLexeme(text)
+func reduceStringValue(ctx dksgenerated.ValueStringReduction) (ValueExpr, error) {
+	decoded, err := decodeStringLexeme(ctx.Token.Text)
 	if err != nil {
 		return nil, err
 	}
 	return StringLiteral{Value: decoded}, nil
 }
 
-func reduceNumberValue(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	text, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return NumberLiteral{Value: text}, nil
+func reduceNumberValue(ctx dksgenerated.ValueNumberReduction) (ValueExpr, error) {
+	return NumberLiteral{Value: ctx.Token.Text}, nil
 }
 
-func reduceIdentifierValue(ctx dksgenerated.Reduction) (dksgenerated.Value, error) {
-	name, err := lexemeTextArg(ctx, 0)
-	if err != nil {
-		return nil, err
-	}
-	return ReferenceExpr{Name: name}, nil
+func reduceIdentifierValue(ctx dksgenerated.ValueIdentReduction) (ValueExpr, error) {
+	return ReferenceExpr{Name: ctx.Token.Text}, nil
 }
 
-func valueArg(ctx dksgenerated.Reduction, index int) (dksgenerated.Value, error) {
-	if index < 0 || index >= len(ctx.Values) {
-		return nil, fmt.Errorf("rule %d action %q missing argument %d", ctx.Rule, ctx.Action, index+1)
-	}
-	return ctx.Values[index], nil
+func prependString(head string, tail []string) []string {
+	return append([]string{head}, tail...)
 }
 
-func lexemeTextArg(ctx dksgenerated.Reduction, index int) (string, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return "", err
-	}
-	lexeme, ok := value.(dksgenerated.Lexeme)
-	if !ok {
-		return "", fmt.Errorf("rule %d action %q argument %d has type %T, want Lexeme", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return lexeme.Text, nil
-}
-
-func stringSliceArg(ctx dksgenerated.Reduction, index int) ([]string, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	out, ok := value.([]string)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []string", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return out, nil
-}
-
-func statementArg(ctx dksgenerated.Reduction, index int) (Statement, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	statement, ok := value.(Statement)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want Statement", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return statement, nil
-}
-
-func statementSliceArg(ctx dksgenerated.Reduction, index int) ([]Statement, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	statements, ok := value.([]Statement)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want []Statement", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return statements, nil
-}
-
-func valueExprArg(ctx dksgenerated.Reduction, index int) (ValueExpr, error) {
-	value, err := valueArg(ctx, index)
-	if err != nil {
-		return nil, err
-	}
-	expr, ok := value.(ValueExpr)
-	if !ok {
-		return nil, fmt.Errorf("rule %d action %q argument %d has type %T, want ValueExpr", ctx.Rule, ctx.Action, index+1, value)
-	}
-	return expr, nil
+func prependStatement(head Statement, tail []Statement) []Statement {
+	return append([]Statement{head}, tail...)
 }
 
 func decodeStringLexeme(text string) (string, error) {

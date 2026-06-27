@@ -38,54 +38,54 @@ LINE_COMMENT   => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : Car Assign LBrace VehicleInfo RBrace
+Program : Car Assign LBrace info=VehicleInfo RBrace
             {cpp: vehicle}
         ;
 
-VehicleInfo : ModelField Comma LicenseField Comma DistanceField Comma FeaturesField Comma RepairsField
+VehicleInfo : model=ModelField Comma license=LicenseField Comma distance=DistanceField Comma features=FeaturesField Comma repairs=RepairsField
                 {cpp: info}
             ;
 
-ModelField : Model Assign String
+ModelField : Model Assign literal=String
                {cpp: field_model}
            ;
-LicenseField : License Assign LicenseString
+LicenseField : License Assign literal=LicenseString
                  {cpp: field_license}
              ;
-DistanceField : Distance Assign Number
+DistanceField : Distance Assign literal=Number
                   {cpp: field_distance}
               ;
 
-FeaturesField : Features Assign LBrace FeatureItems RBrace
+FeaturesField : Features Assign LBrace items=FeatureItems RBrace
                   {cpp: field_features}
               ;
-FeatureItems : Feature FeatureTail
+FeatureItems : head=Feature tail=FeatureTail
                  {cpp: feature_items}
              | %empty
                  {cpp: feature_empty}
              ;
-FeatureTail : Comma Feature FeatureTail
+FeatureTail : Comma head=Feature tail=FeatureTail
                 {cpp: feature_tail_more}
             | %empty
                 {cpp: feature_tail_empty}
             ;
-Feature : Ident Assign String
+Feature : name=Ident Assign value=String
             {cpp: feature}
         ;
 
-RepairsField : Repairs Assign LBrace RepairItems RBrace
+RepairsField : Repairs Assign LBrace items=RepairItems RBrace
                  {cpp: field_repairs}
              ;
-RepairItems : Repair RepairTail
+RepairItems : head=Repair tail=RepairTail
                 {cpp: repair_items}
             | %empty
                 {cpp: repair_empty}
             ;
-RepairTail : Comma Repair RepairTail
+RepairTail : Comma head=Repair tail=RepairTail
                {cpp: repair_tail_more}
            | %empty
                {cpp: repair_tail_empty}
            ;
-Repair : LParen Date Assign DateString Comma Description Assign String RParen
+Repair : LParen Date Assign date=DateString Comma Description Assign description=String RParen
            {cpp: repair}
        ;

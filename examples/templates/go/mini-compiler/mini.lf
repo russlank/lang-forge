@@ -15,13 +15,13 @@ NUMBER   => token(Number);
 [1-32]+  => skip;
 
 %% parser
-Program : Statements {go: program} ;
-Statements : Statement StatementsTail {go: statements} ;
-StatementsTail : Statement StatementsTail {go: statements_tail_more}
+Program : statements=Statements {go: program} ;
+Statements : head=Statement tail=StatementsTail {go: statements} ;
+StatementsTail : head=Statement tail=StatementsTail {go: statements_tail_more}
                | /* empty */ {go: statements_tail_empty}
                ;
-Statement : Print Expr Semi {go: print} ;
-Expr : Expr Plus Term {go: add}
-     | Term {go: pass}
+Statement : Print expr=Expr Semi {go: print} ;
+Expr : left=Expr Plus right=Term {go: add}
+     | value=Term {go: pass}
      ;
-Term : Number {go: number} ;
+Term : token=Number {go: number} ;

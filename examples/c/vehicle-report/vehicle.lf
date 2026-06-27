@@ -38,54 +38,54 @@ LINE_COMMENT   => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : Car Assign LBrace VehicleInfo RBrace
+Program : Car Assign LBrace info=VehicleInfo RBrace
             {c: vehicle}
         ;
 
-VehicleInfo : ModelField Comma LicenseField Comma DistanceField Comma FeaturesField Comma RepairsField
+VehicleInfo : model=ModelField Comma license=LicenseField Comma distance=DistanceField Comma features=FeaturesField Comma repairs=RepairsField
                 {c: info}
             ;
 
-ModelField : Model Assign String
+ModelField : Model Assign literal=String
                {c: field_model}
            ;
-LicenseField : License Assign LicenseString
+LicenseField : License Assign literal=LicenseString
                  {c: field_license}
              ;
-DistanceField : Distance Assign Number
+DistanceField : Distance Assign literal=Number
                   {c: field_distance}
               ;
 
-FeaturesField : Features Assign LBrace FeatureItems RBrace
+FeaturesField : Features Assign LBrace items=FeatureItems RBrace
                   {c: field_features}
               ;
-FeatureItems : Feature FeatureTail
+FeatureItems : head=Feature tail=FeatureTail
                  {c: feature_items}
              | %empty
                  {c: feature_empty}
              ;
-FeatureTail : Comma Feature FeatureTail
+FeatureTail : Comma head=Feature tail=FeatureTail
                 {c: feature_tail_more}
             | %empty
                 {c: feature_tail_empty}
             ;
-Feature : Ident Assign String
+Feature : name=Ident Assign value=String
             {c: feature}
         ;
 
-RepairsField : Repairs Assign LBrace RepairItems RBrace
+RepairsField : Repairs Assign LBrace items=RepairItems RBrace
                  {c: field_repairs}
              ;
-RepairItems : Repair RepairTail
+RepairItems : head=Repair tail=RepairTail
                 {c: repair_items}
             | %empty
                 {c: repair_empty}
             ;
-RepairTail : Comma Repair RepairTail
+RepairTail : Comma head=Repair tail=RepairTail
                {c: repair_tail_more}
            | %empty
                {c: repair_tail_empty}
            ;
-Repair : LParen Date Assign DateString Comma Description Assign String RParen
+Repair : LParen Date Assign date=DateString Comma Description Assign description=String RParen
            {c: repair}
        ;

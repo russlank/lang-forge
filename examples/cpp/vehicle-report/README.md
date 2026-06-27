@@ -6,6 +6,10 @@ and parser code, then lowers selected reductions into a normalized text report.
 It demonstrates the same compiler front-end shape as the Go, C#, and C
 variants: generated syntax recognition plus handwritten domain extraction.
 
+The grammar includes named RHS labels for manifest/debugging clarity. Generated
+C++ typed reducer contexts are still future backend-parity work, so this
+example keeps small checked helpers around boxed reducer values.
+
 ```sh
 make -C examples/cpp/vehicle-report run
 make -C examples/cpp/vehicle-report test

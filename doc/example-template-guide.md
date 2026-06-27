@@ -77,12 +77,16 @@ ordinary application code.
 Use small typed helpers for reducer arguments:
 
 - check that an argument exists;
-- name the role, such as `left operand` or `print expression`;
+- name the role, such as `left`, `right`, or `print expression`;
 - cast once at the boundary;
 - return domain types such as AST nodes, statement lists, or lexemes.
 
 That pattern keeps generated APIs flexible while making handwritten semantics
 readable and easy to debug.
+
+When the grammar has RHS labels, prefer reading values by label instead of
+position. The generated Go API exposes `Reduction.ValueFor("left")`; typed Go
+contexts go one step further when `%semantic go type` declarations are present.
 
 ## Shared Testdata
 
@@ -141,7 +145,8 @@ make examples-test
 ```
 
 `examples-cleanliness` prevents generated or build artifacts from becoming
-tracked. `examples-parity` checks cross-target calc grammar parity.
-`examples-testdata` checks shared fixtures and goldens. `examples-templates`
-builds and tests every mini-compiler template. `examples-test` includes all of
-those checks before running the richer example projects.
+tracked. `examples-parity` checks cross-target calc, DataKeeper, DRAW, and
+vehicle-report grammar parity. `examples-testdata` checks shared fixtures and
+goldens. `examples-templates` builds and tests every mini-compiler template.
+`examples-test` includes all of those checks before running the richer example
+projects.

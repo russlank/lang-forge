@@ -1,6 +1,6 @@
 # Vehicle Report Demo
 
-This example is inspired by a small Flex/Bison-style compiler homework that
+This example is inspired by a small Flex/Bison-style compiler exercise that
 parsed a `car = { ... }` description and printed XML-like output.
 
 The LangForge version keeps the useful learning shape but makes it a clean
@@ -19,14 +19,25 @@ handwritten example code:
 |---|---|
 | `vehicle.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
+| `model/` | Cycle-free vehicle model shared by generated typed contexts and handwritten code |
 | `parser.go` | Handwritten adapter that calls `ParseWithReducer` and builds the AST |
-| `ast.go` | Handwritten vehicle, feature, and repair model |
+| `ast.go` | Public aliases for the vehicle, feature, and repair model |
 | `report.go` | Handwritten report/XML-like rendering |
 | `cmd/vehicle-report-demo` | Handwritten command-line demo |
 
 Action blocks in `vehicle.lf`, such as `{go: feature}` or
 `{go: repair}`, are reducer labels. LangForge exposes generated action IDs and
 rule values; the adapter maps those reductions into ordinary Go structs.
+
+The grammar also uses named RHS labels such as `info=VehicleInfo`,
+`features=FeaturesField`, and `description=String`, plus `%semantic go type`
+declarations. LangForge turns that metadata into typed reducer contexts such as
+`VehicleReduction` and `RepairReduction`; reducer code reads `ctx.Info` or
+`ctx.Description` instead of numeric positions.
+
+The data model lives in `model/` so the generated child package can import the
+types without importing the public example package that already imports
+`generated/`.
 
 Files that import `generated` use the Go build tag
 `//go:build langforge_generated`. The Makefile generates the package first and

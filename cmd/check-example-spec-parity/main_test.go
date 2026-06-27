@@ -56,6 +56,7 @@ func TestNormalizeSpecPreservesWhitespaceInsideLiteralsAndClasses(t *testing.T) 
 	spec := `%% lexer
 WORD = [ A-Z]+;
 "a b" => token(Word);
+QUOTE = \" ( [1-127] )* \";
 `
 	normalized, err := normalizeSpec(spec)
 	if err != nil {
@@ -66,6 +67,9 @@ WORD = [ A-Z]+;
 	}
 	if !strings.Contains(normalized, `"a b"`) {
 		t.Fatalf("literal whitespace was not preserved: %s", normalized)
+	}
+	if !strings.Contains(normalized, `\"`) {
+		t.Fatalf("escaped quote regex punctuation was not preserved: %s", normalized)
 	}
 }
 
@@ -124,5 +128,26 @@ Expr : left=Expr Plus right=Term {go: add} ;
 	}
 	if !strings.Contains(normalized, "left=Expr") || !strings.Contains(normalized, "right=Term") {
 		t.Fatalf("normalized spec lost RHS labels: %s", normalized)
+	}
+}
+
+func TestNormalizeSpecIgnoresTargetSpecificActionLabelText(t *testing.T) {
+	goSpec, err := normalizeSpec(`%% parser
+S : value=Expr {go: program.withParameters} ;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cSpec, err := normalizeSpec(`%% parser
+S : value=Expr {c: program.with_parameters} ;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if goSpec != cSpec {
+		t.Fatalf("normalized action labels differ\nleft:\n%s\nright:\n%s", goSpec, cSpec)
+	}
+	if !strings.Contains(goSpec, "{ACTION}") || strings.Contains(goSpec, "program.withParameters") {
+		t.Fatalf("action block was not normalized: %s", goSpec)
 	}
 }

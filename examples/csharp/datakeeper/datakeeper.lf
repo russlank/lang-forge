@@ -34,31 +34,31 @@ BLOCK_COMMENT  => skip;
 [1-32]+        => skip;
 
 %% parser
-Program : ParametersList CommandBlock
+Program : parameters=ParametersList block=CommandBlock
             {csharp: program.withParameters}
-        | CommandBlock
+        | block=CommandBlock
             {csharp: program.noParameters}
         ;
 
-ParametersList : Parameters ParametersDecl Semi
+ParametersList : Parameters params=ParametersDecl Semi
                    {csharp: parameters.list}
                ;
-ParametersDecl : Ident ParametersTail
+ParametersDecl : name=Ident tail=ParametersTail
                    {csharp: parameters.decl}
                ;
-ParametersTail : Comma Ident ParametersTail
+ParametersTail : Comma name=Ident tail=ParametersTail
                    {csharp: parameters.tail.more}
                | %empty
                    {csharp: parameters.tail.empty}
                ;
 
-CommandBlock : Begin Statements End
+CommandBlock : Begin statements=Statements End
                  {csharp: commandBlock}
              ;
-Statements : Statement StatementTail
+Statements : head=Statement tail=StatementTail
                {csharp: statements}
            ;
-StatementTail : Semi Statement StatementTail
+StatementTail : Semi head=Statement tail=StatementTail
                   {csharp: statements.tail.more}
               | Semi
                   {csharp: statements.tail.empty}
@@ -66,42 +66,42 @@ StatementTail : Semi Statement StatementTail
                   {csharp: statements.tail.empty}
               ;
 
-Statement : AssignStatement
+Statement : value=AssignStatement
               {csharp: statement.pass}
-          | ReplaceStatement
+          | value=ReplaceStatement
               {csharp: statement.pass}
-          | RunSQLStatement
+          | value=RunSQLStatement
               {csharp: statement.pass}
-          | AddObjectStatement
+          | value=AddObjectStatement
               {csharp: statement.pass}
-          | RemoveObjectStatement
+          | value=RemoveObjectStatement
               {csharp: statement.pass}
-          | RunObjectsJobStatement
+          | value=RunObjectsJobStatement
               {csharp: statement.pass}
           ;
 
-AssignStatement : Ident Assign Value
+AssignStatement : name=Ident Assign value=Value
                     {csharp: assign}
                 ;
-ReplaceStatement : Replace LParen Ident Comma Value Comma Value RParen
+ReplaceStatement : Replace LParen target=Ident Comma old=Value Comma new=Value RParen
                      {csharp: replace}
                  ;
-RunSQLStatement : SQLRun LParen Value Comma Value RParen
+RunSQLStatement : SQLRun LParen instance=Value Comma script=Value RParen
                     {csharp: sqlrun}
                 ;
-AddObjectStatement : AddObject LParen Value Comma Value RParen
+AddObjectStatement : AddObject LParen parent=Value Comma xml=Value RParen
                        {csharp: addObject}
                    ;
-RemoveObjectStatement : RemoveObject LParen Value Comma Value RParen
+RemoveObjectStatement : RemoveObject LParen parent=Value Comma name=Value RParen
                           {csharp: removeObject}
                       ;
-RunObjectsJobStatement : RunObjectsJob LParen Value Comma Value Comma Value RParen
+RunObjectsJobStatement : RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
                            {csharp: runObjectsJob}
                        ;
-Value : String
+Value : token=String
           {csharp: value.string}
-      | Number
+      | token=Number
           {csharp: value.number}
-      | Ident
+      | token=Ident
           {csharp: value.ident}
       ;

@@ -14,7 +14,7 @@ The generated scanner/parser package is created on demand in:
 - `generated`
 
 The generated directory is ignored by Git. The semantic layer uses generated
-rule-reduction actions to build the script model, then lowers it to a small
+typed reducer contexts to build the script model, then lowers it to a small
 stack machine.
 It does not touch a real database or DataKeeper service. The interesting path
 is end to end:
@@ -32,6 +32,7 @@ handwritten example code:
 |---|---|
 | `datakeeper.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
+| `model/` | Cycle-free AST model shared by generated typed contexts and handwritten code |
 | `parser.go` | Handwritten adapter that calls `ParseWithReducer` and builds the AST |
 | `compiler.go` | Handwritten lowering from AST to stack-machine instructions |
 | `vm.go` | Handwritten mock execution engine |
@@ -42,6 +43,16 @@ Action blocks in `datakeeper.lf`, such as `{go: assign}` or
 generated action IDs such as `SemanticActionAssign` and through the readable
 string `Reduction.Action`. The adapter uses a generated `ReducerMap` keyed by
 those IDs to decide what script node or value to create.
+
+The grammar also labels RHS values, for example `parent=Value` and
+`jobsTag=Value`, and declares `%semantic go type` entries for each important
+nonterminal. LangForge uses that contract to generate contexts such as
+`RunObjectsJobReduction`, so reducer code can read `ctx.Parent`, `ctx.Name`,
+and `ctx.JobsTag` instead of counting parser-stack positions.
+
+The AST types live in `model/` because generated Go code is in a child package.
+Both the generated parser and this public example package can depend on
+`model/`, avoiding an import cycle.
 
 Files that import `generated` use the Go build tag
 `//go:build langforge_generated`. The Makefile generates the package first and

@@ -235,7 +235,7 @@ The examples are meant to be read in increasing complexity:
 | 3 | `examples/parser-algorithms` | LR parser algorithm differences and expected SLR conflict |
 | 4 | `examples/go/datakeeper` | DSL syntax, generated reduction hooks, AST adapter, stack-machine lowering, mock execution |
 | 5 | `examples/go/draw` | DSL syntax, generated reduction hooks, interpreter, reusable blocks, rendered output |
-| 6 | `examples/go/vehicle-report` | Homework-inspired Flex/Bison migration shape, generated reductions, AST, XML-like report |
+| 6 | `examples/go/vehicle-report` | Exercise-style Flex/Bison migration shape, generated reductions, AST, XML-like report |
 | 7 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
 | 8 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
 | 9 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
@@ -395,7 +395,7 @@ The vehicle report demo lives under:
 
 - [examples/go/vehicle-report](../examples/go/vehicle-report)
 
-It is inspired by a small Flex/Bison-style compiler homework that parsed a
+It is inspired by a small Flex/Bison-style compiler exercise that parsed a
 `car = { ... }` source file and printed XML-like output. The LangForge version
 keeps that migration-friendly shape while using a combined `.lf` grammar,
 generated Go scanner/parser output, and reducer-backed AST construction.

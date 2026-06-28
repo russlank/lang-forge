@@ -1,4 +1,4 @@
 interface:
   display_name: "LangForge Project Steward"
   short_description: "Review code and align project memory"
-  default_prompt: "Use $langforge-project-steward to review LangForge implementation changes, verify edge cases, and align public docs plus private project memory when available."
+  default_prompt: "Use $langforge-project-steward to review LangForge implementation changes, verify edge cases, align skills/docs, and update private project memory when available."

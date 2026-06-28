@@ -1,6 +1,6 @@
 ---
 name: langforge-spec-authoring
-description: Create, edit, validate, or migrate LangForge grammar specifications. Use when working with `.lf` files, legacy `.l`/`.y` Lex/Yacc inputs, lexer rules, parser productions, `%token`/`%start`/`%type` directives, parser conflicts, regex validation errors, or grammar examples that should be accepted by `lang-forge validate`, `inspect`, or `generate`.
+description: Create, edit, validate, or migrate LangForge grammar specifications. Use when working with `.lf` files, legacy `.l`/`.y` Lex/Yacc inputs, lexer rules, parser productions, `%token`/`%start`/`%type` directives, named RHS labels, semantic type declarations, parser recovery, parser conflicts, regex validation errors, or grammar examples that should be accepted by `lang-forge validate`, `inspect`, or `generate`.
 ---
 
 # LangForge Spec Authoring
@@ -22,8 +22,10 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
    adapters are future work.
 5. Encode precedence through grammar structure because precedence declarations
    are not implemented yet. Use target-tagged parser actions as reducer hooks
-   by default; add `%semantic <target> import` for handwritten semantic
-   dependencies and `%semantic go mode inline` only for intentional
+   by default; add named RHS labels such as `left=Expr`; declare
+   `%semantic <target> type Nonterminal Type` when reducers should have a
+   typed contract; add `%semantic <target> import` for handwritten semantic
+   dependencies; and use `%semantic go mode inline` only for intentional
    target-specific generated Go snippets.
 6. Validate with the source runner first:
 
@@ -42,6 +44,10 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
    directory (`generated/` for Go, C, and C++; `Generated/` for C#) and keep
    generated output out of committed source unless the task explicitly asks for
    a golden fixture.
+9. Use generated `langforge.actions.json` as the cross-target semantic
+   contract. Go can generate typed reducer contexts and coverage validation;
+   C#, C, and C++ currently use checked boxed-helper reducers until typed
+   context parity lands.
 
 ## Rules Of Thumb
 
@@ -51,6 +57,9 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
 - Keep token names and nonterminal names disjoint.
 - Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
   selecting a parser algorithm intentionally. LALR is the default.
+- Use the reserved `error` symbol only for parser recovery productions and keep
+  expected-token aliases/groups in the grammar when diagnostics need friendly
+  names.
 - Use split `.l`/`.y` inputs only for source-only fixtures or import
   experiments; UCDT is inspiration, not a compatibility target.
 

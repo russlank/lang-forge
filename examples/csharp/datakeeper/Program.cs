@@ -59,6 +59,9 @@ static object? DefaultReduce(IReadOnlyList<object?> values)
 
 static T Arg<T>(Reduction ctx, int index, string name)
 {
+    // C# typed reducer contexts are planned backend-parity work. Until then,
+    // keep positional access in one checked helper and pass the grammar role as
+    // a name so failures point back to the intended RHS label.
     if (index < 0 || index >= ctx.Values.Count)
     {
         throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name} at argument {index + 1}");

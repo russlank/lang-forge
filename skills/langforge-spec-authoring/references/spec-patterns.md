@@ -9,6 +9,8 @@ validation debugging.
 %target go
 %package packagename
 %semantic go mode reducer
+%semantic go type StartSymbol *model.Program
+%semantic go type Rule model.Node
 %start StartSymbol
 %token TokenA TokenB TokenC
 
@@ -21,9 +23,9 @@ IDENT     => token(TokenB);
 [1-32]+   => skip;
 
 %% parser
-StartSymbol : Rule ;
-Rule : TokenA TokenB
-     | %empty
+StartSymbol : value=Rule {go: program} ;
+Rule : left=TokenA right=TokenB {go: rule.pair}
+     | %empty {go: rule.empty}
      ;
 ```
 
@@ -45,6 +47,10 @@ Rule : TokenA TokenB
 - Encode precedence by grammar layering:
   `Expr -> Expr Plus Term | Term`, `Term -> Term Mul Factor | Factor`.
 - Use `%empty` for intentional empty productions.
+- Give semantic RHS values labels such as `left=Expr`, `token=Number`, or
+  `body=Block`. Labels are preserved in table JSON and
+  `langforge.actions.json`; Go reducers can read them through typed contexts
+  or `Reduction.ValueFor`.
 - Keep terminals declared with `%token`; every nonterminal should have a rule.
 - Keep token and nonterminal names disjoint.
 - Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
@@ -54,6 +60,26 @@ Rule : TokenA TokenB
 - Use target-tagged reducer labels such as `{go: add}`, `{csharp: add}`,
   `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
   generated `SemanticAction` values with `ReducerMap`.
+- Declare `%semantic <target> type Nonterminal TargetType` when a nonterminal
+  has a real domain value. Go emits typed reducer contexts for eligible
+  actions; all targets record the declared types and labels in
+  `langforge.actions.json`.
+- Treat `{target: name}` as an action label, not embedded behavior. Handwritten
+  reducers map the generated action ID/enum to domain code.
+- Use `Statement : error Semi {target: recover.statement}` for conservative
+  parser recovery. Do not depend on a semantic value for the reserved `error`
+  symbol.
+
+## Semantic Contract Checklist
+
+For every non-trivial production, line up:
+
+- RHS labels in the `.lf` file;
+- target-specific nonterminal type declarations where the value is meaningful;
+- generated action IDs/enums and `langforge.actions.json`;
+- handwritten reducer map entries or switch branches;
+- tests for missing reducer coverage in Go, or checked boxed-helper failures in
+  C#, C, and C++.
 
 ## Legacy Split Inputs
 
@@ -77,5 +103,5 @@ Current split-input support:
 
 When converting legacy samples to `.lf`, keep the original fixture under
 `testdata/ucdt` when useful, then create a modern combined spec under
-`examples/<name>/<name>.lf` if it should become runnable.
+`examples/<target>/<name>/<name>.lf` if it should become runnable.
 Do not treat UCDT behavior as a compatibility contract.

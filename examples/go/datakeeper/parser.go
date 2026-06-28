@@ -30,6 +30,9 @@ func Parse(source string) (*Script, error) {
 	return script, nil
 }
 
+// dataKeeperReducers is the join point between datakeeper.lf and application
+// code. Each key is generated from a `{go: ...}` action label, while each
+// value is a handwritten function that decides the meaning of that reduction.
 var dataKeeperReducers = dksgenerated.ReducerMap{
 	dksgenerated.SemanticActionProgramWithParameters: dksgenerated.TypedProgramWithParameters(reduceProgramWithParameters),
 	dksgenerated.SemanticActionProgramNoParameters:   dksgenerated.TypedProgramNoParameters(reduceProgramNoParameters),
@@ -121,6 +124,9 @@ func reduceRunObjectsJob(ctx dksgenerated.RunObjectsJobReduction) (Statement, er
 	return RunObjectsJobStatement{Parent: ctx.Parent, Name: ctx.Name, JobsTag: ctx.JobsTag}, nil
 }
 
+// Value reductions turn scanner lexemes into the expression nodes consumed by
+// compiler.go. Terminals stay as generated Lexeme values so reducers can use
+// the original text and report domain-specific literal errors.
 func reduceStringValue(ctx dksgenerated.ValueStringReduction) (ValueExpr, error) {
 	decoded, err := decodeStringLexeme(ctx.Token.Text)
 	if err != nil {
@@ -145,6 +151,10 @@ func prependStatement(head Statement, tail []Statement) []Statement {
 	return append([]Statement{head}, tail...)
 }
 
+// decodeStringLexeme accepts both the legacy #{...#} form and normal quoted
+// strings used by the sample inputs. Keeping this outside the grammar makes
+// the scanner responsible for recognizing literals and the reducer responsible
+// for interpreting their text.
 func decodeStringLexeme(text string) (string, error) {
 	if strings.HasPrefix(text, "#{") && strings.HasSuffix(text, "#}") {
 		return strings.TrimSuffix(strings.TrimPrefix(text, "#{"), "#}"), nil

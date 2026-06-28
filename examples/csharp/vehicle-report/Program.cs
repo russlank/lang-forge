@@ -62,6 +62,9 @@ static object? DefaultReduce(IReadOnlyList<object?> values)
 
 static T Arg<T>(Reduction ctx, int index, string name)
 {
+    // The grammar gives RHS values names, but current C# generated reducers are
+    // still boxed. Centralizing the cast keeps each switch branch readable and
+    // makes future typed-context migration mechanical.
     if (index < 0 || index >= ctx.Values.Count)
     {
         throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name} at argument {index + 1}");

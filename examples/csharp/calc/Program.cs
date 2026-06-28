@@ -47,6 +47,8 @@ static Lexeme LexemeArg(Reduction ctx, int index, string name)
 
 static T Arg<T>(Reduction ctx, int index, string name)
 {
+    // C# reducer values are boxed today. Keeping casts here makes each action
+    // handler read like grammar semantics: left operand, right operand, number.
     if (index < 0 || index >= ctx.Values.Count)
     {
         throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.Action} is missing {name} at argument {index + 1}");

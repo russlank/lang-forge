@@ -37,6 +37,8 @@ static void write_text_file(const std::string& path, std::string_view text) {
 }
 
 static dks::Lexeme lexeme_arg(const dks::Reduction& ctx, std::size_t index, std::string_view name) {
+    // C++ typed reducer contexts are planned backend-parity work. For now,
+    // keep std::any casts in small helpers whose names mirror RHS labels.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
@@ -103,6 +105,9 @@ static void append_command(Demo& demo, const std::string& kind, const std::strin
 }
 
 static dks::ReducerMap make_reducers(Demo& demo) {
+    // SemanticAction values are generated from {cpp: ...} labels in the
+    // grammar. ReducerMap keeps semantic dispatch data-driven and leaves all
+    // domain behavior in handwritten C++.
     auto noop = [](const dks::Reduction&) -> dks::Value { return {}; };
     auto pass = [](const dks::Reduction& ctx) -> dks::Value {
         return ctx.values.empty() ? dks::Value{} : ctx.values.at(0);

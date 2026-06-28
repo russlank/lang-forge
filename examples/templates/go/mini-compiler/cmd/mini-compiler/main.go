@@ -111,6 +111,9 @@ func parse(source string) (program, error) {
 }
 
 func reduce(ctx minigen.Reduction) (minigen.Value, error) {
+	// Action IDs are generated from `{go: ...}` labels in mini.lf. This switch
+	// is the handwritten semantic layer: it builds AST nodes and lists while the
+	// generated parser only recognizes valid syntax.
 	switch ctx.ActionID {
 	case minigen.SemanticActionProgram:
 		return program{Statements: statementsArg(ctx, "statements")}, nil
@@ -142,6 +145,8 @@ func reduce(ctx minigen.Reduction) (minigen.Value, error) {
 }
 
 func valueArg(ctx minigen.Reduction, label string) (minigen.Value, error) {
+	// Named RHS labels such as `left=Term` and `token=Number` let starter
+	// projects read semantic values by purpose instead of parser-stack index.
 	value, err := ctx.ValueFor(label)
 	if err != nil {
 		return nil, err

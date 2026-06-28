@@ -31,6 +31,10 @@ func Parse(source string) (*Program, error) {
 	return program, nil
 }
 
+// drawReducers connects each `{go: ...}` action label in draw.lf to the
+// handwritten AST-building function below. The generated typed adapters expose
+// labeled RHS values as fields, so drawing semantics stays independent from
+// parser stack positions.
 var drawReducers = drawgenerated.ReducerMap{
 	drawgenerated.SemanticActionProgram:            drawgenerated.TypedProgram(reduceProgram),
 	drawgenerated.SemanticActionStatements:         drawgenerated.TypedStatements(reduceStatements),
@@ -246,6 +250,8 @@ func prependBinaryTail(op string, right Expr, tail []BinaryTail) []BinaryTail {
 	return append([]BinaryTail{{Op: op, Right: right}}, tail...)
 }
 
+// foldBinary turns the grammar's right-recursive expression tail into the
+// left-associative AST expected by the interpreter.
 func foldBinary(left Expr, tails []BinaryTail) Expr {
 	out := left
 	for _, tail := range tails {

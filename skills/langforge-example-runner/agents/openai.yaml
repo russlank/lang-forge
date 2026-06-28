@@ -1,4 +1,4 @@
 interface:
   display_name: "LangForge Example Runner"
-  short_description: "Generate, build, and run examples"
-  default_prompt: "Use $langforge-example-runner to regenerate LangForge example output, build demos, run samples, and keep generated artifacts out of source control."
+  short_description: "Run examples and templates"
+  default_prompt: "Use $langforge-example-runner to regenerate LangForge example/template output, build demos, run samples, verify manifests/reducers, and keep generated artifacts out of source control."

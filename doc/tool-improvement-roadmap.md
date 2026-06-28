@@ -2,14 +2,14 @@
 
 Document id: `lang-forge-tool-improvement-roadmap-v1`
 Status: `active`
-Last updated: `2026-06-25`
+Last updated: `2026-06-29`
 Owner: `Project maintainers`
 Scope: `Forward-looking public roadmap for LangForge usability, diagnostics, generated APIs, editor tooling, and production-readiness`
 
 **Document purpose:** Capture suggested improvements to LangForge as a parser/scanner/compiler tooling project.  
 **Audience:** LangForge maintainers, contributors, and AI coding agents working on future development.  
 **Scope:** Core generator features, grammar ergonomics, typed semantic values, diagnostics, IDE/editor support, runtime maturity, and production-readiness.  
-**Date:** 2026-06-25
+**Date:** 2026-06-29
 
 ---
 
@@ -74,11 +74,11 @@ LangForge should continue to serve three levels of users:
 
 ### Problem
 
-The current reducer model naturally exposes boxed values:
+The baseline reducer model exposes boxed values:
 
 | Target | Current semantic value style |
 |---|---|
-| Go | `any` |
+| Go | `any` boxed fallback; generated typed contexts when the action contract is complete |
 | C# | `object?` |
 | C | `void*` |
 | C++ | `std::any` |
@@ -135,11 +135,14 @@ All backends emit the labels and declared types in
 `langforge.actions.json`. C#, C, and C++ typed context APIs remain the next
 backend-parity step.
 
-### Acceptance Criteria
+### Current Acceptance Snapshot
 
-- Generated reducers can avoid direct `ctx.Values[n]` access.
-- Type mismatches produce clear compile-time or high-quality runtime errors.
-- Examples use typed accessors consistently.
+- Go reducers can avoid direct `ctx.Values[n]` access through generated typed
+  contexts and `Reduction.ValueFor`.
+- Go `ReducerMap` coverage validation detects missing and unknown handlers
+  before input-dependent parser execution.
+- C#, C, and C++ examples keep small checked helper functions at the boxed
+  boundary until LF-126 adds generated typed context parity.
 - Backward compatibility with boxed reducer mode is preserved.
 
 ---
@@ -533,6 +536,12 @@ Potential lint warnings:
 
 ## 11. Add Project Scaffolding
 
+Current status: examples already provide source-clean starter material under
+`examples/templates/{go,csharp,c,cpp}/mini-compiler`. The next usability step
+is a CLI bootstrap command that copies and rewrites those templates into a new
+project so developers do not have to assemble the generated/handwritten
+boundary by hand. This is tracked internally as `W-071` and `LF-128`.
+
 ### Recommendation
 
 Add:
@@ -541,6 +550,7 @@ Add:
 lang-forge init calc --target go
 lang-forge init mini-compiler --target csharp
 lang-forge init dsl --target cpp --template compiler
+lang-forge init draw-like --target go --template interpreter --out ./draw-like
 ```
 
 ### Templates
@@ -570,13 +580,24 @@ parser adapter
 typed reducer helpers
 AST
 tests
+target build file
+clean generated-output policy
 ```
+
+The generated starter should include a `.lf` file with named RHS labels,
+target-specific semantic type declarations where useful, handwritten reducer
+helpers, README usage, shared Makefile-style commands, and `.gitignore` entries
+for generated/build output.
 
 ### Acceptance Criteria
 
 - New users can start a working parser project in one command.
 - Generated starter projects follow best practices.
 - Templates are kept in sync with examples.
+- Bootstrap output validates, generates, runs, tests, and cleans without manual
+  edits.
+- The command supports Go, C#, C, and C++ targets with target-idiomatic
+  filenames and reducer boundaries.
 
 ---
 

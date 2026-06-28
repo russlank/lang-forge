@@ -46,15 +46,15 @@ Current implementation status:
 - copyable mini-compiler templates under `examples/templates` for Go, C#, C,
   and C++;
 - runnable calc, DataKeeper, DRAW, and vehicle-report examples for Go, C#,
-  and C;
+  C, and C++;
 - Go examples with generated parser reduction hooks, AST construction,
   stack-machine lowering, PNG rendering, and XML-like report output;
 - C# examples with generated `.g.cs` scanner/parser output, .NET 10 builds,
   reducer-backed semantic handling, and console/log reports;
 - C examples with generated C headers/sources, handwritten reducers, a shared
   support module, console/log reports, and a full DRAW PNG renderer;
-- a C++ calculator example with generated C++17 scanner/parser output and
-  reducer-map semantic dispatch.
+- C++ examples with generated C++17 scanner/parser output and reducer-map
+  semantic dispatch.
 
 ## Requirements
 

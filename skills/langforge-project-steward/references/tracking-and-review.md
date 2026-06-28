@@ -13,6 +13,11 @@ Prioritize:
 - Example reproducibility from a clean checkout.
 - Correct separation between generated parser reducer hooks, recognizer-only
   parsing, inline target-specific actions, and handwritten semantic layers.
+- Named RHS labels, target-specific semantic type declarations, generated
+  action manifests, Go typed contexts, and checked boxed-helper boundaries for
+  C#/C/C++.
+- Parser recovery contracts: reserved `error` productions, expected-token
+  diagnostics, partial/recovering APIs, and non-looping progress guarantees.
 - Test coverage for malformed input, edge grammar constructs, and clean
   artifact policy.
 - Cross-target example parity for Go, C#, C, and C++, especially when a scenario
@@ -24,6 +29,8 @@ When behavior or scope changes and private tracking documents are available,
 update the smallest relevant set:
 
 - backlog or implementation queue: states, acceptance criteria, and evidence;
+- wishlist/roadmap/plan links when a new idea graduates from theme to tracked
+  work;
 - baseline or current solution snapshot: current implementation state and
   verification table;
 - handoff notes: what changed, evidence, and next actions;
@@ -45,6 +52,8 @@ Use these commands as evidence candidates:
 /usr/local/go/bin/go build -trimpath -o dist/lang-forge ./cmd/lang-forge
 make examples-test
 make examples-run
+make examples-clean
+make examples-cleanliness
 git diff --check
 ```
 

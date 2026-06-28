@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-generated-code-and-semantics-v1`
 Status: `active`
-Last updated: `2026-06-25`
+Last updated: `2026-06-29`
 Owner: `Project maintainers`
 Scope: `Beginner guide to generated files, semantic actions, reducers, Go build tags, and Go/C#/C/C++ output`
 
@@ -147,6 +147,82 @@ when generated typed contexts need to reference them. DRAW, DataKeeper, and
 vehicle-report use this pattern so `generated/` can import the model package
 without importing the public package that already imports `generated/`.
 
+## From `.lf` To Handwritten Semantics
+
+A useful way to read a LangForge project is to treat the `.lf` file as a
+contract. The generated code enforces the contract, and handwritten code
+implements the meaning behind the contract.
+
+This DataKeeper rule has four important parts:
+
+```lf
+%semantic go import dksmodel "github.com/russlank/lang-forge/examples/go/datakeeper/model"
+%semantic go type RunObjectsJobStatement dksmodel.Statement
+
+RunObjectsJobStatement :
+    RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
+      {go: runObjectsJob}
+;
+```
+
+| `.lf` part | Generated result | Handwritten responsibility |
+|---|---|---|
+| `%semantic go import dksmodel ...` | Go generated code can import the model package when typed contexts mention it. | Keep shared AST/model types in that package so generated code and application code do not form an import cycle. |
+| `%semantic go type RunObjectsJobStatement dksmodel.Statement` | The reduction for this nonterminal is expected to return `dksmodel.Statement`. | Implement a reducer function that returns the declared type. |
+| `parent=Value`, `name=Value`, `jobsTag=Value` | RHS labels are preserved in tables, manifests, and Go typed context fields. | Read `ctx.Parent`, `ctx.Name`, and `ctx.JobsTag` instead of counting stack positions. |
+| `{go: runObjectsJob}` | The generated parser exposes an action ID such as `SemanticActionRunObjectsJob` and manifest entry named `runObjectsJob`. | Register a reducer handler for that action ID. The label is not executable code by itself. |
+
+The matching handwritten Go adapter looks like this:
+
+```go
+var dataKeeperReducers = dksgenerated.ReducerMap{
+	dksgenerated.SemanticActionRunObjectsJob:
+		dksgenerated.TypedRunObjectsJob(reduceRunObjectsJob),
+}
+
+func reduceRunObjectsJob(ctx dksgenerated.RunObjectsJobReduction) (Statement, error) {
+	return RunObjectsJobStatement{
+		Parent: ctx.Parent,
+		Name: ctx.Name,
+		JobsTag: ctx.JobsTag,
+	}, nil
+}
+```
+
+For C#, C, and C++, the same `.lf` contract is already written into
+`langforge.actions.json`, but generated typed context APIs are still planned.
+Those examples therefore use checked helper functions near the reducer
+boundary. The helper names should still mirror the grammar labels:
+
+```cpp
+append_command(
+    demo,
+    "runobjectsjob",
+    string_arg(ctx, 2, "parent"),
+    string_arg(ctx, 4, "name"),
+    string_arg(ctx, 6, "jobs tag"));
+```
+
+That keeps the boxed boundary small and makes future migration to generated
+typed contexts mechanical.
+
+## The Action Manifest
+
+Every generated backend writes `langforge.actions.json` beside the generated
+scanner and parser. Treat it as the machine-readable reduction contract. It
+records:
+
+- each semantic action label and generated numeric ID;
+- every grammar rule that uses the action;
+- the LHS nonterminal and its declared semantic result type;
+- each RHS symbol, position, optional label, and semantic type;
+- whether LangForge could generate one consistent typed context for the
+  action, plus a reason when it could not.
+
+Tests can read this file to catch grammar/reducer drift. The Go examples use
+that pattern to require complete typed contexts for DRAW and to check reducer
+coverage for DataKeeper and vehicle-report.
+
 ## Why Reducer Mode Is The Default
 
 Reducer mode keeps generated code separate from application behavior.
@@ -289,6 +365,9 @@ For C++ output, LangForge writes local `generated` directories:
 
 ```text
 examples/cpp/calc/generated/
+examples/cpp/datakeeper/generated/
+examples/cpp/draw/generated/
+examples/cpp/vehicle-report/generated/
 ```
 
 Each C++ generated directory contains `tokens.hpp`, `scanner.hpp`,

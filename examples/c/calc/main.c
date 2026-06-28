@@ -36,6 +36,11 @@ static const calc_lexeme *calc_value_as_lexeme(calc_value value)
 
 static int calc_check_arg(const calc_reduction *ctx, size_t index, const char *name, calc_error *error)
 {
+    /*
+     * Keep boxed C semantic-value checks in one helper. Reducer branches pass
+     * names like "left operand" so failures describe the grammar role instead
+     * of only the numeric RHS position.
+     */
     if (index >= ctx->rhs_count || ctx->values[index] == NULL)
     {
         snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
@@ -93,6 +98,11 @@ static calc_value calc_reduce_binary(const calc_reduction *ctx, calc_demo *demo,
 static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error *error)
 {
     calc_demo *demo = (calc_demo *)user;
+    /*
+     * action_id values are generated from {c: ...} labels in calc.lf. The
+     * handwritten reducer supplies the arithmetic; generated code only decides
+     * which grammar rule reduced.
+     */
     switch (ctx->action_id)
     {
     case CALC_ACTION_START:

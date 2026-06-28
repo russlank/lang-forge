@@ -109,6 +109,9 @@ internal static class DrawParser
 
     private static T Arg<T>(Reduction ctx, int index, string name)
     {
+        // Current C# output records named RHS labels in the manifest, while the
+        // reducer runtime still passes boxed values. Keep all casts here and
+        // use the grammar role name in diagnostics.
         if (index < 0 || index >= ctx.Values.Count)
         {
             throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.Action} is missing {name} at argument {index + 1}");

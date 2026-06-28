@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-examples-v1`
 Status: `active`
-Last updated: `2026-06-19`
+Last updated: `2026-06-29`
 Owner: `Project maintainers`
 Scope: `Examples and fixture guide for LangForge`
 
@@ -238,7 +238,8 @@ The examples are meant to be read in increasing complexity:
 | 6 | `examples/go/vehicle-report` | Exercise-style Flex/Bison migration shape, generated reductions, AST, XML-like report |
 | 7 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
 | 8 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
-| 9 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
+| 9 | `examples/cpp/*` | The same example set generated for C++17 with `enum class` actions, `ReducerMap`, and static table lookup |
+| 10 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
 
 For starter-project guidance rather than a demo tour, read
 [Example Template Guide](example-template-guide.md). It explains the
@@ -337,6 +338,14 @@ make -C examples/csharp/calc LANG_FORGE=../../../dist/lang-forge run
 make -C examples/csharp/datakeeper LANG_FORGE=../../../dist/lang-forge run
 make -C examples/csharp/draw LANG_FORGE=../../../dist/lang-forge run
 make -C examples/csharp/vehicle-report LANG_FORGE=../../../dist/lang-forge run
+make -C examples/c/calc LANG_FORGE=../../../dist/lang-forge run
+make -C examples/c/datakeeper LANG_FORGE=../../../dist/lang-forge run
+make -C examples/c/draw LANG_FORGE=../../../dist/lang-forge run
+make -C examples/c/vehicle-report LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/calc LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/datakeeper LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/draw LANG_FORGE=../../../dist/lang-forge run
+make -C examples/cpp/vehicle-report LANG_FORGE=../../../dist/lang-forge run
 ```
 
 ## DRAW PNG Renderer Demo

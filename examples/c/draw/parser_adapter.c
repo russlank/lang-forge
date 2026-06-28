@@ -15,6 +15,11 @@ static void *draw_alloc(draw_context *ctx, size_t size, draw_error *error, const
 }
 
 static draw_value draw_arg_value(const draw_reduction *ctx, size_t index, const char *name, draw_error *error) {
+    /*
+     * The C backend currently passes boxed semantic values. This helper keeps
+     * positional access in one place while call sites use grammar-oriented
+     * names such as "figure reference" and "right expression".
+     */
     if (index >= ctx->rhs_count) {
         snprintf(error->message, sizeof(error->message),
             "rule %d action %s is missing %s at argument %lu",

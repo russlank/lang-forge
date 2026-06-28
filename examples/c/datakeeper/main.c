@@ -20,6 +20,11 @@ static const datakeeper_lexeme *dks_lexeme(datakeeper_value value) {
 }
 
 static datakeeper_value dks_arg(const datakeeper_reduction *ctx, size_t index, const char *name, datakeeper_error *error) {
+    /*
+     * C generated reducers expose boxed values as void pointers. Keep all
+     * positional access in this helper and pass the grammar role as name so
+     * diagnostics remain close to labels such as parent=Value or jobsTag=Value.
+     */
     if (index >= ctx->rhs_count || ctx->values[index] == NULL) {
         snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
         return NULL;
@@ -125,6 +130,11 @@ static datakeeper_value dks_default_reduce(const datakeeper_reduction *ctx) {
 
 static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, datakeeper_error *error) {
     dks_demo *demo = (dks_demo *)user;
+    /*
+     * action_id values are generated from {c: ...} labels in datakeeper.lf.
+     * This switch is handwritten semantics: it records mock instructions and
+     * returns only the intermediate values later reductions need.
+     */
     switch (ctx->action_id) {
     case DATAKEEPER_ACTION_PARAMETERS_DECL: {
         const datakeeper_lexeme *parameter_name = dks_lexeme_arg(ctx, 0, "parameter name", error);

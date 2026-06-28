@@ -15,8 +15,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/lang-forge",
-      "args": ["validate", "--spec", "${workspaceFolder}/examples/calc/calc.lf"]
+      "args": ["validate", "--spec", "${workspaceFolder}/examples/go/calc/calc.lf"]
     }
   ]
 }
-

@@ -1,6 +1,6 @@
 ---
 name: langforge-project-steward
-description: Review, harden, document, and track LangForge implementation work. Use when doing code review, bug/edge-case analysis, SOLID/refactoring checks, test coverage improvement, generated-code policy changes, private tracking alignment when available, documentation updates, or preparing implementation context for the next agent.
+description: Review, harden, document, and track LangForge implementation work. Use when doing code review, bug/edge-case analysis, SOLID/refactoring checks, test coverage improvement, generated-code policy changes, repo-local skill updates, private tracking alignment when available, documentation updates, or preparing implementation context for the next agent.
 ---
 
 # LangForge Project Steward
@@ -24,7 +24,8 @@ available.
    `internal/spec`, `internal/lex`, `internal/parse`, `internal/codegen`, and
    example-local semantic layers.
 6. Keep one source of truth for repeated concepts such as parser algorithms,
-   generated-output policy, and example workflows.
+   generated-output policy, semantic action contracts, bootstrap templates, and
+   example workflows.
 7. Update user-facing docs and private project memory, when present, if
    behavior, workflows, or verification evidence changes.
 
@@ -51,6 +52,9 @@ cleaning example outputs and rerunning root tests/builds.
 Update these when relevant:
 
 - `README.md`, `doc/usage.md`, `doc/examples.md`, `doc/specification.md`,
-  `doc/architecture.md`.
+  `doc/architecture.md`, `doc/generated-code-and-semantics.md`,
+  `doc/tool-improvement-roadmap.md`, and `doc/example-template-guide.md`.
+- Repo-local skills under `skills/` when workflows or current capabilities
+  change.
 - Private project memory and handoff notes, when available in the workspace.
 - Review notes for substantial findings, when the repository keeps them.

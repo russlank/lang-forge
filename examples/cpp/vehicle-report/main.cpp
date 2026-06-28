@@ -39,6 +39,8 @@ static void write_text_file(const std::string& path, std::string_view text) {
 }
 
 static vehicle::Lexeme lexeme_arg(const vehicle::Reduction& ctx, std::size_t index, std::string_view name) {
+    // Current C++ reducers receive boxed std::any values. This helper keeps the
+    // cast and bounds check in one place while call sites name the grammar role.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
@@ -58,6 +60,8 @@ static std::string unquote(vehicle::Lexeme lexeme) {
 }
 
 static vehicle::ReducerMap make_reducers(Demo& demo) {
+    // The map keys are generated from {cpp: ...} labels in vehicle.lf. Values
+    // are ordinary lambdas that build the example's report model.
     auto noop = [](const vehicle::Reduction&) -> vehicle::Value { return {}; };
     return vehicle::ReducerMap{
         {vehicle::SemanticAction::Vehicle, noop},

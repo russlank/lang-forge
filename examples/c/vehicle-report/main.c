@@ -26,6 +26,11 @@ static char *vehicle_copy_lexeme(vehicle_demo *demo, const vehicle_report_lexeme
 }
 
 static vehicle_report_value vehicle_arg(const vehicle_report_reduction *ctx, size_t index, const char *name, vehicle_report_error *error) {
+    /*
+     * This is the boxed C reducer boundary. Callers provide a grammar-oriented
+     * name such as "feature value" so errors explain the semantic role, not
+     * only the numeric parser-stack position.
+     */
     if (index >= ctx->rhs_count || ctx->values[index] == NULL) {
         snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
         return NULL;
@@ -59,6 +64,11 @@ static vehicle_report_value vehicle_default_reduce(const vehicle_report_reductio
 
 static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, void *user, vehicle_report_error *error) {
     vehicle_demo *demo = (vehicle_demo *)user;
+    /*
+     * Generated action IDs come from {c: ...} labels in vehicle.lf. The switch
+     * below turns recognized fields into a report; generated parser code never
+     * knows about report formatting.
+     */
     switch (ctx->action_id) {
     case VEHICLE_REPORT_ACTION_FIELD_MODEL: {
         char *model = vehicle_unquote(demo, vehicle_lexeme_arg(ctx, 2, "model literal", error));

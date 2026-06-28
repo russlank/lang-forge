@@ -28,6 +28,9 @@ static std::string text_arg(const draw::Reduction& ctx, std::size_t index, const
 
 template <typename T>
 static T value_arg(const draw::Reduction& ctx, std::size_t index, const std::string& name) {
+    // Generated C++ typed contexts are future backend-parity work. Until then,
+    // keep std::any extraction here and let reducer entries speak in grammar
+    // roles instead of raw stack indexes.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing " + name);
     }
@@ -139,6 +142,9 @@ static Color parse_color(std::string text) {
 }
 
 draw::ReducerMap make_reducers() {
+    // The map keys are generated from {cpp: ...} labels in draw.lf. Each lambda
+    // is handwritten semantic code that builds the DRAW AST consumed by the
+    // renderer.
     return draw::ReducerMap{
         {draw::SemanticAction::Program, [](const draw::Reduction& ctx) -> draw::Value {
             auto program = std::make_shared<Program>();

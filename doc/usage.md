@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-usage-v1`
 Status: `active`
-Last updated: `2026-06-25`
+Last updated: `2026-06-29`
 Owner: `Project maintainers`
 Scope: `CLI usage guide for the current LangForge implementation`
 
@@ -261,7 +261,8 @@ generated `ReducerMap`.
 
 The C++ examples are Makefile-based rather than CMake-based. The repository
 includes shared VS Code settings that tell the Microsoft C/C++ extension to use
-C++17 and to index `examples/cpp/calc/generated`. Without those settings,
+C++17 and to index the generated include folders for the C++ example family.
+Without those settings,
 IntelliSense may parse `main.cpp` with an older C++ dialect and incorrectly
 underline valid C++17 names such as `std::string_view` or `std::any_cast`.
 

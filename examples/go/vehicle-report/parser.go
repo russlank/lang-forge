@@ -32,6 +32,9 @@ func Parse(source string) (*Vehicle, error) {
 	return vehicle, nil
 }
 
+// vehicleReducers maps `{go: ...}` action labels from vehicle.lf to ordinary
+// Go functions. The generated typed adapters check the reduction shape once,
+// then the reducer body can work with named fields such as ctx.Description.
 var vehicleReducers = vehiclegen.ReducerMap{
 	vehiclegen.SemanticActionVehicle:          vehiclegen.TypedVehicle(reduceVehicle),
 	vehiclegen.SemanticActionInfo:             vehiclegen.TypedInfo(reduceInfo),
@@ -148,6 +151,9 @@ func prependRepair(head Repair, tail []Repair) []Repair {
 	return append([]Repair{head}, tail...)
 }
 
+// decodeQuoted is intentionally semantic code, not lexer code: the token tells
+// us a quoted literal was recognized, and the reducer decides how that literal
+// becomes a report field.
 func decodeQuoted(text string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(text, "\""), "\"")
 }

@@ -99,11 +99,12 @@ func Generate(input Input, outDir string) error {
 		return err
 	}
 	files := map[string]string{
-		"tokens.h":  renderTokensHeader(prefix, input.Spec.SourceFile, tokens, tokenIDs),
-		"scanner.h": renderScannerHeader(prefix, input.Spec.SourceFile),
-		"scanner.c": renderScannerSource(prefix, input.Spec.SourceFile, input.DFA, tokens, tokenIDs),
-		"parser.h":  renderParserHeader(prefix, input.Spec.SourceFile, actions),
-		"parser.c":  renderParserSource(prefix, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions),
+		"tokens.h":       renderTokensHeader(prefix, input.Spec.SourceFile, tokens, tokenIDs),
+		"scanner.h":      renderScannerHeader(prefix, input.Spec.SourceFile),
+		"scanner.c":      renderScannerSource(prefix, input.Spec.SourceFile, input.DFA, tokens, tokenIDs),
+		"parser.h":       renderParserHeader(prefix, input.Spec.SourceFile, actions),
+		"parser_typed.h": renderTypedParserHeader(prefix, input.Spec.SourceFile, actionManifest, actions),
+		"parser.c":       renderParserSource(prefix, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions),
 	}
 	for name, content := range files {
 		if err := writeFile(filepath.Join(outDir, name), content); err != nil {
@@ -424,7 +425,7 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	}
 	b.WriteString("} " + prefix + "_semantic_action;\n\n")
 	b.WriteString("typedef void *" + prefix + "_value;\n\n")
-	b.WriteString("typedef struct " + prefix + "_reduction {\n    int rule;\n    const char *lhs;\n    const char **rhs;\n    size_t rhs_count;\n    " + prefix + "_semantic_action action_id;\n    const char *action;\n    " + prefix + "_value *values;\n} " + prefix + "_reduction;\n\n")
+	b.WriteString("typedef struct " + prefix + "_reduction {\n    int rule;\n    const char *lhs;\n    const char **rhs;\n    size_t rhs_count;\n    const char **labels;\n    size_t label_count;\n    " + prefix + "_semantic_action action_id;\n    const char *action;\n    " + prefix + "_value *values;\n} " + prefix + "_reduction;\n\n")
 	b.WriteString("typedef " + prefix + "_value (*" + prefix + "_reduce_fn)(const " + prefix + "_reduction *ctx, void *user, " + prefix + "_error *error);\n\n")
 	b.WriteString("/* One expected terminal or reporting group. */\n")
 	b.WriteString("typedef struct " + prefix + "_expected_token {\n    const char *symbol;\n    const char *display;\n    const char *const *members;\n    size_t member_count;\n} " + prefix + "_expected_token;\n\n")
@@ -433,12 +434,119 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("/* A possibly partial semantic value plus owned syntax diagnostics. */\n")
 	b.WriteString("typedef struct " + prefix + "_parse_result {\n    " + prefix + "_value value;\n    " + prefix + "_parse_diagnostic *diagnostics;\n    size_t diagnostic_count;\n    int accepted;\n} " + prefix + "_parse_result;\n\n")
 	b.WriteString("const char *" + prefix + "_semantic_action_name(" + prefix + "_semantic_action action);\n")
+	b.WriteString("int " + prefix + "_reduction_value_for(const " + prefix + "_reduction *ctx, const char *label, " + prefix + "_value *out, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
 	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_parse_result_init(" + prefix + "_parse_result *result);\n")
 	b.WriteString("void " + prefix + "_parse_result_free(" + prefix + "_parse_result *result);\n\n")
+	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
+	return b.String()
+}
+
+func renderTypedParserHeader(prefix string, source string, manifest action.Manifest, actions []SemanticAction) string {
+	guard := headerGuard(prefix, "PARSER_TYPED")
+	var b strings.Builder
+	b.WriteString(cHeader(source, "parser_typed.h"))
+	b.WriteString("#ifndef " + guard + "\n#define " + guard + "\n\n")
+	b.WriteString("#include \"parser.h\"\n\n")
+	b.WriteString("#include <stdio.h>\n\n")
+	b.WriteString("#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n")
+	typedActions := typedCManifestActions(manifest, actions)
+	if len(typedActions) == 0 {
+		b.WriteString("/* No consistently typed semantic actions were declared for this grammar. */\n\n")
+		b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
+		return b.String()
+	}
+	constants := semanticActionIDs(actions)
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		contextType := prefix + "_" + actionName + "_reduction"
+		handlerType := prefix + "_" + actionName + "_handler"
+		b.WriteString("/* Typed context for semantic action " + cString(semanticAction.Name) + ". */\n")
+		b.WriteString("typedef struct " + contextType + " {\n")
+		b.WriteString("    const " + prefix + "_reduction *reduction;\n")
+		for _, field := range typedCFields(prefix, semanticAction.Rules[0]) {
+			b.WriteString("    " + field.Type + " " + field.Name + ";\n")
+		}
+		b.WriteString("} " + contextType + ";\n\n")
+		b.WriteString("typedef " + prefix + "_value (*" + handlerType + ")(const " + contextType + " *ctx, void *user, " + prefix + "_error *error);\n\n")
+	}
+	b.WriteString("typedef struct " + prefix + "_typed_reducer {\n")
+	b.WriteString("    void *user;\n")
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		b.WriteString("    " + prefix + "_" + actionName + "_handler " + actionName + ";\n")
+	}
+	b.WriteString("} " + prefix + "_typed_reducer;\n\n")
+	b.WriteString("typedef struct " + prefix + "_boxed_typed_reducer {\n")
+	b.WriteString("    " + prefix + "_reduce_fn reducer;\n")
+	b.WriteString("    void *user;\n")
+	b.WriteString("} " + prefix + "_boxed_typed_reducer;\n\n")
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		contextType := prefix + "_" + actionName + "_reduction"
+		b.WriteString("static inline " + prefix + "_value " + prefix + "_" + actionName + "_boxed_typed_handler(const " + contextType + " *ctx, void *user, " + prefix + "_error *error) {\n")
+		b.WriteString("    const " + prefix + "_boxed_typed_reducer *boxed = (const " + prefix + "_boxed_typed_reducer *)user;\n")
+		b.WriteString("    if (boxed == NULL || boxed->reducer == NULL) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"boxed typed reducer is required\"); } return NULL; }\n")
+		b.WriteString("    return boxed->reducer(ctx->reduction, boxed->user, error);\n")
+		b.WriteString("}\n\n")
+	}
+	b.WriteString("static inline " + prefix + "_typed_reducer " + prefix + "_typed_reducer_from_boxed(" + prefix + "_boxed_typed_reducer *storage, " + prefix + "_reduce_fn reducer, void *user) {\n")
+	b.WriteString("    if (storage != NULL) { storage->reducer = reducer; storage->user = user; }\n")
+	b.WriteString("    " + prefix + "_typed_reducer typed;\n")
+	b.WriteString("    typed.user = storage;\n")
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		b.WriteString("    typed." + actionName + " = " + prefix + "_" + actionName + "_boxed_typed_handler;\n")
+	}
+	b.WriteString("    return typed;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_typed_reducer_validate(const " + prefix + "_typed_reducer *reducer, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (reducer == NULL) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"typed reducer is required\"); } return 0; }\n")
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		b.WriteString("    if (reducer->" + actionName + " == NULL) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"typed reducer missing handler " + actionName + "\"); } return 0; }\n")
+	}
+	b.WriteString("    return 1;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline " + prefix + "_value " + prefix + "_typed_reduce(const " + prefix + "_reduction *ctx, void *user, " + prefix + "_error *error) {\n")
+	b.WriteString("    const " + prefix + "_typed_reducer *reducer = (const " + prefix + "_typed_reducer *)user;\n")
+	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return NULL; }\n")
+	b.WriteString("    switch (ctx->action_id) {\n")
+	for _, semanticAction := range typedActions {
+		actionName := cMemberName(semanticAction.Name)
+		contextType := prefix + "_" + actionName + "_reduction"
+		b.WriteString("    case " + constants[semanticAction.Name] + ": {\n")
+		b.WriteString("        " + contextType + " typed;\n")
+		b.WriteString("        typed.reduction = ctx;\n")
+		for _, field := range typedCFields(prefix, semanticAction.Rules[0]) {
+			b.WriteString("        " + prefix + "_value " + field.Local + " = NULL;\n")
+			b.WriteString("        if (!" + prefix + "_reduction_value_for(ctx, " + cString(field.Label) + ", &" + field.Local + ", error)) { return NULL; }\n")
+			if !field.Pointer {
+				b.WriteString("        if (" + field.Local + " == NULL) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"typed reducer label " + field.Name + " has null value\"); } return NULL; }\n")
+			}
+			b.WriteString("        typed." + field.Name + " = " + fieldCValueExpr(field, field.Local) + ";\n")
+		}
+		b.WriteString("        return reducer->" + actionName + "(&typed, reducer->user, error);\n")
+		b.WriteString("    }\n")
+	}
+	b.WriteString("    case " + actionNone(prefix) + ":\n")
+	b.WriteString("        return ctx->rhs_count == 1 ? ctx->values[0] : NULL;\n")
+	b.WriteString("    default:\n")
+	b.WriteString("        if (error != NULL) { snprintf(error->message, sizeof(error->message), \"no typed reducer handler for action %s\", ctx->action); }\n")
+	b.WriteString("        return NULL;\n")
+	b.WriteString("    }\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_typed(const " + prefix + "_lexeme *tokens, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
+	b.WriteString("    return " + prefix + "_parse_value(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *tokens, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("}\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
 	return b.String()
 }
@@ -452,7 +560,7 @@ func renderParserSource(prefix string, source string, project *spec.Spec, table 
 	b.WriteString("typedef struct { const char *symbol; lf_action_kind kind; int state; int rule; } lf_action_entry;\n")
 	b.WriteString("typedef struct { size_t start; size_t count; } lf_row;\n")
 	b.WriteString("typedef struct { const char *symbol; int state; } lf_goto_entry;\n")
-	b.WriteString("typedef struct { int id; const char *lhs; const char **rhs; size_t rhs_count; " + prefix + "_semantic_action action; } lf_rule;\n\n")
+	b.WriteString("typedef struct { int id; const char *lhs; const char **rhs; size_t rhs_count; const char **labels; size_t label_count; " + prefix + "_semantic_action action; } lf_rule;\n\n")
 	b.WriteString("typedef struct { size_t start; size_t count; } lf_expected_row;\n")
 	b.WriteString("typedef struct { const char *symbol; const char *display; } lf_alias_entry;\n\n")
 	b.WriteString(renderActionName(prefix, actions))
@@ -689,7 +797,7 @@ int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, s
             }
             ` + prefix + `_value result = NULL;
             if (reducer != NULL && rule->action != ` + actionNone(prefix) + `) {
-                ` + prefix + `_reduction ctx = {rule->id, rule->lhs, rule->rhs, rule->rhs_count, rule->action, ` + prefix + `_semantic_action_name(rule->action), rhs_values};
+                ` + prefix + `_reduction ctx = {rule->id, rule->lhs, rule->rhs, rule->rhs_count, rule->labels, rule->label_count, rule->action, ` + prefix + `_semantic_action_name(rule->action), rhs_values};
                 result = reducer(&ctx, user, error);
                 if (error != NULL && error->message[0] != '\0') { free(rhs_values); free(states); free(values); return 0; }
             } else if (rule->rhs_count == 1) {
@@ -741,6 +849,19 @@ func renderActionName(prefix string, actions []SemanticAction) string {
 		b.WriteString(fmt.Sprintf("    case %s: return %s;\n", action.Constant, cString(action.Name)))
 	}
 	b.WriteString("    default: return \"UNKNOWN\";\n    }\n}\n\n")
+	b.WriteString("int " + prefix + "_reduction_value_for(const " + prefix + "_reduction *ctx, const char *label, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (out != NULL) { *out = NULL; }\n")
+	b.WriteString("    if (ctx == NULL || label == NULL) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"reduction and label are required\"); } return 0; }\n")
+	b.WriteString("    for (size_t i = 0; i < ctx->label_count; i++) {\n")
+	b.WriteString("        if (ctx->labels[i] != NULL && strcmp(ctx->labels[i], label) == 0) {\n")
+	b.WriteString("            if (i >= ctx->rhs_count) { if (error != NULL) { snprintf(error->message, sizeof(error->message), \"reduction label has no value\"); } return 0; }\n")
+	b.WriteString("            if (out != NULL) { *out = ctx->values[i]; }\n")
+	b.WriteString("            return 1;\n")
+	b.WriteString("        }\n")
+	b.WriteString("    }\n")
+	b.WriteString("    if (error != NULL) { snprintf(error->message, sizeof(error->message), \"reduction label was not found\"); }\n")
+	b.WriteString("    return 0;\n")
+	b.WriteString("}\n\n")
 	return b.String()
 }
 
@@ -756,6 +877,15 @@ func renderParserRules(prefix string, table *parse.Table, actionIDs map[string]s
 			}
 		}
 		b.WriteString("};\n")
+		b.WriteString(fmt.Sprintf("static const char *%s_rule_%d_labels[] = {", prefix, rule.ID))
+		if len(rule.Labels) == 0 {
+			b.WriteString("NULL")
+		} else {
+			for _, label := range rule.Labels {
+				b.WriteString(cString(label) + ", ")
+			}
+		}
+		b.WriteString("};\n")
 	}
 	b.WriteString("\nstatic const lf_rule " + prefix + "_rules[] = {\n")
 	for _, rule := range table.Rules {
@@ -763,7 +893,7 @@ func renderParserRules(prefix string, table *parse.Table, actionIDs map[string]s
 		if id, ok := actionIDs[strings.TrimSpace(rule.Actions["c"])]; ok {
 			action = id
 		}
-		b.WriteString(fmt.Sprintf("    {%d, %s, %s_rule_%d_rhs, %d, %s},\n", rule.ID, cString(rule.LHS), prefix, rule.ID, len(rule.RHS), action))
+		b.WriteString(fmt.Sprintf("    {%d, %s, %s_rule_%d_rhs, %d, %s_rule_%d_labels, %d, %s},\n", rule.ID, cString(rule.LHS), prefix, rule.ID, len(rule.RHS), prefix, rule.ID, len(rule.Labels), action))
 	}
 	b.WriteString("};\n\n")
 	return b.String()
@@ -938,6 +1068,77 @@ func semanticActionIDs(actions []SemanticAction) map[string]string {
 	return out
 }
 
+func typedCManifestActions(manifest action.Manifest, actions []SemanticAction) []action.Action {
+	constants := semanticActionIDs(actions)
+	var out []action.Action
+	for _, semanticAction := range manifest.Actions {
+		if !semanticAction.Typed || len(semanticAction.Rules) == 0 {
+			continue
+		}
+		if constants[semanticAction.Name] == "" {
+			continue
+		}
+		out = append(out, semanticAction)
+	}
+	return out
+}
+
+type cTypedField struct {
+	Label   string
+	Name    string
+	Local   string
+	Type    string
+	Pointer bool
+}
+
+func typedCFields(prefix string, rule action.Rule) []cTypedField {
+	used := map[string]int{}
+	var fields []cTypedField
+	for _, operand := range rule.RHS {
+		if operand.Label == "" {
+			continue
+		}
+		base := cMemberName(operand.Label)
+		if base == "" {
+			base = "value"
+		}
+		used[base]++
+		name := base
+		if used[base] > 1 {
+			name = fmt.Sprintf("%s_%d", base, used[base])
+		}
+		fieldType := strings.TrimSpace(operand.Type)
+		if fieldType == "" {
+			fieldType = "void *"
+		}
+		pointer := cTypeIsPointer(fieldType)
+		if fieldType == "lexeme" {
+			fieldType = "const " + prefix + "_lexeme *"
+			pointer = true
+		}
+		fields = append(fields, cTypedField{
+			Label:   operand.Label,
+			Name:    name,
+			Local:   "value_" + name,
+			Type:    fieldType,
+			Pointer: pointer,
+		})
+	}
+	return fields
+}
+
+func fieldCValueExpr(field cTypedField, local string) string {
+	if field.Pointer {
+		return "(" + field.Type + ")" + local
+	}
+	return "*((" + field.Type + " *)" + local + ")"
+}
+
+func cTypeIsPointer(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return strings.Contains(trimmed, "*")
+}
+
 func tokenIdentifiers(prefix string, tokens []string) map[string]string {
 	used := map[string]int{"EOF": 1, "ERROR": 1}
 	out := map[string]string{}
@@ -1013,6 +1214,42 @@ func cIdentifierSuffix(name string) string {
 		}
 	}
 	return strings.Trim(b.String(), "_")
+}
+
+func cMemberName(name string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range name {
+		if r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if b.Len() == 0 && unicode.IsDigit(r) {
+				b.WriteString("value_")
+			}
+			b.WriteRune(unicode.ToLower(r))
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore && b.Len() > 0 {
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		out = "value"
+	}
+	if cKeywords[out] {
+		out = "value_" + out
+	}
+	return out
+}
+
+var cKeywords = map[string]bool{
+	"auto": true, "break": true, "case": true, "char": true, "const": true, "continue": true,
+	"default": true, "do": true, "double": true, "else": true, "enum": true, "extern": true,
+	"float": true, "for": true, "goto": true, "if": true, "inline": true, "int": true,
+	"long": true, "register": true, "restrict": true, "return": true, "short": true, "signed": true,
+	"sizeof": true, "static": true, "struct": true, "switch": true, "typedef": true, "union": true,
+	"unsigned": true, "void": true, "volatile": true, "while": true,
 }
 
 func cHeader(source, file string) string {

@@ -1,5 +1,7 @@
 #include "parser_adapter.hpp"
 
+#include "generated/parser_typed.hpp"
+
 #include <algorithm>
 #include <any>
 #include <cmath>
@@ -28,9 +30,9 @@ static std::string text_arg(const draw::Reduction& ctx, std::size_t index, const
 
 template <typename T>
 static T value_arg(const draw::Reduction& ctx, std::size_t index, const std::string& name) {
-    // Generated C++ typed contexts are future backend-parity work. Until then,
-    // keep std::any extraction here and let reducer entries speak in grammar
-    // roles instead of raw stack indexes.
+    // Boxed reducers still receive std::any values. Typed mode validates the
+    // generated named-label context first, then delegates to this compatibility
+    // implementation so AST construction remains a single source of truth.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing " + name);
     }
@@ -288,8 +290,12 @@ draw::ReducerMap make_reducers() {
     };
 }
 
-ProgramPtr parse_program(const std::string& source) {
-    return std::any_cast<ProgramPtr>(draw::parse_value(draw::tokenize(source), make_reducers()));
+draw::ReducerMap make_typed_reducers() {
+    return draw::typed_reducer_map_from_boxed(make_reducers());
+}
+
+ProgramPtr parse_program(const std::string& source, bool typed) {
+    return std::any_cast<ProgramPtr>(draw::parse_value(draw::tokenize(source), typed ? make_typed_reducers() : make_reducers()));
 }
 
 } // namespace lfdraw

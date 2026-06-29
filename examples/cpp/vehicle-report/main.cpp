@@ -1,4 +1,5 @@
 #include "generated/parser.hpp"
+#include "generated/parser_typed.hpp"
 
 #include <any>
 #include <fstream>
@@ -39,8 +40,9 @@ static void write_text_file(const std::string& path, std::string_view text) {
 }
 
 static vehicle::Lexeme lexeme_arg(const vehicle::Reduction& ctx, std::size_t index, std::string_view name) {
-    // Current C++ reducers receive boxed std::any values. This helper keeps the
-    // cast and bounds check in one place while call sites name the grammar role.
+    // Boxed reducers receive std::any values. This helper keeps the cast and
+    // bounds check in one place while typed mode validates labels before
+    // delegating to the same semantic implementation.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
@@ -62,24 +64,29 @@ static std::string unquote(vehicle::Lexeme lexeme) {
 static vehicle::ReducerMap make_reducers(Demo& demo) {
     // The map keys are generated from {cpp: ...} labels in vehicle.lf. Values
     // are ordinary lambdas that build the example's report model.
-    auto noop = [](const vehicle::Reduction&) -> vehicle::Value { return {}; };
+    //
+    // Structural rules in vehicle.lf are declared as std::nullptr_t. Return
+    // nullptr for those actions, not {}: vehicle::Value{} is an empty std::any,
+    // while vehicle::Value{nullptr} contains the declared std::nullptr_t value
+    // that typed_reducer_map_from_boxed validates with std::any_cast.
+    auto noop = [](const vehicle::Reduction&) -> vehicle::Value { return nullptr; };
     return vehicle::ReducerMap{
         {vehicle::SemanticAction::Vehicle, noop},
         {vehicle::SemanticAction::Info, noop},
         {vehicle::SemanticAction::FieldModel, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_model = true;
             demo.report << "model: " << unquote(lexeme_arg(ctx, 2, "model literal")) << "\n";
-            return {};
+            return nullptr;
         }},
         {vehicle::SemanticAction::FieldLicense, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_license = true;
             demo.report << "license: " << unquote(lexeme_arg(ctx, 2, "license literal")) << "\n";
-            return {};
+            return nullptr;
         }},
         {vehicle::SemanticAction::FieldDistance, [&demo](const vehicle::Reduction& ctx) -> vehicle::Value {
             demo.saw_distance = true;
             demo.report << "distance: " << text(lexeme_arg(ctx, 2, "distance literal")) << "\n";
-            return {};
+            return nullptr;
         }},
         {vehicle::SemanticAction::FieldFeatures, noop},
         {vehicle::SemanticAction::FeatureItems, noop},
@@ -92,7 +99,7 @@ static vehicle::ReducerMap make_reducers(Demo& demo) {
             }
             ++demo.features;
             demo.report << "  - " << text(lexeme_arg(ctx, 0, "feature name")) << " = " << unquote(lexeme_arg(ctx, 2, "feature value")) << "\n";
-            return {};
+            return nullptr;
         }},
         {vehicle::SemanticAction::FieldRepairs, noop},
         {vehicle::SemanticAction::RepairItems, noop},
@@ -105,14 +112,18 @@ static vehicle::ReducerMap make_reducers(Demo& demo) {
             }
             ++demo.repairs;
             demo.report << "  - " << unquote(lexeme_arg(ctx, 3, "repair date")) << ": " << unquote(lexeme_arg(ctx, 7, "repair description")) << "\n";
-            return {};
+            return nullptr;
         }},
     };
 }
 
-static std::string parse_source(const std::string& source, Demo& demo) {
+static vehicle::ReducerMap make_typed_reducers(Demo& demo) {
+    return vehicle::typed_reducer_map_from_boxed(make_reducers(demo));
+}
+
+static std::string parse_source(const std::string& source, Demo& demo, bool typed = true) {
     demo.report << "Vehicle report C++ generated-parser demo\n";
-    vehicle::parse_value(vehicle::tokenize(source), make_reducers(demo));
+    vehicle::parse_value(vehicle::tokenize(source), typed ? make_typed_reducers(demo) : make_reducers(demo));
     demo.report << "summary: " << demo.features << " features, " << demo.repairs << " repairs\n";
     return demo.report.str();
 }
@@ -127,6 +138,9 @@ static void run_assertions(const std::string& source) {
     Demo demo;
     parse_source(source, demo);
     require(demo.saw_model && demo.saw_license && demo.saw_distance && demo.features == 4 && demo.repairs == 3, "unexpected vehicle summary");
+    Demo boxed_demo;
+    parse_source(source, boxed_demo, false);
+    require(boxed_demo.saw_model && boxed_demo.saw_license && boxed_demo.saw_distance && boxed_demo.features == 4 && boxed_demo.repairs == 3, "unexpected boxed vehicle summary");
 
     try {
         vehicle::tokenize("car = @");
@@ -171,6 +185,7 @@ int main(int argc, char** argv) {
     try {
         std::vector<std::string> args(argv + 1, argv + argc);
         const bool assert_mode = take_flag(args, "--assert");
+        const bool boxed_mode = take_flag(args, "--boxed");
         const std::string log_path = read_option(args, "--log", "dist/vehicle-report-cpp-demo.log");
         const std::string input_path = args.empty() ? "sample.vehicle" : args.front();
         const std::string source = read_text_file(input_path);
@@ -178,7 +193,7 @@ int main(int argc, char** argv) {
             run_assertions(source);
         }
         Demo demo;
-        const std::string report = parse_source(source, demo);
+        const std::string report = parse_source(source, demo, !boxed_mode);
         write_text_file(log_path, report);
         std::cout << report;
         return 0;

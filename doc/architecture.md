@@ -171,7 +171,7 @@ handwritten code can dispatch through `ReducerMap`.
 - `langforge.tables.json`: full source model and generated tables.
 - `tokens.h`: token enum and token-name helper declaration.
 - `scanner.h` and `scanner.c`: generated scanner runtime and DFA tables.
-- `parser.h` and `parser.c`: generated table-driven parser with
+- `parser.h`, `parser_typed.h`, and `parser.c`: generated table-driven parser with
   recognizer-only and reducer-backed semantic APIs.
 
 Generated C output is dependency-free C11. Scanner state is stored in a
@@ -181,7 +181,11 @@ The generated API is reentrant for independent scanner/parser instances.
 Sharing one scanner struct across threads requires caller synchronization.
 Action labels such as `{c: add}` become target-prefixed enum values such as
 `CALC_ACTION_ADD`, and shifted terminals are passed to reducers as pointers to
-generated `*_lexeme` records.
+generated `*_lexeme` records. `parser_typed.h` adds typed reduction context
+structs, required-handler validation, typed parse wrappers, and a
+`*_typed_reducer_from_boxed` migration adapter. C typed handlers receive typed
+arguments but return `*_value` (`void *`) so allocation and ownership remain in
+handwritten code.
 
 ## C++ Backend
 
@@ -193,7 +197,7 @@ generated `*_lexeme` records.
 - `langforge.tables.json`: full source model and generated tables.
 - `tokens.hpp`: strongly typed token enum and token-name helper.
 - `scanner.hpp` and `scanner.cpp`: generated scanner runtime and DFA tables.
-- `parser.hpp` and `parser.cpp`: generated table-driven parser with
+- `parser.hpp`, `parser_typed.hpp`, and `parser.cpp`: generated table-driven parser with
   recognizer-only and reducer-backed semantic APIs.
 
 Generated C++ output targets C++17. Scanner instances store a
@@ -203,7 +207,9 @@ be reused concurrently when the installed reducer is also safe. Action labels
 such as `{cpp: add}` become `enum class SemanticAction` values such as
 `SemanticAction::Add`. Parser action/goto lookup uses static sorted arrays and
 binary search, while handwritten semantics normally dispatch through the
-generated `ReducerMap`.
+generated `ReducerMap`. `parser_typed.hpp` adds typed reduction structs,
+`typed_<action>` adapter factories, `typed_reducer_map_from_boxed`, and
+`ReducerMap::validate_coverage` so missing handlers fail before parsing.
 
 ## Example Project Layout
 

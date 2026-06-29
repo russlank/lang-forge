@@ -49,8 +49,8 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
 - Use `%empty` for intentional empty productions.
 - Give semantic RHS values labels such as `left=Expr`, `token=Number`, or
   `body=Block`. Labels are preserved in table JSON and
-  `langforge.actions.json`; Go and C# reducers can read them through typed
-  contexts or label-aware `Reduction.ValueFor`.
+  `langforge.actions.json`; generated reducers can read them through typed
+  contexts/adapters or label-aware reductions.
 - Keep terminals declared with `%token`; every nonterminal should have a rule.
 - Keep token and nonterminal names disjoint.
 - Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
@@ -61,9 +61,9 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
   `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
   generated `SemanticAction` values with `ReducerMap`.
 - Declare `%semantic <target> type Nonterminal TargetType` when a nonterminal
-  has a real domain value. Go and C# emit typed reducer contexts for eligible
-  actions; all targets record the declared types and labels in
-  `langforge.actions.json`.
+  has a real domain value. Go, C#, C, and C++ emit typed reducer
+  contexts/adapters for eligible actions; all targets record the declared types
+  and labels in `langforge.actions.json`.
 - Treat `{target: name}` as an action label, not embedded behavior. Handwritten
   reducers map the generated action ID/enum to domain code.
 - Use `Statement : error Semi {target: recover.statement}` for conservative

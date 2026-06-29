@@ -1,6 +1,19 @@
 %target c
 %package vehicle_report
 %semantic c mode reducer
+%semantic c type Program void *
+%semantic c type VehicleInfo void *
+%semantic c type ModelField void *
+%semantic c type LicenseField void *
+%semantic c type DistanceField void *
+%semantic c type FeaturesField void *
+%semantic c type FeatureItems void *
+%semantic c type FeatureTail void *
+%semantic c type Feature void *
+%semantic c type RepairsField void *
+%semantic c type RepairItems void *
+%semantic c type RepairTail void *
+%semantic c type Repair void *
 %start Program
 %token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
 

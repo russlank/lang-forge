@@ -56,9 +56,9 @@ make -C examples/<target>/<name> LANG_FORGE=../../../dist/lang-forge run
    installed; compile/run steps should print a skip message through `CC` or
    `CXX`.
 9. For examples that use named RHS labels and semantic type declarations,
-   verify the handwritten reducer boundary: Go and C# should prefer generated
-   typed contexts; C and C++ should keep checked casts in small helper
-   functions until typed-context parity lands.
+   verify the handwritten reducer boundary: prefer generated typed
+   contexts/adapters, and keep boxed reducer paths only as explicit
+   compatibility coverage when useful.
 10. Clean generated and binary output before final status unless the task
    explicitly asks to inspect those files.
 

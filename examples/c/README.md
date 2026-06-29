@@ -5,7 +5,7 @@ generated files into each example's `generated/` directory:
 
 - `tokens.h`
 - `scanner.h` and `scanner.c`
-- `parser.h` and `parser.c`
+- `parser.h`, `parser_typed.h`, and `parser.c`
 
 Each example keeps handwritten reducer and demo code in `main.c`. The generated
 scanner/parser API is reentrant and does not use global mutable parse state; the
@@ -22,6 +22,10 @@ navigation.
 GCC is the verified compiler in the current workspace. Any C11-capable compiler
 should work through the `CC` override. The DRAW example links the math library
 with `LDLIBS=-lm` by default.
+
+The examples default to the generated typed reducer wrapper, which validates
+named RHS labels and required handlers before delegating to the boxed C reducer.
+Pass `--boxed` to any C demo to run the compatibility reducer path directly.
 
 Run one example:
 

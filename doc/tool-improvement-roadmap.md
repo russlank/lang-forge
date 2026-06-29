@@ -31,7 +31,8 @@ LangForge already has a strong foundation as a modern Lex/Yacc-style parser-gene
 - reducer-based semantic hooks;
 - deterministic manifests;
 - named RHS labels and target-specific nonterminal type declarations;
-- generated Go and C# typed reducer contexts and reducer coverage validation;
+- generated Go, C#, C, and C++ typed reducer contexts/adapters plus reducer
+  coverage validation where the target exposes reducer maps;
 - deterministic cross-target semantic action manifests;
 - generated example projects.
 
@@ -80,8 +81,8 @@ The baseline reducer model exposes boxed values:
 |---|---|
 | Go | `any` boxed fallback; generated typed contexts when the action contract is complete |
 | C# | `object?` boxed fallback; generated internal typed contexts when the action contract is complete |
-| C | `void*` |
-| C++ | `std::any` |
+| C | `void*` boxed fallback plus generated typed argument contexts in `parser_typed.h` |
+| C++ | `std::any` boxed fallback plus generated typed contexts/adapters in `parser_typed.hpp` |
 
 This gives flexibility, but it pushes casts into user code:
 
@@ -117,7 +118,7 @@ LangForge now accepts target-specific nonterminal result types:
 ```
 
 Terminals remain generated `Lexeme` values so scanner text and source spans are
-not discarded. The Go and C# backends generate typed contexts:
+not discarded. Go, C#, C, and C++ now generate typed contexts or adapters:
 
 ```go
 parser.TypedAdd(func(ctx parser.AddReduction) (float64, error) {
@@ -136,18 +137,20 @@ Named RHS labels are implemented in the grammar:
 Expr : left=Expr Plus right=Term {go: add}
 ```
 
-All backends emit the labels and declared types in
-`langforge.actions.json`. C and C++ typed context APIs remain the next
-backend-parity step.
+All backends emit the labels and declared types in `langforge.actions.json`.
+C and C++ also emit companion typed headers, while preserving boxed reducer
+APIs for gradual migration.
 
 ### Current Acceptance Snapshot
 
-- Go and C# reducers can avoid direct `ctx.Values[n]` access through generated
-  typed contexts and label-aware reductions.
-- Go and C# `ReducerMap` coverage validation detects missing and unknown handlers
-  before input-dependent parser execution.
-- C and C++ examples keep small checked helper functions at the boxed boundary
-  until LF-126 adds generated typed context parity for those targets.
+- Go, C#, C, and C++ reducers can avoid or validate direct positional
+  `ctx.Values[n]` access through generated typed contexts/adapters and
+  label-aware reductions.
+- Go, C#, and C++ `ReducerMap` coverage validation detects missing and unknown
+  handlers before input-dependent parser execution; C typed reducers validate
+  required handler pointers before parsing.
+- C and C++ examples default to typed validation and keep `--boxed` as an
+  explicit compatibility path.
 - Backward compatibility with boxed reducer mode is preserved.
 
 ---

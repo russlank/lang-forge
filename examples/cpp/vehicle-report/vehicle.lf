@@ -1,6 +1,19 @@
 %target cpp
 %package LangForge::Examples::VehicleReport::Generated
 %semantic cpp mode reducer
+%semantic cpp type Program std::nullptr_t
+%semantic cpp type VehicleInfo std::nullptr_t
+%semantic cpp type ModelField std::nullptr_t
+%semantic cpp type LicenseField std::nullptr_t
+%semantic cpp type DistanceField std::nullptr_t
+%semantic cpp type FeaturesField std::nullptr_t
+%semantic cpp type FeatureItems std::nullptr_t
+%semantic cpp type FeatureTail std::nullptr_t
+%semantic cpp type Feature std::nullptr_t
+%semantic cpp type RepairsField std::nullptr_t
+%semantic cpp type RepairItems std::nullptr_t
+%semantic cpp type RepairTail std::nullptr_t
+%semantic cpp type Repair std::nullptr_t
 %start Program
 %token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
 

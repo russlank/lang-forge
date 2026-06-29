@@ -1,5 +1,6 @@
 #include "../common/demo.h"
 #include "generated/parser.h"
+#include "generated/parser_typed.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,6 +14,11 @@ typedef struct vehicle_demo {
     int saw_license;
     int saw_distance;
 } vehicle_demo;
+
+typedef enum vehicle_reducer_mode {
+    VEHICLE_REDUCER_TYPED,
+    VEHICLE_REDUCER_BOXED
+} vehicle_reducer_mode;
 
 static const vehicle_report_lexeme *vehicle_lexeme(vehicle_report_value value) {
     return (const vehicle_report_lexeme *)value;
@@ -118,10 +124,11 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
     }
 }
 
-static int vehicle_parse_source(vehicle_demo *demo, const char *source, char *message, size_t message_size) {
+static int vehicle_parse_source(vehicle_demo *demo, const char *source, vehicle_reducer_mode mode, char *message, size_t message_size) {
     vehicle_report_error error;
     vehicle_report_lexeme *tokens = NULL;
     size_t count = 0;
+    int parsed = 0;
     error.message[0] = '\0';
     if (!demo_text_append(&demo->report, "Vehicle report C generated-parser demo\n", message, message_size)) {
         return 0;
@@ -129,7 +136,14 @@ static int vehicle_parse_source(vehicle_demo *demo, const char *source, char *me
     if (!vehicle_report_tokenize(source, &tokens, &count, &error)) {
         return demo_set_error(message, message_size, "scan failed: %s", error.message);
     }
-    if (!vehicle_report_parse_value(tokens, count, vehicle_reduce, demo, NULL, &error)) {
+    if (mode == VEHICLE_REDUCER_TYPED) {
+        vehicle_report_boxed_typed_reducer boxed = {0};
+        vehicle_report_typed_reducer typed = vehicle_report_typed_reducer_from_boxed(&boxed, vehicle_reduce, demo);
+        parsed = vehicle_report_parse_value_typed(tokens, count, &typed, NULL, &error);
+    } else {
+        parsed = vehicle_report_parse_value(tokens, count, vehicle_reduce, demo, NULL, &error);
+    }
+    if (!parsed) {
         vehicle_report_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
@@ -139,10 +153,11 @@ static int vehicle_parse_source(vehicle_demo *demo, const char *source, char *me
 
 static int vehicle_run_assertions(const char *source, char *message, size_t message_size) {
     vehicle_demo demo = {0};
+    vehicle_demo boxed_demo = {0};
     vehicle_report_error error;
     vehicle_report_lexeme *tokens = NULL;
     size_t count = 0;
-    if (!vehicle_parse_source(&demo, source, message, message_size)) {
+    if (!vehicle_parse_source(&demo, source, VEHICLE_REDUCER_TYPED, message, message_size)) {
         demo_text_free(&demo.report);
         demo_arena_free(&demo.arena);
         return 0;
@@ -154,6 +169,15 @@ static int vehicle_run_assertions(const char *source, char *message, size_t mess
     }
     demo_text_free(&demo.report);
     demo_arena_free(&demo.arena);
+    if (!vehicle_parse_source(&boxed_demo, source, VEHICLE_REDUCER_BOXED, message, message_size) ||
+        !boxed_demo.saw_model || !boxed_demo.saw_license || !boxed_demo.saw_distance ||
+        boxed_demo.features != 4 || boxed_demo.repairs != 3) {
+        demo_text_free(&boxed_demo.report);
+        demo_arena_free(&boxed_demo.arena);
+        return demo_set_error(message, message_size, "boxed vehicle summary mismatch");
+    }
+    demo_text_free(&boxed_demo.report);
+    demo_arena_free(&boxed_demo.arena);
     if (vehicle_report_tokenize("car = @", &tokens, &count, &error)) {
         vehicle_report_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected scanner failure");
@@ -205,6 +229,7 @@ int main(int argc, char **argv) {
     demo_buffer source = {0};
     vehicle_demo demo = {0};
     int assert_mode = vehicle_take_flag(&argc, argv, "--assert");
+    int boxed_mode = vehicle_take_flag(&argc, argv, "--boxed");
     const char *log_path = vehicle_read_option(&argc, argv, "--log", "dist/vehicle-report-c-demo.log");
     const char *input_path = argc > 1 ? argv[1] : "sample.vehicle";
     if (!demo_read_file(input_path, &source, message, sizeof(message))) {
@@ -216,7 +241,7 @@ int main(int argc, char **argv) {
         demo_free_buffer(&source);
         return 1;
     }
-    if (!vehicle_parse_source(&demo, source.data, message, sizeof(message)) ||
+    if (!vehicle_parse_source(&demo, source.data, boxed_mode ? VEHICLE_REDUCER_BOXED : VEHICLE_REDUCER_TYPED, message, sizeof(message)) ||
         !demo_write_text(log_path, demo.report.data, message, sizeof(message))) {
         fprintf(stderr, "%s\n", message);
         demo_free_buffer(&source);

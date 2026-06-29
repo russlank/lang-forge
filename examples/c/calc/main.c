@@ -1,5 +1,6 @@
 #include "../common/demo.h"
 #include "generated/parser.h"
+#include "generated/parser_typed.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,12 @@ typedef struct calc_demo
 } calc_demo;
 
 typedef double (*calc_binary_op)(double left, double right);
+
+typedef enum calc_reducer_mode
+{
+    CALC_REDUCER_TYPED,
+    CALC_REDUCER_BOXED
+} calc_reducer_mode;
 
 static calc_value calc_number(calc_demo *demo, calc_error *error, double value)
 {
@@ -162,7 +169,7 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
     }
 }
 
-static int calc_eval(calc_demo *demo, const char *source, double *out, char *message, size_t message_size)
+static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode, double *out, char *message, size_t message_size)
 {
     calc_error error;
     calc_lexeme *tokens = NULL;
@@ -173,7 +180,22 @@ static int calc_eval(calc_demo *demo, const char *source, double *out, char *mes
     {
         return demo_set_error(message, message_size, "scan failed: %s", error.message);
     }
-    if (!calc_parse_value(tokens, count, calc_reduce, demo, &value, &error))
+    if (mode == CALC_REDUCER_TYPED)
+    {
+        /*
+         * The typed path builds generated contexts from named RHS labels before
+         * delegating to the boxed reducer. That keeps the example compact while
+         * proving both generated reducer APIs can execute the same grammar.
+         */
+        calc_boxed_typed_reducer boxed = {0};
+        calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, demo);
+        if (!calc_parse_value_typed(tokens, count, &typed, &value, &error))
+        {
+            calc_free_lexemes(tokens);
+            return demo_set_error(message, message_size, "parse failed: %s", error.message);
+        }
+    }
+    else if (!calc_parse_value(tokens, count, calc_reduce, demo, &value, &error))
     {
         calc_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
@@ -201,17 +223,17 @@ static int calc_run_assertions(char *message, size_t message_size)
     calc_lexeme *tokens = NULL;
     size_t count = 0;
     error.message[0] = '\0';
-    if (!calc_eval(&demo, "1 + 2 * (3 - 4.5)", &value, message, message_size) || !calc_close_enough(value, -2.0))
+    if (!calc_eval(&demo, "1 + 2 * (3 - 4.5)", CALC_REDUCER_TYPED, &value, message, message_size) || !calc_close_enough(value, -2.0))
     {
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "calculator assertion failed, got %.6f", value);
     }
-    if (!calc_eval(&demo, "7.5/2.5", &value, message, message_size) || !calc_close_enough(value, 3.0))
+    if (!calc_eval(&demo, "7.5/2.5", CALC_REDUCER_BOXED, &value, message, message_size) || !calc_close_enough(value, 3.0))
     {
         demo_arena_free(&demo.arena);
-        return demo_set_error(message, message_size, "decimal division assertion failed, got %.6f", value);
+        return demo_set_error(message, message_size, "boxed decimal division assertion failed, got %.6f", value);
     }
-    if (calc_eval(&demo, "1/0", &value, message, message_size))
+    if (calc_eval(&demo, "1/0", CALC_REDUCER_TYPED, &value, message, message_size))
     {
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "expected division-by-zero failure");
@@ -282,6 +304,7 @@ int main(int argc, char **argv)
     calc_demo demo = {0};
     double result = 0.0;
     int assert_mode = take_flag(&argc, argv, "--assert");
+    int boxed_mode = take_flag(&argc, argv, "--boxed");
     const char *log_path = read_option(&argc, argv, "--log", "dist/calc-c-demo.log");
     const char *input_path = argc > 1 ? argv[1] : "input.calc";
     if (assert_mode && !calc_run_assertions(message, sizeof(message)))
@@ -290,7 +313,7 @@ int main(int argc, char **argv)
         return 1;
     }
     if (!demo_read_file(input_path, &source, message, sizeof(message)) ||
-        !calc_eval(&demo, source.data, &result, message, sizeof(message)) ||
+        !calc_eval(&demo, source.data, boxed_mode ? CALC_REDUCER_BOXED : CALC_REDUCER_TYPED, &result, message, sizeof(message)) ||
         !demo_text_appendf(&report, message, sizeof(message), "LangForge C calculator demo\nsource: %s\nresult: %.10g\n", source.data, result) ||
         !demo_write_text(log_path, report.data, message, sizeof(message)))
     {

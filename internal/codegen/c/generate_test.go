@@ -15,6 +15,7 @@ func TestGenerateWritesConventionalCFilesAndMetadata(t *testing.T) {
 	parsed, diagnostics := spec.ParseCombined([]byte(`%target c
 %package calc-demo
 %semantic c mode reducer
+%semantic c type S double
 %token A B
 %start S
 %% lexer
@@ -22,7 +23,7 @@ func TestGenerateWritesConventionalCFilesAndMetadata(t *testing.T) {
 "b" => token(B);
 [1-32]+ => skip;
 %% parser
-S : A B {c: pair.value} ;
+S : left=A right=B {c: pair.value} ;
 `), "calc.lf")
 	if diagnostics.HasErrors() {
 		t.Fatalf("parse diagnostics: %v", diagnostics)
@@ -53,6 +54,7 @@ S : A B {c: pair.value} ;
 		"scanner.h",
 		"scanner.c",
 		"parser.h",
+		"parser_typed.h",
 		"parser.c",
 	} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
@@ -67,7 +69,7 @@ S : A B {c: pair.value} ;
 		}
 	}
 	actionManifest := readGeneratedFile(t, out, "langforge.actions.json")
-	for _, fragment := range []string{`"name": "pair.value"`, `"lhs": "S"`, `"symbol": "A"`} {
+	for _, fragment := range []string{`"name": "pair.value"`, `"lhs": "S"`, `"symbol": "A"`, `"label": "left"`, `"typed": true`} {
 		if !strings.Contains(actionManifest, fragment) {
 			t.Fatalf("action manifest missing %q:\n%s", fragment, actionManifest)
 		}
@@ -81,9 +83,16 @@ S : A B {c: pair.value} ;
 	}
 
 	parserHeader := readGeneratedFile(t, out, "parser.h")
-	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PAIR_VALUE", "calc_demo_parse_result", "calc_demo_parse_recovering", "calc_demo_parse_result_free"} {
+	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PAIR_VALUE", "const char **labels", "calc_demo_reduction_value_for", "calc_demo_parse_result", "calc_demo_parse_recovering", "calc_demo_parse_result_free"} {
 		if !strings.Contains(parserHeader, fragment) {
 			t.Fatalf("parser.h missing %q:\n%s", fragment, parserHeader)
+		}
+	}
+
+	typedHeader := readGeneratedFile(t, out, "parser_typed.h")
+	for _, fragment := range []string{"calc_demo_pair_value_reduction", "const calc_demo_lexeme * left", "const calc_demo_lexeme * right", "calc_demo_typed_reducer", "calc_demo_typed_reducer_from_boxed", "calc_demo_parse_value_typed"} {
+		if !strings.Contains(typedHeader, fragment) {
+			t.Fatalf("parser_typed.h missing %q:\n%s", fragment, typedHeader)
 		}
 	}
 

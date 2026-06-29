@@ -3,6 +3,12 @@
 
 #include "ast.h"
 
+/** Selects which generated semantic reducer ABI the parser adapter uses. */
+typedef enum draw_reducer_mode {
+    DRAW_REDUCER_TYPED,
+    DRAW_REDUCER_BOXED
+} draw_reducer_mode;
+
 /** Scans and parses DRAW source text into a typed AST.
  *
  * @param ctx caller-owned allocation context for the resulting AST
@@ -13,5 +19,8 @@
  * @return non-zero on success, zero on failure
  */
 int draw_parse_source(draw_context *ctx, const char *source, draw_program **out, char *message, size_t message_size);
+
+/** Scans and parses DRAW source text with an explicit reducer mode. */
+int draw_parse_source_with_mode(draw_context *ctx, const char *source, draw_reducer_mode mode, draw_program **out, char *message, size_t message_size);
 
 #endif

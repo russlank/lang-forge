@@ -11,9 +11,9 @@
  * source text -> generated scanner/parser -> typed DRAW AST -> renderer -> PNG
  * and deterministic text report. The detailed parser and renderer mechanics
  * live in separate modules so this file stays focused on CLI orchestration. */
-static int draw_render_source(draw_context *ctx, const char *source, const char *input_path, const char *output_path, draw_renderer *renderer, demo_text *report, char *message, size_t message_size) {
+static int draw_render_source(draw_context *ctx, const char *source, draw_reducer_mode mode, const char *input_path, const char *output_path, draw_renderer *renderer, demo_text *report, char *message, size_t message_size) {
     draw_program *program = NULL;
-    if (!draw_parse_source(ctx, source, &program, message, message_size) ||
+    if (!draw_parse_source_with_mode(ctx, source, mode, &program, message, message_size) ||
         !draw_render(program, renderer, message, message_size) ||
         !demo_write_png(output_path, &renderer->image, message, message_size) ||
         !draw_build_report(renderer, input_path, output_path, report, message, message_size)) {
@@ -27,27 +27,47 @@ static int draw_render_source(draw_context *ctx, const char *source, const char 
  * useful as a compact integration test for future backend changes. */
 static int draw_run_assertions(const char *source, const char *output_path, char *message, size_t message_size) {
     draw_context ctx;
+    draw_context boxed_ctx;
     draw_renderer renderer;
+    draw_renderer boxed_renderer;
     demo_text report = {0};
+    demo_text boxed_report = {0};
     draw_error error;
     draw_lexeme *tokens = NULL;
     size_t count = 0;
     draw_context_init(&ctx);
+    draw_context_init(&boxed_ctx);
     error.message[0] = '\0';
-    if (!draw_render_source(&ctx, source, "sample.draw", output_path, &renderer, &report, message, message_size)) {
+    if (!draw_render_source(&ctx, source, DRAW_REDUCER_TYPED, "sample.draw", output_path, &renderer, &report, message, message_size)) {
         demo_text_free(&report);
         draw_context_free(&ctx);
+        draw_context_free(&boxed_ctx);
         return 0;
     }
     if (renderer.image.width != 960 || renderer.image.height != 640 || renderer.counts.line != 90 || renderer.counts.circle != 196 || renderer.counts.box != 2) {
         draw_renderer_free(&renderer);
         demo_text_free(&report);
         draw_context_free(&ctx);
+        draw_context_free(&boxed_ctx);
         return demo_set_error(message, message_size, "unexpected draw render summary");
     }
     draw_renderer_free(&renderer);
     demo_text_free(&report);
     draw_context_free(&ctx);
+    if (!draw_render_source(&boxed_ctx, source, DRAW_REDUCER_BOXED, "sample.draw", output_path, &boxed_renderer, &boxed_report, message, message_size)) {
+        demo_text_free(&boxed_report);
+        draw_context_free(&boxed_ctx);
+        return 0;
+    }
+    if (boxed_renderer.image.width != 960 || boxed_renderer.image.height != 640 || boxed_renderer.counts.line != 90 || boxed_renderer.counts.circle != 196 || boxed_renderer.counts.box != 2) {
+        draw_renderer_free(&boxed_renderer);
+        demo_text_free(&boxed_report);
+        draw_context_free(&boxed_ctx);
+        return demo_set_error(message, message_size, "unexpected boxed draw render summary");
+    }
+    draw_renderer_free(&boxed_renderer);
+    demo_text_free(&boxed_report);
+    draw_context_free(&boxed_ctx);
     if (draw_tokenize("canvas 1, @", &tokens, &count, &error)) {
         draw_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected scanner failure");
@@ -101,6 +121,7 @@ int main(int argc, char **argv) {
     draw_context ctx;
     draw_renderer renderer;
     int assert_mode = draw_take_flag(&argc, argv, "--assert");
+    int boxed_mode = draw_take_flag(&argc, argv, "--boxed");
     const char *output_path = draw_read_option(&argc, argv, "--output", "dist/sample-c.png");
     const char *log_path = draw_read_option(&argc, argv, "--log", "dist/draw-c-demo.log");
     const char *input_path = argc > 1 ? argv[1] : "sample.draw";
@@ -116,7 +137,7 @@ int main(int argc, char **argv) {
         draw_context_free(&ctx);
         return 1;
     }
-    if (!draw_render_source(&ctx, source.data, input_path, output_path, &renderer, &report, message, sizeof(message)) ||
+    if (!draw_render_source(&ctx, source.data, boxed_mode ? DRAW_REDUCER_BOXED : DRAW_REDUCER_TYPED, input_path, output_path, &renderer, &report, message, sizeof(message)) ||
         !demo_write_text(log_path, report.data, message, sizeof(message))) {
         fprintf(stderr, "%s\n", message);
         demo_free_buffer(&source);

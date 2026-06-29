@@ -1,4 +1,5 @@
 #include "generated/parser.hpp"
+#include "generated/parser_typed.hpp"
 
 #include <any>
 #include <fstream>
@@ -37,8 +38,9 @@ static void write_text_file(const std::string& path, std::string_view text) {
 }
 
 static dks::Lexeme lexeme_arg(const dks::Reduction& ctx, std::size_t index, std::string_view name) {
-    // C++ typed reducer contexts are planned backend-parity work. For now,
-    // keep std::any casts in small helpers whose names mirror RHS labels.
+    // Boxed reducers still receive std::any values. Keep casts in small helpers
+    // whose names mirror RHS labels; typed mode validates those labels before
+    // delegating to this compatibility implementation.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }
@@ -108,7 +110,12 @@ static dks::ReducerMap make_reducers(Demo& demo) {
     // SemanticAction values are generated from {cpp: ...} labels in the
     // grammar. ReducerMap keeps semantic dispatch data-driven and leaves all
     // domain behavior in handwritten C++.
-    auto noop = [](const dks::Reduction&) -> dks::Value { return {}; };
+    //
+    // Structural rules in datakeeper.lf are declared as std::nullptr_t. Return
+    // nullptr for those actions, not {}: dks::Value{} is an empty std::any,
+    // while dks::Value{nullptr} contains the declared std::nullptr_t value that
+    // typed_reducer_map_from_boxed validates with std::any_cast.
+    auto noop = [](const dks::Reduction&) -> dks::Value { return nullptr; };
     auto pass = [](const dks::Reduction& ctx) -> dks::Value {
         return ctx.values.empty() ? dks::Value{} : ctx.values.at(0);
     };
@@ -118,11 +125,11 @@ static dks::ReducerMap make_reducers(Demo& demo) {
         {dks::SemanticAction::ParametersList, noop},
         {dks::SemanticAction::ParametersDecl, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_parameter(demo, text(lexeme_arg(ctx, 0, "parameter name")));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::ParametersTailMore, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_parameter(demo, text(lexeme_arg(ctx, 1, "parameter name")));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::ParametersTailEmpty, noop},
         {dks::SemanticAction::CommandBlock, noop},
@@ -141,34 +148,38 @@ static dks::ReducerMap make_reducers(Demo& demo) {
         }},
         {dks::SemanticAction::Assign, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "assign", text(lexeme_arg(ctx, 0, "assignment name")), string_arg(ctx, 2, "assignment value"));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::Replace, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "replace", text(lexeme_arg(ctx, 2, "replace target")), string_arg(ctx, 4, "old value"), string_arg(ctx, 6, "new value"));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::Sqlrun, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "sqlrun", string_arg(ctx, 2, "instance"), string_arg(ctx, 4, "script"));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::AddObject, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "addobject", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "xml"));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::RemoveObject, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "removeobject", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "name"));
-            return {};
+            return nullptr;
         }},
         {dks::SemanticAction::RunObjectsJob, [&demo](const dks::Reduction& ctx) -> dks::Value {
             append_command(demo, "runobjectsjob", string_arg(ctx, 2, "parent"), string_arg(ctx, 4, "name"), string_arg(ctx, 6, "jobs tag"));
-            return {};
+            return nullptr;
         }},
     };
 }
 
-static std::string parse_source(const std::string& source, Demo& demo) {
+static dks::ReducerMap make_typed_reducers(Demo& demo) {
+    return dks::typed_reducer_map_from_boxed(make_reducers(demo));
+}
+
+static std::string parse_source(const std::string& source, Demo& demo, bool typed = true) {
     demo.report << "DataKeeper C++ mock compiler\nparameters:\n";
-    dks::parse_value(dks::tokenize(source), make_reducers(demo));
+    dks::parse_value(dks::tokenize(source), typed ? make_typed_reducers(demo) : make_reducers(demo));
     demo.report << "summary: " << demo.parameters << " parameters, " << demo.commands << " mock stack instructions\n";
     return demo.report.str();
 }
@@ -183,6 +194,9 @@ static void run_assertions(const std::string& source) {
     Demo demo;
     parse_source(source, demo);
     require(demo.parameters == 4 && demo.commands == 8, "unexpected DataKeeper summary");
+    Demo boxed_demo;
+    parse_source(source, boxed_demo, false);
+    require(boxed_demo.parameters == 4 && boxed_demo.commands == 8, "unexpected boxed DataKeeper summary");
 
     try {
         dks::tokenize("begin @ end");
@@ -227,6 +241,7 @@ int main(int argc, char** argv) {
     try {
         std::vector<std::string> args(argv + 1, argv + argc);
         const bool assert_mode = take_flag(args, "--assert");
+        const bool boxed_mode = take_flag(args, "--boxed");
         const std::string log_path = read_option(args, "--log", "dist/datakeeper-cpp-demo.log");
         const std::string input_path = args.empty() ? "sample.dks" : args.front();
         const std::string source = read_text_file(input_path);
@@ -234,7 +249,7 @@ int main(int argc, char** argv) {
             run_assertions(source);
         }
         Demo demo;
-        const std::string report = parse_source(source, demo);
+        const std::string report = parse_source(source, demo, !boxed_mode);
         write_text_file(log_path, report);
         std::cout << report;
         return 0;

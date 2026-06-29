@@ -102,11 +102,12 @@ func Generate(input Input, outDir string) error {
 		return err
 	}
 	files := map[string]string{
-		"tokens.hpp":  renderTokensHeader(namespace, input.Spec.SourceFile, tokens, tokenIDs),
-		"scanner.hpp": renderScannerHeader(namespace, input.Spec.SourceFile),
-		"scanner.cpp": renderScannerSource(namespace, input.Spec.SourceFile, input.DFA, tokens, tokenIDs),
-		"parser.hpp":  renderParserHeader(namespace, input.Spec.SourceFile, actions),
-		"parser.cpp":  renderParserSource(namespace, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions),
+		"tokens.hpp":       renderTokensHeader(namespace, input.Spec.SourceFile, tokens, tokenIDs),
+		"scanner.hpp":      renderScannerHeader(namespace, input.Spec.SourceFile),
+		"scanner.cpp":      renderScannerSource(namespace, input.Spec.SourceFile, input.DFA, tokens, tokenIDs),
+		"parser.hpp":       renderParserHeader(namespace, input.Spec.SourceFile, actions),
+		"parser_typed.hpp": renderTypedParserHeader(namespace, input.Spec.SourceFile, actionManifest, actions),
+		"parser.cpp":       renderParserSource(namespace, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions),
 	}
 	for name, content := range files {
 		if err := writeFile(filepath.Join(outDir, name), content); err != nil {
@@ -484,9 +485,11 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    int rule = 0;\n")
 	b.WriteString("    std::string_view lhs;\n")
 	b.WriteString("    std::vector<std::string_view> rhs;\n")
+	b.WriteString("    std::vector<std::string_view> labels;\n")
 	b.WriteString("    SemanticAction action_id = SemanticAction::None;\n")
 	b.WriteString("    std::string_view action;\n")
 	b.WriteString("    std::vector<Value> values;\n")
+	b.WriteString("    const Value& value_for(std::string_view label) const;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("/// Receives target-tagged action hooks during parser reductions.\n")
 	b.WriteString("using Reducer = std::function<Value(const Reduction&)>;\n")
@@ -503,6 +506,7 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    explicit ReducerMap(ReducerTable handlers);\n")
 	b.WriteString("    ReducerMap(std::initializer_list<std::pair<const SemanticAction, ReductionHandler>> handlers);\n")
 	b.WriteString("    Value operator()(const Reduction& ctx) const;\n")
+	b.WriteString("    void validate_coverage() const;\n")
 	b.WriteString("    ReducerTable& handlers() noexcept;\n")
 	b.WriteString("    const ReducerTable& handlers() const noexcept;\n\n")
 	b.WriteString("private:\n")
@@ -515,6 +519,7 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("class Parser {\n")
 	b.WriteString("public:\n")
 	b.WriteString("    explicit Parser(Reducer reducer = Reducer{});\n")
+	b.WriteString("    explicit Parser(const ReducerMap& reducer);\n")
 	b.WriteString("    void parse(const std::vector<Lexeme>& tokens) const;\n")
 	b.WriteString("    Value parse_value(const std::vector<Lexeme>& tokens) const;\n\n")
 	b.WriteString("    ParseResult parse_recovering(const std::vector<Lexeme>& tokens) const;\n\n")
@@ -529,8 +534,117 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("void parse(const std::vector<Lexeme>& tokens);\n")
 	b.WriteString("/// Parses with an explicit reducer and returns the final semantic value.\n")
 	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses with a checked reducer map and returns the final semantic value.\n")
+	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
 	b.WriteString("/// Parses with grammar-directed recovery and returns every syntax diagnostic.\n")
 	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses with grammar-directed recovery and a checked reducer map.\n")
+	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
+	b.WriteString(closeNamespace(namespace))
+	return b.String()
+}
+
+func renderTypedParserHeader(namespace []string, source string, manifest action.Manifest, actions []SemanticAction) string {
+	var b strings.Builder
+	b.WriteString(generatedHeader(source, "parser_typed.hpp"))
+	b.WriteString("#pragma once\n\n")
+	b.WriteString("#include \"parser.hpp\"\n\n")
+	b.WriteString("#include <any>\n")
+	b.WriteString("#include <functional>\n")
+	b.WriteString("#include <stdexcept>\n")
+	b.WriteString("#include <string>\n")
+	b.WriteString("#include <string_view>\n")
+	b.WriteString("#include <typeinfo>\n")
+	b.WriteString("#include <utility>\n\n")
+	b.WriteString(openNamespace(namespace))
+	typedActions := typedCppManifestActions(manifest, actions)
+	if len(typedActions) == 0 {
+		b.WriteString("// No consistently typed semantic actions were declared for this grammar.\n\n")
+		b.WriteString(closeNamespace(namespace))
+		return b.String()
+	}
+	constants := semanticActionIDs(actions)
+	b.WriteString("namespace typed_detail {\n\n")
+	b.WriteString("inline std::string typed_error_prefix(const Reduction& ctx, std::string_view label) {\n")
+	b.WriteString("    return \"rule \" + std::to_string(ctx.rule) + \" action \" + std::string(ctx.action) + \" label \" + std::string(label);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("template <typename T>\n")
+	b.WriteString("T semantic_value_as(const Reduction& ctx, std::string_view label) {\n")
+	b.WriteString("    const auto& value = ctx.value_for(label);\n")
+	b.WriteString("    try {\n")
+	b.WriteString("        return std::any_cast<T>(value);\n")
+	b.WriteString("    } catch (const std::bad_any_cast&) {\n")
+	b.WriteString("        throw std::runtime_error(typed_error_prefix(ctx, label) + \" has incompatible semantic value; expected \" + typeid(T).name());\n")
+	b.WriteString("    }\n")
+	b.WriteString("}\n\n")
+	b.WriteString("template <typename T>\n")
+	b.WriteString("// Converts a boxed reducer result back to the declared typed result.\n")
+	b.WriteString("// When this adapter is used for std::nullptr_t actions, boxed reducers must\n")
+	b.WriteString("// return nullptr. Returning Value{} or `{}` creates an empty std::any, which\n")
+	b.WriteString("// boxed-only code may ignore but this typed adapter rejects because it means\n")
+	b.WriteString("// missing value rather than an intentional no-op value.\n")
+	b.WriteString("T boxed_value_as(Value value, const Reduction& ctx) {\n")
+	b.WriteString("    try {\n")
+	b.WriteString("        return std::any_cast<T>(std::move(value));\n")
+	b.WriteString("    } catch (const std::bad_any_cast&) {\n")
+	b.WriteString("        throw std::runtime_error(\"typed boxed adapter for action \" + std::string(ctx.action) + \" returned incompatible value; expected \" + typeid(T).name());\n")
+	b.WriteString("    }\n")
+	b.WriteString("}\n\n")
+	b.WriteString("template <>\n")
+	b.WriteString("inline Value boxed_value_as<Value>(Value value, const Reduction&) {\n")
+	b.WriteString("    return value;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("} // namespace typed_detail\n\n")
+	for _, semanticAction := range typedActions {
+		constant := constants[semanticAction.Name]
+		suffix := strings.TrimPrefix(constant, "SemanticAction::")
+		contextType := suffix + "Reduction"
+		handlerType := suffix + "Handler"
+		factoryName := "typed_" + cppFunctionSuffix(semanticAction.Name)
+		fields := typedCppFields(semanticAction.Rules[0])
+
+		b.WriteString("/// Typed context for semantic action " + cppString(semanticAction.Name) + ".\n")
+		b.WriteString("struct " + contextType + " {\n")
+		b.WriteString("    Reduction reduction;\n")
+		for _, field := range fields {
+			b.WriteString("    " + field.Type + " " + field.Name + ";\n")
+		}
+		b.WriteString("};\n\n")
+		b.WriteString("/// Handles one typed " + cppString(semanticAction.Name) + " reduction.\n")
+		b.WriteString("using " + handlerType + " = std::function<" + semanticAction.ReturnType + "(const " + contextType + "&)>;\n\n")
+		b.WriteString("/// Adapts a typed " + cppString(semanticAction.Name) + " handler to the boxed reducer ABI.\n")
+		b.WriteString("inline ReductionHandler " + factoryName + "(" + handlerType + " handler) {\n")
+		b.WriteString("    return [handler = std::move(handler)](const Reduction& ctx) -> Value {\n")
+		b.WriteString("        if (ctx.action_id != " + constant + ") { throw std::runtime_error(\"typed reducer " + factoryName + " received action \" + std::string(ctx.action)); }\n")
+		b.WriteString("        " + contextType + " typed{ctx")
+		for _, field := range fields {
+			b.WriteString(", typed_detail::semantic_value_as<" + field.Type + ">(ctx, " + cppString(field.Label) + ")")
+		}
+		b.WriteString("};\n")
+		b.WriteString("        return Value{handler(typed)};\n")
+		b.WriteString("    };\n")
+		b.WriteString("}\n\n")
+	}
+	b.WriteString("/// Builds typed reducers that validate generated contexts before delegating to a boxed handler.\n")
+	b.WriteString("inline ReducerMap typed_reducer_map_from_boxed(ReductionHandler handler) {\n")
+	b.WriteString("    ReducerMap reducers;\n")
+	for _, semanticAction := range typedActions {
+		constant := constants[semanticAction.Name]
+		suffix := strings.TrimPrefix(constant, "SemanticAction::")
+		contextType := suffix + "Reduction"
+		factoryName := "typed_" + cppFunctionSuffix(semanticAction.Name)
+		b.WriteString("    reducers.handlers().emplace(" + constant + ", " + factoryName + "([handler](const " + contextType + "& ctx) -> " + semanticAction.ReturnType + " {\n")
+		b.WriteString("        return typed_detail::boxed_value_as<" + semanticAction.ReturnType + ">(handler(ctx.reduction), ctx.reduction);\n")
+		b.WriteString("    }));\n")
+	}
+	b.WriteString("    reducers.validate_coverage();\n")
+	b.WriteString("    return reducers;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("/// Builds typed reducers that validate generated contexts before delegating to a boxed reducer map.\n")
+	b.WriteString("inline ReducerMap typed_reducer_map_from_boxed(const ReducerMap& boxed) {\n")
+	b.WriteString("    boxed.validate_coverage();\n")
+	b.WriteString("    return typed_reducer_map_from_boxed([boxed](const Reduction& ctx) -> Value { return boxed(ctx); });\n")
+	b.WriteString("}\n\n")
 	b.WriteString(closeNamespace(namespace))
 	return b.String()
 }
@@ -551,7 +665,7 @@ func renderParserSource(namespace []string, source string, project *spec.Spec, t
 	b.WriteString("struct ParserActionEntry { std::string_view symbol; ParserActionKind kind; int state; int rule; };\n")
 	b.WriteString("struct ParserGotoEntry { std::string_view symbol; int state; };\n")
 	b.WriteString("struct ParserRow { std::size_t start; std::size_t count; };\n")
-	b.WriteString("struct ParserRule { int id; std::string_view lhs; const std::string_view* rhs; std::size_t rhs_count; SemanticAction action; };\n")
+	b.WriteString("struct ParserRule { int id; std::string_view lhs; const std::string_view* rhs; std::size_t rhs_count; const std::string_view* labels; std::size_t label_count; SemanticAction action; };\n")
 	b.WriteString("struct ParserExpectedEntry { int state; std::string_view symbol; std::string_view display; std::size_t member_start; std::size_t member_count; };\n")
 	b.WriteString("struct ParserAliasEntry { std::string_view symbol; std::string_view display; };\n")
 	b.WriteString("struct SemanticActionLookup { std::string_view name; SemanticAction action; };\n\n")
@@ -617,22 +731,30 @@ func renderParserRules(table *parse.Table, actionIDs map[string]string) string {
 			b.WriteString(cppString(sym) + ", ")
 		}
 		b.WriteString("}};\n")
+		b.WriteString(fmt.Sprintf("static constexpr std::array<std::string_view, %d> parser_rule_%d_labels = {{", size, i))
+		for _, label := range rule.Labels {
+			b.WriteString(cppString(label) + ", ")
+		}
+		for missing := len(rule.Labels); missing < size; missing++ {
+			b.WriteString("\"\", ")
+		}
+		b.WriteString("}};\n")
 	}
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("static constexpr std::array<ParserRule, %d> parser_rules = {{\n", max(1, maxRule+1)))
 	for i, rule := range rules {
 		if !present[i] {
-			b.WriteString(fmt.Sprintf("    {-1, \"\", parser_rule_%d_rhs.data(), parser_rule_%d_rhs.size(), SemanticAction::None},\n", i, i))
+			b.WriteString(fmt.Sprintf("    {-1, \"\", parser_rule_%d_rhs.data(), parser_rule_%d_rhs.size(), parser_rule_%d_labels.data(), parser_rule_%d_labels.size(), SemanticAction::None},\n", i, i, i, i))
 			continue
 		}
 		action := "SemanticAction::None"
 		if id, ok := actionIDs[strings.TrimSpace(rule.Actions["cpp"])]; ok {
 			action = id
 		}
-		b.WriteString(fmt.Sprintf("    {%d, %s, parser_rule_%d_rhs.data(), parser_rule_%d_rhs.size(), %s},\n", rule.ID, cppString(rule.LHS), i, i, action))
+		b.WriteString(fmt.Sprintf("    {%d, %s, parser_rule_%d_rhs.data(), parser_rule_%d_rhs.size(), parser_rule_%d_labels.data(), parser_rule_%d_labels.size(), %s},\n", rule.ID, cppString(rule.LHS), i, i, i, i, action))
 	}
 	if len(rules) == 0 {
-		b.WriteString("    {-1, \"\", nullptr, 0, SemanticAction::None},\n")
+		b.WriteString("    {-1, \"\", nullptr, 0, nullptr, 0, SemanticAction::None},\n")
 	}
 	b.WriteString("}};\n\n")
 	return b.String()
@@ -831,7 +953,17 @@ Value default_reduce(const std::vector<Value>& values) {
 }
 
 std::vector<std::string_view> rhs_symbols(const ParserRule& rule) {
+    if (rule.rhs_count == 0) {
+        return {};
+    }
     return std::vector<std::string_view>(rule.rhs, rule.rhs + rule.rhs_count);
+}
+
+std::vector<std::string_view> label_symbols(const ParserRule& rule) {
+    if (rule.label_count == 0) {
+        return {};
+    }
+    return std::vector<std::string_view>(rule.labels, rule.labels + rule.label_count);
 }
 
 std::string_view unexpected_display(std::string_view symbol) {
@@ -927,6 +1059,18 @@ func renderSemanticImplementation(actions []SemanticAction) string {
     return static_cast<std::size_t>(action);
 }
 
+const Value& Reduction::value_for(std::string_view label) const {
+    for (std::size_t index = 0; index < labels.size(); ++index) {
+        if (labels[index] == label) {
+            if (index >= values.size()) {
+                throw std::runtime_error("rule " + std::to_string(rule) + " action " + std::string(action) + " label " + std::string(label) + " has no semantic value");
+            }
+            return values[index];
+        }
+    }
+    throw std::runtime_error("rule " + std::to_string(rule) + " action " + std::string(action) + " has no RHS label " + std::string(label));
+}
+
 ReducerMap::ReducerMap(ReducerTable handlers) : handlers_(std::move(handlers)) {}
 
 ReducerMap::ReducerMap(std::initializer_list<std::pair<const SemanticAction, ReductionHandler>> handlers) : handlers_(handlers) {}
@@ -939,6 +1083,40 @@ Value ReducerMap::operator()(const Reduction& ctx) const {
     return it->second(ctx);
 }
 
+void ReducerMap::validate_coverage() const {
+`)
+	if len(actions) == 0 {
+		b.WriteString(`}
+
+`)
+	} else {
+		b.WriteString(fmt.Sprintf("    static constexpr std::array<SemanticAction, %d> required = {{\n", len(actions)))
+		for _, action := range actions {
+			b.WriteString("        SemanticAction::" + action.Constant + ",\n")
+		}
+		b.WriteString("    }};\n")
+		b.WriteString(`    for (const auto& handler : handlers_) {
+        bool known = false;
+        for (const auto action : required) {
+            if (handler.first == action) {
+                known = true;
+                break;
+            }
+        }
+        if (!known) {
+            throw std::runtime_error("unknown reducer registered for action " + std::to_string(static_cast<int>(handler.first)));
+        }
+    }
+    for (const auto action : required) {
+        if (handlers_.find(action) == handlers_.end()) {
+            throw std::runtime_error("no reducer registered for action " + std::string(semantic_action_name(action)));
+        }
+    }
+}
+
+`)
+	}
+	b.WriteString(`
 ReducerTable& ReducerMap::handlers() noexcept {
     return handlers_;
 }
@@ -986,6 +1164,10 @@ const std::vector<ParseDiagnostic>& ParseError::diagnostics() const noexcept {
 }
 
 Parser::Parser(Reducer reducer) : reducer_(std::move(reducer)) {}
+
+Parser::Parser(const ReducerMap& reducer) : reducer_([reducer](const Reduction& ctx) { return reducer(ctx); }) {
+    reducer.validate_coverage();
+}
 
 void Parser::parse(const std::vector<Lexeme>& tokens) const {
     (void)parse_value(tokens);
@@ -1092,7 +1274,7 @@ ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
 
             Value result;
             if (reducer_ && rule.action != SemanticAction::None) {
-                Reduction ctx{rule.id, rule.lhs, rhs_symbols(rule), rule.action, semantic_action_name(rule.action), rhs_values};
+                Reduction ctx{rule.id, rule.lhs, rhs_symbols(rule), label_symbols(rule), rule.action, semantic_action_name(rule.action), rhs_values};
                 result = reducer_(ctx);
             } else {
                 result = default_reduce(rhs_values);
@@ -1129,8 +1311,16 @@ Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer) {
     return Parser(std::move(reducer)).parse_value(tokens);
 }
 
+Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
+    return Parser(reducer).parse_value(tokens);
+}
+
 ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer) {
     return Parser(std::move(reducer)).parse_recovering(tokens);
+}
+
+ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
+    return Parser(reducer).parse_recovering(tokens);
 }
 
 `
@@ -1168,6 +1358,106 @@ func semanticActionIDs(actions []SemanticAction) map[string]string {
 	out := map[string]string{}
 	for _, action := range actions {
 		out[action.Name] = "SemanticAction::" + action.Constant
+	}
+	return out
+}
+
+func typedCppManifestActions(manifest action.Manifest, actions []SemanticAction) []action.Action {
+	constants := semanticActionIDs(actions)
+	var out []action.Action
+	for _, semanticAction := range manifest.Actions {
+		if !semanticAction.Typed || len(semanticAction.Rules) == 0 {
+			continue
+		}
+		if constants[semanticAction.Name] == "" {
+			continue
+		}
+		out = append(out, semanticAction)
+	}
+	return out
+}
+
+type cppTypedField struct {
+	Label string
+	Name  string
+	Type  string
+}
+
+func typedCppFields(rule action.Rule) []cppTypedField {
+	used := map[string]int{}
+	var fields []cppTypedField
+	for _, operand := range rule.RHS {
+		if operand.Label == "" {
+			continue
+		}
+		base := cppMemberName(operand.Label)
+		if base == "" {
+			base = "value"
+		}
+		used[base]++
+		name := base
+		if used[base] > 1 {
+			name = fmt.Sprintf("%s%d", base, used[base])
+		}
+		fieldType := strings.TrimSpace(operand.Type)
+		if fieldType == "" {
+			fieldType = "Value"
+		}
+		fields = append(fields, cppTypedField{
+			Label: operand.Label,
+			Name:  name,
+			Type:  fieldType,
+		})
+	}
+	return fields
+}
+
+func cppMemberName(name string) string {
+	suffix := exportedIdentifierSuffix(name)
+	if suffix == "" {
+		suffix = "Value"
+	}
+	var b strings.Builder
+	for i, r := range suffix {
+		if i == 0 && r >= 'A' && r <= 'Z' {
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	out := b.String()
+	if !isValidCppIdentifier(out) {
+		return "value_" + out
+	}
+	return out
+}
+
+func cppFunctionSuffix(name string) string {
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range name {
+		switch {
+		case isASCIIAlpha(r):
+			b.WriteRune(toASCIILower(r))
+			lastUnderscore = false
+		case isASCIIDigit(r):
+			if b.Len() == 0 {
+				b.WriteString("n_")
+			}
+			b.WriteRune(r)
+			lastUnderscore = false
+		default:
+			if !lastUnderscore && b.Len() > 0 {
+				b.WriteByte('_')
+				lastUnderscore = true
+			}
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		out = "action"
+	}
+	if !isValidCppIdentifier(out) {
+		out = "action_" + out
 	}
 	return out
 }
@@ -1309,6 +1599,13 @@ func isASCIIDigit(r rune) bool {
 func toASCIIUpper(r rune) rune {
 	if r >= 'a' && r <= 'z' {
 		return r - ('a' - 'A')
+	}
+	return r
+}
+
+func toASCIILower(r rune) rune {
+	if r >= 'A' && r <= 'Z' {
+		return r + ('a' - 'A')
 	}
 	return r
 }

@@ -1,6 +1,21 @@
 %target cpp
 %package LangForge::Examples::DataKeeper::Generated
 %semantic cpp mode reducer
+%semantic cpp type Program std::nullptr_t
+%semantic cpp type ParametersList std::nullptr_t
+%semantic cpp type ParametersDecl std::nullptr_t
+%semantic cpp type ParametersTail std::nullptr_t
+%semantic cpp type CommandBlock std::nullptr_t
+%semantic cpp type Statements std::nullptr_t
+%semantic cpp type StatementTail std::nullptr_t
+%semantic cpp type Statement std::nullptr_t
+%semantic cpp type AssignStatement std::nullptr_t
+%semantic cpp type ReplaceStatement std::nullptr_t
+%semantic cpp type RunSQLStatement std::nullptr_t
+%semantic cpp type AddObjectStatement std::nullptr_t
+%semantic cpp type RemoveObjectStatement std::nullptr_t
+%semantic cpp type RunObjectsJobStatement std::nullptr_t
+%semantic cpp type Value std::string
 %start Program
 %token Parameters Begin End Replace SQLRun AddObject RemoveObject RunObjectsJob Ident Number String Assign Comma Semi LParen RParen
 

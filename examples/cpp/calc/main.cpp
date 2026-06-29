@@ -1,4 +1,5 @@
 #include "generated/parser.hpp"
+#include "generated/parser_typed.hpp"
 
 #include <any>
 #include <atomic>
@@ -65,7 +66,7 @@ static lfcalc::Lexeme lexeme_arg(const lfcalc::Reduction& ctx, std::size_t index
 /// labels into `SemanticAction` enum values, and this reducer map connects each
 /// generated action ID to ordinary C++ code. Keeping this as a map avoids a long
 /// reduction switch and makes it obvious which grammar actions are implemented.
-static lfcalc::ReducerMap make_reducers() {
+static lfcalc::ReducerMap make_boxed_reducers() {
     return lfcalc::ReducerMap{
         {lfcalc::SemanticAction::Start, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
         {lfcalc::SemanticAction::Pass, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
@@ -96,10 +97,21 @@ static lfcalc::ReducerMap make_reducers() {
     };
 }
 
+/// Builds reducers through generated typed contexts while reusing boxed semantics.
+static lfcalc::ReducerMap make_typed_reducers() {
+    return lfcalc::typed_reducer_map_from_boxed(make_boxed_reducers());
+}
+
+/// Selects the reducer ABI used by the demo. Typed mode is the default because
+/// it validates named RHS labels and semantic value types before dispatch.
+static lfcalc::ReducerMap make_reducers(bool typed) {
+    return typed ? make_typed_reducers() : make_boxed_reducers();
+}
+
 /// Scans, parses, and evaluates one calculator expression.
-static double evaluate(std::string_view source) {
+static double evaluate(std::string_view source, bool typed = true) {
     const auto tokens = lfcalc::tokenize(source);
-    const auto value = lfcalc::parse_value(tokens, make_reducers());
+    const auto value = lfcalc::parse_value(tokens, make_reducers(typed));
     return std::any_cast<double>(value);
 }
 
@@ -113,7 +125,7 @@ static void require(bool condition, const std::string& message) {
 /// Covers behavior that is easy to regress while changing generated runtimes.
 static void run_assertions() {
     require(std::fabs(evaluate("1 + 2 * (3 - 4.5)") - -2.0) < 0.000001, "wrong expression result");
-    require(std::fabs(evaluate("7.5/2.5") - 3.0) < 0.000001, "wrong decimal division result");
+    require(std::fabs(evaluate("7.5/2.5", false) - 3.0) < 0.000001, "wrong boxed decimal division result");
 
     const auto visible = lfcalc::tokenize("1+2");
     lfcalc::parse(visible);
@@ -202,6 +214,7 @@ int main(int argc, char** argv) {
     try {
         std::vector<std::string> args(argv + 1, argv + argc);
         const bool assert_mode = take_flag(args, "--assert");
+        const bool boxed_mode = take_flag(args, "--boxed");
         const std::string log_path = read_option(args, "--log", "dist/calc-cpp-demo.log");
         const std::string input_path = args.empty() ? "input.calc" : args.front();
 
@@ -210,7 +223,7 @@ int main(int argc, char** argv) {
         }
 
         const std::string source = read_text_file(input_path);
-        const double result = evaluate(source);
+        const double result = evaluate(source, !boxed_mode);
         std::ostringstream report;
         report << "LangForge C++ calculator demo\n";
         report << "source: " << source;

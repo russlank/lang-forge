@@ -14,8 +14,8 @@ Prioritize:
 - Correct separation between generated parser reducer hooks, recognizer-only
   parsing, inline target-specific actions, and handwritten semantic layers.
 - Named RHS labels, target-specific semantic type declarations, generated
-  action manifests, Go/C# typed contexts, and checked boxed-helper boundaries
-  for C/C++.
+  action manifests, generated typed contexts/adapters, and explicit boxed
+  compatibility paths where examples keep them.
 - Parser recovery contracts: reserved `error` productions, expected-token
   diagnostics, partial/recovering APIs, and non-looping progress guarantees.
 - Test coverage for malformed input, edge grammar constructs, and clean

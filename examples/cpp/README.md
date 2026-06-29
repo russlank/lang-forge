@@ -36,10 +36,19 @@ make -C examples/cpp/calc LANG_FORGE=lang-forge run
 ```
 
 Generated C++ output uses conventional filenames: `tokens.hpp`,
-`scanner.hpp`, `scanner.cpp`, `parser.hpp`, and `parser.cpp`. Handwritten code
-includes generated headers through paths such as `generated/parser.hpp` so IDEs
-can see generated types while the generated directory remains the single source
-of generated declarations.
+`scanner.hpp`, `scanner.cpp`, `parser.hpp`, `parser_typed.hpp`, and
+`parser.cpp`. Handwritten code includes generated headers through paths such as
+`generated/parser.hpp` so IDEs can see generated types while the generated
+directory remains the single source of generated declarations.
+
+The examples default to generated typed reducer adapters and keep `--boxed` as
+an explicit compatibility mode. The typed path validates named RHS labels and
+`ReducerMap` coverage before delegating to the boxed reducer implementation.
+When a spec declares structural semantic values as `std::nullptr_t`, reducers
+return `nullptr` rather than `{}` when using typed adapters or direct typed
+handlers. Boxed-only reducers can tolerate an empty `std::any` only when that
+value is never read, but `nullptr` keeps the result consistent with the
+declared no-op type.
 
 The DRAW C++ example writes a PNG image with a tiny local encoder rather than
 using an external image library.

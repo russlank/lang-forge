@@ -1,6 +1,21 @@
 %target c
 %package datakeeper
 %semantic c mode reducer
+%semantic c type Program void *
+%semantic c type ParametersList void *
+%semantic c type ParametersDecl void *
+%semantic c type ParametersTail void *
+%semantic c type CommandBlock void *
+%semantic c type Statements void *
+%semantic c type StatementTail void *
+%semantic c type Statement void *
+%semantic c type AssignStatement void *
+%semantic c type ReplaceStatement void *
+%semantic c type RunSQLStatement void *
+%semantic c type AddObjectStatement void *
+%semantic c type RemoveObjectStatement void *
+%semantic c type RunObjectsJobStatement void *
+%semantic c type Value char *
 %start Program
 %token Parameters Begin End Replace SQLRun AddObject RemoveObject RunObjectsJob Ident Number String Assign Comma Semi LParen RParen
 

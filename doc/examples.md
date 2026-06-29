@@ -369,10 +369,11 @@ outside `generated`.
 
 DRAW is also the larger typed-semantics example. Its four target specs share
 labels such as `width=Expr`, `target=FigureReference`, and `right=Term`, plus
-target-native nonterminal result declarations. Go generates typed contexts for
-all DRAW actions and the handwritten adapter uses named fields without
-positional casts. The dependency-only `model` package prevents an import cycle
-between generated parser code and the application AST.
+target-native nonterminal result declarations. Supported targets generate typed
+contexts or adapters for DRAW actions; the handwritten adapters use named
+fields directly or validate typed contexts before delegating to boxed
+compatibility reducers. The Go dependency-only `model` package prevents an
+import cycle between generated parser code and the application AST.
 
 ```text
 draw.lf -> generated scanner/parser reducer -> AST -> interpreter -> PNG

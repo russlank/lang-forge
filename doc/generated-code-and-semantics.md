@@ -120,8 +120,8 @@ language.
 
 ## Typed Contexts And Coverage
 
-For Go and C#, an action receives a generated typed context when its result
-nonterminal and labeled nonterminals have `%semantic <target> type`
+For Go, C#, C, and C++, an action receives a generated typed context when its
+result nonterminal and labeled nonterminals have `%semantic <target> type`
 declarations, labeled terminals use the generated `Lexeme` type, and every rule
 sharing the action label has the same named field and result types.
 
@@ -133,10 +133,11 @@ API remains available for gradual migration:
 left, err := ctx.ValueFor("left")
 ```
 
-Generated `ReducerMap` values expose coverage validation. The standard
-`ParseWithReducer` entry point validates Go and C# reducer maps automatically,
-so missing handlers fail before input-dependent parser execution can hide the
-gap.
+Generated reducer maps expose coverage validation where the target has a map
+abstraction. Go, C#, and C++ standard map-based parse paths validate handler
+coverage before input-dependent parser execution can hide a missing action.
+C generated typed reducers validate that every action handler is present before
+parsing.
 
 Every backend writes `langforge.actions.json`. It records actions, normalized
 rules, RHS positions, optional labels, semantic types, and why an action could
@@ -150,6 +151,67 @@ without importing the public package that already imports `generated/`. C#
 typed contexts are generated as `internal` records/delegates in the generated
 namespace, so examples can keep handwritten AST/model records internal inside
 the same project.
+
+C and C++ generate companion typed headers beside the boxed parser API:
+`parser_typed.h` and `parser_typed.hpp`. Include handwritten model or AST
+headers before those typed headers when `%semantic c/cpp type` declarations
+refer to application types. C typed handlers receive typed arguments but still
+return `*_value` (`void *`) so ownership stays explicit in handwritten code.
+C++ typed handlers return the declared native type, and LangForge boxes that
+value into the generated `std::any` stack.
+
+### C++ No-Op Values: `nullptr` Is Not `{}`
+
+C++ examples sometimes declare structural reductions as `std::nullptr_t`:
+
+```lf
+%semantic cpp type Program std::nullptr_t
+%semantic cpp type Statement std::nullptr_t
+```
+
+That says the action intentionally returns a no-op value.
+
+There are three cases:
+
+- **Boxed-only reducer path:** `return {};` creates an empty `std::any`. That is
+  tolerated when the value is never read or cast, but it means "no semantic
+  value was returned", not "the declared no-op value was returned".
+- **Boxed reducer adapted to typed:** `typed_reducer_map_from_boxed` validates
+  boxed results with `std::any_cast<std::nullptr_t>`. An empty `std::any` fails
+  that validation, so the boxed reducer must return `nullptr`.
+- **Direct typed reducer:** the typed handler's native return type is
+  `std::nullptr_t`, so return `nullptr` there as well.
+
+For boxed reducers that may be used through the typed adapter, write:
+
+```cpp
+auto noop = [](const generated::Reduction&) -> generated::Value {
+    return nullptr; // std::any contains std::nullptr_t
+};
+```
+
+Do not use `return {};` for those actions:
+
+```cpp
+generated::Value missing{};  // empty std::any, contains no type
+generated::Value noop = nullptr; // contains std::nullptr_t
+```
+
+For direct typed reducers, write the same semantic value explicitly:
+
+```cpp
+generated::typed_program(
+    [](const generated::ProgramReduction&) -> std::nullptr_t {
+        return nullptr;
+    });
+```
+
+`return {};` can be value-initialization in some explicitly typed C++ contexts,
+but it is easy to confuse with an empty `std::any` and can fail under return
+type deduction. LangForge examples use `return nullptr;` because it is the
+readable and reliable way to say "this reduction intentionally returned the
+declared no-op value". Typed adapters reject the empty boxed case so forgotten
+reducer returns are caught early.
 
 ## From `.lf` To Handwritten Semantics
 
@@ -209,22 +271,25 @@ static Command ReduceRunObjectsJob(RunObjectsJobReduction ctx)
 }
 ```
 
-For C and C++, the same `.lf` contract is already written into
-`langforge.actions.json`, but generated typed context APIs are still planned.
-Those examples therefore use checked helper functions near the reducer
-boundary. The helper names should still mirror the grammar labels:
+For C and C++, the same `.lf` contract is written into `langforge.actions.json`
+and into generated typed companion headers. The examples keep their boxed
+reducers as a compatibility source of truth, then use generated
+`*_typed_reducer_from_boxed(...)` or `typed_reducer_map_from_boxed(...)`
+adapters to validate typed contexts before delegating to boxed semantics. You
+can also write native typed handlers directly:
 
 ```cpp
-append_command(
-    demo,
-    "runobjectsjob",
-    string_arg(ctx, 2, "parent"),
-    string_arg(ctx, 4, "name"),
-    string_arg(ctx, 6, "jobs tag"));
+auto reducers = generated::ReducerMap{
+    {generated::SemanticAction::Add,
+     generated::typed_add([](const generated::AddReduction& ctx) {
+         return ctx.left + ctx.right;
+     })},
+};
 ```
 
-That keeps the boxed boundary small and makes future migration to generated
-typed contexts mechanical.
+The generated typed-from-boxed adapters are useful while migrating larger
+semantic layers. They exercise the same named labels and type checks while
+letting existing boxed reducers continue to run.
 
 ## The Action Manifest
 
@@ -596,12 +661,14 @@ if action is "subtract", return left - right
 
 This is the same pattern used by the larger examples:
 
-- DataKeeper uses named action/RHS labels and Go/C# typed contexts to build a
-  script AST, then lowers that AST to stack-machine instructions.
+- DataKeeper uses named action/RHS labels and typed reducer contexts/adapters
+  to build or validate the semantic layer, then lowers the script model to
+  stack-machine instructions.
 - DRAW uses action labels to build a drawing AST, then interprets it into a
   PNG image.
-- Vehicle report uses named action/RHS labels and Go/C# typed contexts to build
-  a small AST, then renders a text/XML-like report.
+- Vehicle report uses named action/RHS labels and typed reducer
+  contexts/adapters to build or validate a small semantic model, then renders a
+  text/XML-like report.
 
 ## Recovery Productions And Semantic Actions
 

@@ -16,9 +16,9 @@ namespace draw = LangForge::Examples::Draw::Generated;
 
 namespace {
 
-lfdraw::RenderResult render_source(const std::string& source, const std::string& output_path) {
+lfdraw::RenderResult render_source(const std::string& source, const std::string& output_path, bool typed = true) {
     lfdraw::Renderer renderer;
-    lfdraw::RenderResult result = renderer.render(lfdraw::parse_program(source));
+    lfdraw::RenderResult result = renderer.render(lfdraw::parse_program(source, typed));
     lfdraw::write_png(output_path, result.image);
     return result;
 }
@@ -41,7 +41,10 @@ void run_assertions(const std::string& source, const std::string& output_path) {
     require(count_operation(result, "circle 3 args") == 196, "expected 196 rendered circles");
     require(count_operation(result, "box 4 args") == 2, "expected 2 rendered boxes");
 
-    draw::Parser parser(lfdraw::make_reducers());
+    const lfdraw::RenderResult boxed_result = render_source(source, output_path, false);
+    require(boxed_result.image.width == 960 && boxed_result.image.height == 640, "expected boxed 960x640 canvas");
+
+    draw::Parser parser(lfdraw::make_typed_reducers());
     const auto tokens = draw::tokenize(source);
     parser.parse_value(tokens);
 
@@ -90,6 +93,7 @@ int main(int argc, char** argv) {
     try {
         std::vector<std::string> args(argv + 1, argv + argc);
         const bool assert_mode = take_flag(args, "--assert");
+        const bool boxed_mode = take_flag(args, "--boxed");
         const std::string output_path = read_option(args, "--output", "dist/sample-cpp.png");
         const std::string log_path = read_option(args, "--log", "dist/draw-cpp-demo.log");
         const std::string input_path = args.empty() ? "sample.draw" : args.front();
@@ -99,7 +103,7 @@ int main(int argc, char** argv) {
             run_assertions(source, output_path);
         }
 
-        const lfdraw::RenderResult result = render_source(source, output_path);
+        const lfdraw::RenderResult result = render_source(source, output_path, !boxed_mode);
         const std::string report = lfdraw::build_report(input_path, output_path, result);
         lfdraw::write_text_file(log_path, report);
         std::cout << report;

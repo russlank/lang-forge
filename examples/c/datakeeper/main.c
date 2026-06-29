@@ -1,5 +1,6 @@
 #include "../common/demo.h"
 #include "generated/parser.h"
+#include "generated/parser_typed.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,11 @@ typedef struct dks_demo {
     int parameters;
     int commands;
 } dks_demo;
+
+typedef enum dks_reducer_mode {
+    DKS_REDUCER_TYPED,
+    DKS_REDUCER_BOXED
+} dks_reducer_mode;
 
 static char *dks_copy_lexeme(dks_demo *demo, const datakeeper_lexeme *lexeme) {
     return demo_arena_copy(&demo->arena, lexeme->text, lexeme->length);
@@ -226,16 +232,27 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
     }
 }
 
-static int dks_parse(dks_demo *demo, const char *source, char *message, size_t message_size) {
+static int dks_parse(dks_demo *demo, const char *source, dks_reducer_mode mode, char *message, size_t message_size) {
     datakeeper_error error;
     datakeeper_lexeme *tokens = NULL;
     size_t count = 0;
+    int parsed = 0;
     error.message[0] = '\0';
     if (!datakeeper_tokenize(source, &tokens, &count, &error)) {
         return demo_set_error(message, message_size, "scan failed: %s", error.message);
     }
-    if (!demo_text_append(&demo->report, "DataKeeper C mock compiler\nparameters:\n", message, message_size) ||
-        !datakeeper_parse_value(tokens, count, dks_reduce, demo, NULL, &error)) {
+    if (!demo_text_append(&demo->report, "DataKeeper C mock compiler\nparameters:\n", message, message_size)) {
+        datakeeper_free_lexemes(tokens);
+        return 0;
+    }
+    if (mode == DKS_REDUCER_TYPED) {
+        datakeeper_boxed_typed_reducer boxed = {0};
+        datakeeper_typed_reducer typed = datakeeper_typed_reducer_from_boxed(&boxed, dks_reduce, demo);
+        parsed = datakeeper_parse_value_typed(tokens, count, &typed, NULL, &error);
+    } else {
+        parsed = datakeeper_parse_value(tokens, count, dks_reduce, demo, NULL, &error);
+    }
+    if (!parsed) {
         datakeeper_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
@@ -248,10 +265,11 @@ static int dks_parse(dks_demo *demo, const char *source, char *message, size_t m
 
 static int dks_run_assertions(const char *source, char *message, size_t message_size) {
     dks_demo demo = {0};
+    dks_demo boxed_demo = {0};
     datakeeper_error error;
     datakeeper_lexeme *tokens = NULL;
     size_t count = 0;
-    if (!dks_parse(&demo, source, message, message_size)) {
+    if (!dks_parse(&demo, source, DKS_REDUCER_TYPED, message, message_size)) {
         demo_text_free(&demo.report);
         demo_arena_free(&demo.arena);
         return 0;
@@ -263,6 +281,13 @@ static int dks_run_assertions(const char *source, char *message, size_t message_
     }
     demo_text_free(&demo.report);
     demo_arena_free(&demo.arena);
+    if (!dks_parse(&boxed_demo, source, DKS_REDUCER_BOXED, message, message_size) || boxed_demo.parameters != 4 || boxed_demo.commands != 8) {
+        demo_text_free(&boxed_demo.report);
+        demo_arena_free(&boxed_demo.arena);
+        return demo_set_error(message, message_size, "boxed reducer summary mismatch");
+    }
+    demo_text_free(&boxed_demo.report);
+    demo_arena_free(&boxed_demo.arena);
     if (datakeeper_tokenize("begin @ end", &tokens, &count, &error)) {
         datakeeper_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected scanner failure");
@@ -314,6 +339,7 @@ int main(int argc, char **argv) {
     demo_buffer source = {0};
     dks_demo demo = {0};
     int assert_mode = dks_take_flag(&argc, argv, "--assert");
+    int boxed_mode = dks_take_flag(&argc, argv, "--boxed");
     const char *log_path = dks_read_option(&argc, argv, "--log", "dist/datakeeper-c-demo.log");
     const char *input_path = argc > 1 ? argv[1] : "sample.dks";
     if (!demo_read_file(input_path, &source, message, sizeof(message))) {
@@ -325,7 +351,7 @@ int main(int argc, char **argv) {
         demo_free_buffer(&source);
         return 1;
     }
-    if (!dks_parse(&demo, source.data, message, sizeof(message)) ||
+    if (!dks_parse(&demo, source.data, boxed_mode ? DKS_REDUCER_BOXED : DKS_REDUCER_TYPED, message, sizeof(message)) ||
         !demo_write_text(log_path, demo.report.data, message, sizeof(message))) {
         fprintf(stderr, "%s\n", message);
         demo_free_buffer(&source);

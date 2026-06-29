@@ -45,9 +45,9 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
    generated output out of committed source unless the task explicitly asks for
    a golden fixture.
 9. Use generated `langforge.actions.json` as the cross-target semantic
-   contract. Go can generate typed reducer contexts and coverage validation;
-   C#, C, and C++ currently use checked boxed-helper reducers until typed
-   context parity lands.
+   contract. Go and C# can generate typed reducer contexts and coverage
+   validation; C and C++ currently use checked boxed-helper reducers until
+   typed context parity lands.
 
 ## Rules Of Thumb
 

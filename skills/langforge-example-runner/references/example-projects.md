@@ -78,8 +78,9 @@ Modern examples should make the grammar-to-code contract obvious:
   helper names;
 - `{target: action}` labels map to generated action IDs/enums;
 - `langforge.actions.json` records the cross-target action manifest;
-- Go examples should use generated typed reducer contexts when eligible;
-- C#, C, and C++ examples should centralize boxed casts in helpers and pass
+- Go and C# examples should use generated typed reducer contexts when
+  eligible;
+- C and C++ examples should centralize boxed casts in helpers and pass
   descriptive grammar-role names to those helpers.
 
 DRAW, DataKeeper, and vehicle-report are the best examples for this pattern.

@@ -4,9 +4,11 @@ This example generates a C# scanner/parser from [vehicle.lf](vehicle.lf). The
 handwritten reducer in [Program.cs](Program.cs) builds a vehicle model and
 writes a compact text report.
 
-The grammar includes named RHS labels so generated manifests are useful for
-debugging and future typed reducer-context parity. The current C# reducer still
-uses checked helper functions over the boxed generated API.
+The grammar includes named RHS labels and C# semantic type declarations.
+LangForge uses them to generate typed reducer contexts, so the handwritten
+reducer can build the report model from properties such as `ctx.Model`,
+`ctx.Features`, `ctx.Date`, and `ctx.Description` instead of positional
+`object?` values.
 
 Run:
 

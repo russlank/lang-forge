@@ -34,6 +34,7 @@ outputs, generated PNG files, and demo logs are ignored.
 
 The grammar uses the same named RHS labels and action names as the Go, C, and
 C++ DRAW specs. Target-specific C# semantic types are recorded in
-`Generated/langforge.actions.json`. The handwritten adapter still uses the
-current C# boxed reducer API; generated C# typed contexts and coverage helpers
-are tracked as backend-parity work.
+`Generated/langforge.actions.json`. The handwritten adapter uses generated C#
+typed reducer contexts and coverage validation, so reductions read from named
+properties such as `ctx.Width`, `ctx.Height`, `ctx.Target`, and `ctx.Tail`
+instead of counting parser stack positions.

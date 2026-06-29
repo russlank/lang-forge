@@ -60,7 +60,7 @@ internal static class Program
         Check(result.Operations.Count > 100, "expected repeated drawing operations");
         Check(new FileInfo(outputPath).Length > 1000, "expected non-empty PNG output");
 
-        var parser = new Parser(new ReducerFunc(DrawParser.Reduce));
+        var parser = new Parser(DrawParser.CreateReducers());
         Parallel.For(0, 8, _ => parser.ParseValueInput(Scanner.Tokenize(source)));
 
         try

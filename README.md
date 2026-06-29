@@ -205,10 +205,10 @@ Reusable Codex skills for LangForge live under [skills](skills):
   reducer-map helpers where the target has that convenience layer. Specs can
   also opt into Go inline action mode with target-tagged semantic imports for
   advanced handwritten-library integration. Named RHS labels, target-specific
-  nonterminal types, deterministic action manifests, generated Go typed
-  reducer contexts, and Go reducer-map coverage validation are implemented.
-  Equivalent typed context APIs for C#, C, and C++, debug tracing, and optional
-  AST helper generation remain planned. See
+  nonterminal types, deterministic action manifests, generated Go and C# typed
+  reducer contexts, and Go/C# reducer-map coverage validation are implemented.
+  Equivalent typed context APIs for C and C++, debug tracing, and optional AST
+  helper generation remain planned. See
   [Generated code and semantics](doc/generated-code-and-semantics.md) for a
   beginner-friendly explanation of reducer labels, generated directories, and
   Go build tags used by the runnable examples.

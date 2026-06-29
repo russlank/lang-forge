@@ -4,10 +4,11 @@ This example generates a C# scanner/parser from [datakeeper.lf](datakeeper.lf)
 and uses a handwritten reducer in [Program.cs](Program.cs) to lower the script
 into a small stack-machine-like instruction log.
 
-The grammar uses named RHS labels in the same places as the Go version.
-Generated C# typed reducer contexts are still tracked as backend-parity work,
-so this example keeps small checked helper functions around the boxed reducer
-API.
+The grammar uses named RHS labels and C# semantic type declarations in the same
+places as the Go version. LangForge turns those into generated typed reducer
+contexts, so [Program.cs](Program.cs) can register adapters such as
+`SemanticReducerContexts.TypedRunObjectsJob` and implement handlers with
+properties like `ctx.Parent`, `ctx.Name`, and `ctx.JobsTag`.
 
 Run:
 

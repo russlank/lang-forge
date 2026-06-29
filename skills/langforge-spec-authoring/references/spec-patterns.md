@@ -49,8 +49,8 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
 - Use `%empty` for intentional empty productions.
 - Give semantic RHS values labels such as `left=Expr`, `token=Number`, or
   `body=Block`. Labels are preserved in table JSON and
-  `langforge.actions.json`; Go reducers can read them through typed contexts
-  or `Reduction.ValueFor`.
+  `langforge.actions.json`; Go and C# reducers can read them through typed
+  contexts or label-aware `Reduction.ValueFor`.
 - Keep terminals declared with `%token`; every nonterminal should have a rule.
 - Keep token and nonterminal names disjoint.
 - Use `%type slr`, `%type lalr`, `%type ielr`, or `%type canonical` only when
@@ -61,7 +61,7 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
   `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
   generated `SemanticAction` values with `ReducerMap`.
 - Declare `%semantic <target> type Nonterminal TargetType` when a nonterminal
-  has a real domain value. Go emits typed reducer contexts for eligible
+  has a real domain value. Go and C# emit typed reducer contexts for eligible
   actions; all targets record the declared types and labels in
   `langforge.actions.json`.
 - Treat `{target: name}` as an action label, not embedded behavior. Handwritten
@@ -78,8 +78,8 @@ For every non-trivial production, line up:
 - target-specific nonterminal type declarations where the value is meaningful;
 - generated action IDs/enums and `langforge.actions.json`;
 - handwritten reducer map entries or switch branches;
-- tests for missing reducer coverage in Go, or checked boxed-helper failures in
-  C#, C, and C++.
+- tests for missing reducer coverage in Go/C#, or checked boxed-helper failures
+  in C and C++.
 
 ## Legacy Split Inputs
 

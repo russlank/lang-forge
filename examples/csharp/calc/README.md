@@ -10,8 +10,10 @@ may contain a fractional part, and the default sample evaluates
 
 Action labels such as `{csharp: add}` become generated `SemanticAction` enum
 values. They do not contain arithmetic by themselves; [Program.cs](Program.cs)
-maps those enum values to C# lambdas and uses typed helper functions to keep
-`object?` conversions in one easy-to-review place.
+maps those enum values to generated typed reducer adapters such as
+`SemanticReducerContexts.TypedAdd`. The handwritten handler receives an
+`AddReduction` record with named properties like `Left` and `Right`, so grammar
+changes are easier to review than positional `object?` casts.
 
 Run:
 

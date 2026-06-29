@@ -1,8 +1,10 @@
 package csharp
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/russlank/lang-forge/internal/action"
 	"github.com/russlank/lang-forge/internal/parse"
 )
 
@@ -42,6 +44,51 @@ func TestSemanticActions_GeneratesStableCSharpConstants(t *testing.T) {
 	for i := range want {
 		if actions[i] != want[i] {
 			t.Fatalf("actions[%d] = %#v, want %#v", i, actions[i], want[i])
+		}
+	}
+}
+
+func TestRenderTypedReductionContexts_GeneratesCSharpAdapters(t *testing.T) {
+	manifest := action.Manifest{
+		Target: "csharp",
+		Actions: []action.Action{
+			{
+				ID:         1,
+				Name:       "add",
+				Typed:      true,
+				ReturnType: "double",
+				Rules: []action.Rule{
+					{
+						ID:         3,
+						LHS:        "Expr",
+						ReturnType: "double",
+						Typed:      true,
+						RHS: []action.Operand{
+							{Position: 1, Symbol: "Expr", Label: "left", Type: "double"},
+							{Position: 2, Symbol: "Plus", Type: "Lexeme"},
+							{Position: 3, Symbol: "Term", Label: "right", Type: "double"},
+						},
+					},
+				},
+				ConsistentContext: true,
+			},
+		},
+	}
+	actions := []SemanticAction{{ID: 1, Name: "add", Constant: "Add"}}
+
+	var b strings.Builder
+	renderTypedReductionContexts(&b, manifest, actions)
+	got := b.String()
+	for _, want := range []string{
+		"internal sealed record AddReduction(Reduction Reduction, double Left, double Right);",
+		"internal delegate double AddHandler(AddReduction ctx);",
+		"internal static class SemanticReducerContexts",
+		"internal static AddReduction NewAddReduction(Reduction ctx)",
+		"SemanticValueAs<double>(ctx, \"left\")",
+		"internal static Func<Reduction, object?> TypedAdd(AddHandler handler)",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("typed C# contexts missing %q in:\n%s", want, got)
 		}
 	}
 }

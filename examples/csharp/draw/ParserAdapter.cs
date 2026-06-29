@@ -1,5 +1,6 @@
 using System.Globalization;
 using LangForge.Examples.Draw.Generated;
+using static LangForge.Examples.Draw.Generated.SemanticReducerContexts;
 
 namespace LangForge.Examples.Draw;
 
@@ -13,69 +14,152 @@ internal static class DrawParser
     /// </summary>
     public static DrawProgram Parse(string source)
     {
-        var value = Parser.ParseWithReducer(Scanner.Tokenize(source), new ReducerFunc(Reduce));
-        return Arg<DrawProgram>(value, "program");
+        var value = Parser.ParseWithReducer(Scanner.Tokenize(source), CreateReducers());
+        return value is DrawProgram program
+            ? program
+            : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of DrawProgram");
     }
 
     /// <summary>
-    /// Dispatches generated semantic action IDs to AST-building helpers.
+    /// Creates the semantic reducer map used by the generated parser.
     /// </summary>
-    public static object? Reduce(Reduction ctx)
+    public static ReducerMap CreateReducers()
     {
-        return ctx.ActionID switch
+        // The generated adapters validate the action ID, read named RHS labels,
+        // and pass a typed context into each handwritten AST-building function.
+        return new ReducerMap
         {
-            SemanticAction.Program => new DrawProgram(Arg<List<Statement>>(ctx, 0, "statement list")),
-            SemanticAction.Statements => Prepend(Arg<Statement>(ctx, 0, "statement"), Arg<List<Statement>>(ctx, 1, "tail statements")),
-            SemanticAction.Figures => Prepend(Arg<Statement>(ctx, 0, "figure statement"), Arg<List<Statement>>(ctx, 1, "tail figures")),
-            SemanticAction.StatementTailMore => Prepend(Arg<Statement>(ctx, 1, "statement"), Arg<List<Statement>>(ctx, 2, "tail statements")),
-            SemanticAction.FigureTailMore => Prepend(Arg<Statement>(ctx, 1, "figure statement"), Arg<List<Statement>>(ctx, 2, "tail figures")),
-            SemanticAction.StatementTailEmpty => new List<Statement>(),
-            SemanticAction.FigureTailEmpty => new List<Statement>(),
-            SemanticAction.Pass => ctx.Values[0],
-            SemanticAction.Canvas => new CanvasStatement(Arg<Expr>(ctx, 1, "width"), Arg<Expr>(ctx, 3, "height")),
-            SemanticAction.Background => new BackgroundStatement(Arg<ColorRgb>(ctx, 1, "color")),
-            SemanticAction.Stroke => new StrokeStatement(Arg<ColorRgb>(ctx, 1, "color")),
-            SemanticAction.Fill => new FillStatement(Arg<ColorRgb>(ctx, 1, "color"), true),
-            SemanticAction.FillNone => new FillStatement(ColorRgb.Black, false),
-            SemanticAction.Width => new WidthStatement(Arg<Expr>(ctx, 1, "line width")),
-            SemanticAction.Assign => new AssignStatement(Text(ctx, 0, "variable name"), Arg<Expr>(ctx, 2, "assigned value")),
-            SemanticAction.DefineFigure => new DefineFigureStatement(Text(ctx, 0, "figure name"), Arg<FigureBlock>(ctx, 2, "figure block")),
-            SemanticAction.Draw => new DrawStatement(Arg<FigureRef>(ctx, 1, "figure reference")),
-            SemanticAction.Repdraw => new RepDrawStatement(Arg<Expr>(ctx, 1, "repeat count"), Arg<FigureRef>(ctx, 2, "figure reference")),
-            SemanticAction.FigureRefNamed => new NamedFigureRef(Text(ctx, 0, "figure name")),
-            SemanticAction.FigureRefInline => new InlineFigureRef(Arg<FigureBlock>(ctx, 0, "inline figure")),
-            SemanticAction.FigureBlock => new FigureBlock(Arg<List<Statement>>(ctx, 1, "figure statements")),
-            SemanticAction.PrimitivePoint => Primitive("point", ctx, 1, 3),
-            SemanticAction.PrimitiveLine => Primitive("line", ctx, 1, 3, 5, 7),
-            SemanticAction.PrimitiveBox => Primitive("box", ctx, 1, 3, 5, 7),
-            SemanticAction.PrimitiveCircle => Primitive("circle", ctx, 1, 3, 5),
-            SemanticAction.Color => ParseColor(Text(ctx, 0, "color literal")),
-            SemanticAction.Expr => FoldBinary(Arg<Expr>(ctx, 0, "left expression"), Arg<List<BinaryTail>>(ctx, 1, "expression tail")),
-            SemanticAction.Term => FoldBinary(Arg<Expr>(ctx, 0, "left term"), Arg<List<BinaryTail>>(ctx, 1, "term tail")),
-            SemanticAction.ExprTailAdd => BinaryTailList("+", ctx, 1, 2),
-            SemanticAction.ExprTailSubtract => BinaryTailList("-", ctx, 1, 2),
-            SemanticAction.ExprTailEmpty => new List<BinaryTail>(),
-            SemanticAction.TermTailMultiply => BinaryTailList("*", ctx, 1, 2),
-            SemanticAction.TermTailDivide => BinaryTailList("/", ctx, 1, 2),
-            SemanticAction.TermTailEmpty => new List<BinaryTail>(),
-            SemanticAction.UnaryNegate => new UnaryExpr("-", Arg<Expr>(ctx, 1, "operand")),
-            SemanticAction.ExprPass => Arg<Expr>(ctx, 0, "expression"),
-            SemanticAction.Number => new NumberExpr(double.Parse(Text(ctx, 0, "number"), CultureInfo.InvariantCulture)),
-            SemanticAction.Variable => new VariableExpr(Text(ctx, 0, "variable name")),
-            SemanticAction.Call => new CallExpr(Text(ctx, 0, "function name"), Arg<Expr>(ctx, 2, "argument")),
-            SemanticAction.Group => ctx.Values[1],
-            _ => DefaultReduce(ctx.Values),
+            [SemanticAction.Program] = TypedProgram(Program),
+            [SemanticAction.Statements] = TypedStatements(Statements),
+            [SemanticAction.StatementTailMore] = TypedStatementTailMore(StatementTailMore),
+            [SemanticAction.StatementTailEmpty] = TypedStatementTailEmpty(StatementTailEmpty),
+            [SemanticAction.Pass] = TypedPass(Pass),
+            [SemanticAction.Canvas] = TypedCanvas(Canvas),
+            [SemanticAction.Background] = TypedBackground(Background),
+            [SemanticAction.Stroke] = TypedStroke(Stroke),
+            [SemanticAction.Fill] = TypedFill(Fill),
+            [SemanticAction.FillNone] = TypedFillNone(FillNone),
+            [SemanticAction.Width] = TypedWidth(Width),
+            [SemanticAction.Assign] = TypedAssign(Assign),
+            [SemanticAction.DefineFigure] = TypedDefineFigure(DefineFigure),
+            [SemanticAction.Draw] = TypedDraw(Draw),
+            [SemanticAction.Repdraw] = TypedRepdraw(Repdraw),
+            [SemanticAction.FigureRefNamed] = TypedFigureRefNamed(FigureRefNamed),
+            [SemanticAction.FigureRefInline] = TypedFigureRefInline(FigureRefInline),
+            [SemanticAction.FigureBlock] = TypedFigureBlock(FigureBlock),
+            [SemanticAction.Figures] = TypedFigures(Figures),
+            [SemanticAction.FigureTailMore] = TypedFigureTailMore(FigureTailMore),
+            [SemanticAction.FigureTailEmpty] = TypedFigureTailEmpty(FigureTailEmpty),
+            [SemanticAction.PrimitivePoint] = TypedPrimitivePoint(PrimitivePoint),
+            [SemanticAction.PrimitiveLine] = TypedPrimitiveLine(PrimitiveLine),
+            [SemanticAction.PrimitiveBox] = TypedPrimitiveBox(PrimitiveBox),
+            [SemanticAction.PrimitiveCircle] = TypedPrimitiveCircle(PrimitiveCircle),
+            [SemanticAction.Color] = TypedColor(Color),
+            [SemanticAction.Expr] = TypedExpr(Expr),
+            [SemanticAction.ExprTailAdd] = TypedExprTailAdd(ExprTailAdd),
+            [SemanticAction.ExprTailSubtract] = TypedExprTailSubtract(ExprTailSubtract),
+            [SemanticAction.ExprTailEmpty] = TypedExprTailEmpty(ExprTailEmpty),
+            [SemanticAction.Term] = TypedTerm(Term),
+            [SemanticAction.TermTailMultiply] = TypedTermTailMultiply(TermTailMultiply),
+            [SemanticAction.TermTailDivide] = TypedTermTailDivide(TermTailDivide),
+            [SemanticAction.TermTailEmpty] = TypedTermTailEmpty(TermTailEmpty),
+            [SemanticAction.UnaryNegate] = TypedUnaryNegate(UnaryNegate),
+            [SemanticAction.ExprPass] = TypedExprPass(ExprPass),
+            [SemanticAction.Number] = TypedNumber(Number),
+            [SemanticAction.Variable] = TypedVariable(Variable),
+            [SemanticAction.Call] = TypedCall(Call),
+            [SemanticAction.Group] = TypedGroup(Group),
         };
     }
 
-    private static PrimitiveStatement Primitive(string kind, Reduction ctx, params int[] indexes)
+    private static DrawProgram Program(ProgramReduction ctx) => new(ctx.Statements);
+
+    private static List<Statement> Statements(StatementsReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+    private static List<Statement> StatementTailMore(StatementTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+    private static List<Statement> StatementTailEmpty(StatementTailEmptyReduction ctx) => [];
+
+    private static Statement Pass(PassReduction ctx) => ctx.Value;
+
+    private static Statement Canvas(CanvasReduction ctx) => new CanvasStatement(ctx.Width, ctx.Height);
+
+    private static Statement Background(BackgroundReduction ctx) => new BackgroundStatement(ctx.Color);
+
+    private static Statement Stroke(StrokeReduction ctx) => new StrokeStatement(ctx.Color);
+
+    private static Statement Fill(FillReduction ctx) => new FillStatement(ctx.Color, true);
+
+    private static Statement FillNone(FillNoneReduction ctx) => new FillStatement(ColorRgb.Black, false);
+
+    private static Statement Width(WidthReduction ctx) => new WidthStatement(ctx.Value);
+
+    private static Statement Assign(AssignReduction ctx) => new AssignStatement(ctx.Name.Text, ctx.Value);
+
+    private static Statement DefineFigure(DefineFigureReduction ctx) => new DefineFigureStatement(ctx.Name.Text, ctx.Figure);
+
+    private static Statement Draw(DrawReduction ctx) => new DrawStatement(ctx.Target);
+
+    private static Statement Repdraw(RepdrawReduction ctx) => new RepDrawStatement(ctx.Count, ctx.Target);
+
+    private static FigureRef FigureRefNamed(FigureRefNamedReduction ctx) => new NamedFigureRef(ctx.Name.Text);
+
+    private static FigureRef FigureRefInline(FigureRefInlineReduction ctx) => new InlineFigureRef(ctx.Figure);
+
+    private static FigureBlock FigureBlock(FigureBlockReduction ctx) => new(ctx.Statements);
+
+    private static List<Statement> Figures(FiguresReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+    private static List<Statement> FigureTailMore(FigureTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+    private static List<Statement> FigureTailEmpty(FigureTailEmptyReduction ctx) => [];
+
+    private static Statement PrimitivePoint(PrimitivePointReduction ctx) => Primitive("point", ctx.X, ctx.Y);
+
+    private static Statement PrimitiveLine(PrimitiveLineReduction ctx) => Primitive("line", ctx.X1, ctx.Y1, ctx.X2, ctx.Y2);
+
+    private static Statement PrimitiveBox(PrimitiveBoxReduction ctx) => Primitive("box", ctx.X1, ctx.Y1, ctx.X2, ctx.Y2);
+
+    private static Statement PrimitiveCircle(PrimitiveCircleReduction ctx) => Primitive("circle", ctx.Cx, ctx.Cy, ctx.Radius);
+
+    private static ColorRgb Color(ColorReduction ctx) => ParseColor(ctx.Literal.Text);
+
+    private static Expr Expr(ExprReduction ctx) => FoldBinary(ctx.Left, ctx.Tail);
+
+    private static List<BinaryTail> ExprTailAdd(ExprTailAddReduction ctx) => BinaryTailList("+", ctx.Right, ctx.Tail);
+
+    private static List<BinaryTail> ExprTailSubtract(ExprTailSubtractReduction ctx) => BinaryTailList("-", ctx.Right, ctx.Tail);
+
+    private static List<BinaryTail> ExprTailEmpty(ExprTailEmptyReduction ctx) => [];
+
+    private static Expr Term(TermReduction ctx) => FoldBinary(ctx.Left, ctx.Tail);
+
+    private static List<BinaryTail> TermTailMultiply(TermTailMultiplyReduction ctx) => BinaryTailList("*", ctx.Right, ctx.Tail);
+
+    private static List<BinaryTail> TermTailDivide(TermTailDivideReduction ctx) => BinaryTailList("/", ctx.Right, ctx.Tail);
+
+    private static List<BinaryTail> TermTailEmpty(TermTailEmptyReduction ctx) => [];
+
+    private static Expr UnaryNegate(UnaryNegateReduction ctx) => new UnaryExpr("-", ctx.Operand);
+
+    private static Expr ExprPass(ExprPassReduction ctx) => ctx.Value;
+
+    private static Expr Number(NumberReduction ctx) => new NumberExpr(double.Parse(ctx.Token.Text, CultureInfo.InvariantCulture));
+
+    private static Expr Variable(VariableReduction ctx) => new VariableExpr(ctx.Name.Text);
+
+    private static Expr Call(CallReduction ctx) => new CallExpr(ctx.Function.Text, ctx.Argument);
+
+    private static Expr Group(GroupReduction ctx) => ctx.Value;
+
+    private static PrimitiveStatement Primitive(string kind, params Expr[] args)
     {
-        return new PrimitiveStatement(kind, indexes.Select(index => Arg<Expr>(ctx, index, $"{kind} argument")).ToList());
+        return new PrimitiveStatement(kind, args.ToList());
     }
 
-    private static List<BinaryTail> BinaryTailList(string op, Reduction ctx, int exprIndex, int tailIndex)
+    private static List<BinaryTail> BinaryTailList(string op, Expr right, List<BinaryTail> tail)
     {
-        return Prepend(new BinaryTail(op, Arg<Expr>(ctx, exprIndex, "right expression")), Arg<List<BinaryTail>>(ctx, tailIndex, "tail expressions"));
+        return Prepend(new BinaryTail(op, right), tail);
     }
 
     private static Expr FoldBinary(Expr left, IReadOnlyList<BinaryTail> tails)
@@ -93,39 +177,6 @@ internal static class DrawParser
         var result = new List<T> { head };
         result.AddRange(tail);
         return result;
-    }
-
-    private static object? DefaultReduce(IReadOnlyList<object?> values)
-    {
-        return values.Count switch
-        {
-            0 => null,
-            1 => values[0],
-            _ => values.ToArray(),
-        };
-    }
-
-    private static string Text(Reduction ctx, int index, string name) => Arg<Lexeme>(ctx, index, name).Text;
-
-    private static T Arg<T>(Reduction ctx, int index, string name)
-    {
-        // Current C# output records named RHS labels in the manifest, while the
-        // reducer runtime still passes boxed values. Keep all casts here and
-        // use the grammar role name in diagnostics.
-        if (index < 0 || index >= ctx.Values.Count)
-        {
-            throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.Action} is missing {name} at argument {index + 1}");
-        }
-        return Arg<T>(ctx.Values[index], $"rule {ctx.Rule} action {ctx.Action} argument {index + 1} ({name})");
-    }
-
-    private static T Arg<T>(object? value, string name)
-    {
-        if (value is T typed)
-        {
-            return typed;
-        }
-        throw new InvalidOperationException($"{name} has type {value?.GetType().Name ?? "null"}, expected {typeof(T).Name}");
     }
 
     private static ColorRgb ParseColor(string text)

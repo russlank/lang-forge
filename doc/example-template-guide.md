@@ -85,8 +85,9 @@ That pattern keeps generated APIs flexible while making handwritten semantics
 readable and easy to debug.
 
 When the grammar has RHS labels, prefer reading values by label instead of
-position. The generated Go API exposes `Reduction.ValueFor("left")`; typed Go
-contexts go one step further when `%semantic go type` declarations are present.
+position. The generated Go and C# APIs expose label-aware reductions; typed
+contexts go one step further when `%semantic <target> type` declarations are
+present.
 
 ## Spec-To-Code Checklist
 
@@ -96,8 +97,8 @@ When creating or reviewing an example, line up these pieces:
 |---|---|---|
 | `%target` and `%package` | Target language files and package/namespace/prefix. | Imports/includes and Makefile variables that point at the generated directory. |
 | `%token` and lexer rules | Token enum/const values and `Lexeme` values with source text. | Literal decoding, number parsing, identifier validation, and domain errors. |
-| `%semantic <target> type Nonterminal Type` | Action manifest type metadata; Go typed contexts when the action is eligible. | AST/model types and reducer return values with the same meaning. |
-| `label=Symbol` in a RHS | Manifest labels; Go `ValueFor` names; Go typed context fields. | Reducer helper names such as `left`, `right`, `parent`, or `jobsTag`. |
+| `%semantic <target> type Nonterminal Type` | Action manifest type metadata; Go/C# typed contexts when the action is eligible. | AST/model types and reducer return values with the same meaning. |
+| `label=Symbol` in a RHS | Manifest labels; Go/C# `ValueFor` names; Go/C# typed context fields. | Reducer helper names such as `left`, `right`, `parent`, or `jobsTag`. |
 | `{target: actionName}` | Generated semantic action ID/enum and manifest action entry. | Reducer map entry or switch branch that implements the behavior. |
 | `%empty` alternatives | Empty reductions with no RHS values. | Explicit empty list, no-op, or optional-value result rather than accidental fallthrough. |
 
@@ -112,10 +113,10 @@ A good starter project usually has:
 - tests for valid input, scanner failures, parser failures, empty productions,
   repeated lists, and at least one semantic edge case.
 
-C#, C, and C++ currently use boxed reducer contexts, so keep checked casts in
-one helper layer and pass descriptive names to those helpers. Go projects can
-move further by declaring `%semantic go type` entries and using generated typed
-contexts.
+Go and C# projects can declare `%semantic <target> type` entries and use
+generated typed contexts. C and C++ currently use boxed reducer contexts, so
+keep checked casts in one helper layer and pass descriptive names to those
+helpers until their typed context parity work lands.
 
 ## Shared Testdata
 

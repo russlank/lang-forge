@@ -1,6 +1,19 @@
 %target csharp
 %package LangForge.Examples.VehicleReport.Generated
 %semantic csharp mode reducer
+%semantic csharp type Program global::Vehicle
+%semantic csharp type VehicleInfo global::VehicleInfo
+%semantic csharp type ModelField string
+%semantic csharp type LicenseField string
+%semantic csharp type DistanceField int
+%semantic csharp type FeaturesField global::System.Collections.Generic.List<global::Feature>
+%semantic csharp type FeatureItems global::System.Collections.Generic.List<global::Feature>
+%semantic csharp type FeatureTail global::System.Collections.Generic.List<global::Feature>
+%semantic csharp type Feature global::Feature
+%semantic csharp type RepairsField global::System.Collections.Generic.List<global::Repair>
+%semantic csharp type RepairItems global::System.Collections.Generic.List<global::Repair>
+%semantic csharp type RepairTail global::System.Collections.Generic.List<global::Repair>
+%semantic csharp type Repair global::Repair
 %start Program
 %token Car Model License Distance Features Repairs Date Description Ident Number String LicenseString DateString Assign Comma LBrace RBrace LParen RParen
 

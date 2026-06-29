@@ -120,10 +120,10 @@ language.
 
 ## Typed Contexts And Coverage
 
-For Go, an action receives a generated typed context when its result
-nonterminal and labeled nonterminals have `%semantic go type` declarations,
-labeled terminals use the generated `Lexeme` type, and every rule sharing the
-action label has the same named field and result types.
+For Go and C#, an action receives a generated typed context when its result
+nonterminal and labeled nonterminals have `%semantic <target> type`
+declarations, labeled terminals use the generated `Lexeme` type, and every rule
+sharing the action label has the same named field and result types.
 
 The generated adapter performs focused runtime conversion once at the parser
 boundary. Handwritten reducer logic then uses ordinary typed fields. The boxed
@@ -133,9 +133,10 @@ API remains available for gradual migration:
 left, err := ctx.ValueFor("left")
 ```
 
-Generated `ReducerMap` values expose `ValidateCoverage`. The standard
-`ParseWithReducer` entry point calls it automatically, so missing handlers fail
-before input-dependent parser execution can hide the gap.
+Generated `ReducerMap` values expose coverage validation. The standard
+`ParseWithReducer` entry point validates Go and C# reducer maps automatically,
+so missing handlers fail before input-dependent parser execution can hide the
+gap.
 
 Every backend writes `langforge.actions.json`. It records actions, normalized
 rules, RHS positions, optional labels, semantic types, and why an action could
@@ -145,7 +146,10 @@ tests, tooling, and future target-specific typed adapters.
 For larger Go examples, put AST/model types in a small dependency-only package
 when generated typed contexts need to reference them. DRAW, DataKeeper, and
 vehicle-report use this pattern so `generated/` can import the model package
-without importing the public package that already imports `generated/`.
+without importing the public package that already imports `generated/`. C#
+typed contexts are generated as `internal` records/delegates in the generated
+namespace, so examples can keep handwritten AST/model records internal inside
+the same project.
 
 ## From `.lf` To Handwritten Semantics
 
@@ -189,7 +193,23 @@ func reduceRunObjectsJob(ctx dksgenerated.RunObjectsJobReduction) (Statement, er
 }
 ```
 
-For C#, C, and C++, the same `.lf` contract is already written into
+C# uses the same shape with generated `*Reduction` records and
+`SemanticReducerContexts.Typed*` adapters:
+
+```csharp
+var reducers = new ReducerMap
+{
+    [SemanticAction.RunObjectsJob] =
+        SemanticReducerContexts.TypedRunObjectsJob(ReduceRunObjectsJob),
+};
+
+static Command ReduceRunObjectsJob(RunObjectsJobReduction ctx)
+{
+    return new Command("runobjectsjob", [ctx.Parent, ctx.Name, ctx.JobsTag]);
+}
+```
+
+For C and C++, the same `.lf` contract is already written into
 `langforge.actions.json`, but generated typed context APIs are still planned.
 Those examples therefore use checked helper functions near the reducer
 boundary. The helper names should still mirror the grammar labels:
@@ -576,12 +596,12 @@ if action is "subtract", return left - right
 
 This is the same pattern used by the larger examples:
 
-- DataKeeper uses named action/RHS labels and Go typed contexts to build a
+- DataKeeper uses named action/RHS labels and Go/C# typed contexts to build a
   script AST, then lowers that AST to stack-machine instructions.
 - DRAW uses action labels to build a drawing AST, then interprets it into a
   PNG image.
-- Vehicle report uses named action/RHS labels and Go typed contexts to build a
-  small AST, then renders a text/XML-like report.
+- Vehicle report uses named action/RHS labels and Go/C# typed contexts to build
+  a small AST, then renders a text/XML-like report.
 
 ## Recovery Productions And Semantic Actions
 

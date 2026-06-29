@@ -1,6 +1,21 @@
 %target csharp
 %package LangForge.Examples.DataKeeper.Generated
 %semantic csharp mode reducer
+%semantic csharp type Program global::Script
+%semantic csharp type ParametersList global::System.Collections.Generic.List<string>
+%semantic csharp type ParametersDecl global::System.Collections.Generic.List<string>
+%semantic csharp type ParametersTail global::System.Collections.Generic.List<string>
+%semantic csharp type CommandBlock global::System.Collections.Generic.List<global::Command>
+%semantic csharp type Statements global::System.Collections.Generic.List<global::Command>
+%semantic csharp type StatementTail global::System.Collections.Generic.List<global::Command>
+%semantic csharp type Statement global::Command
+%semantic csharp type AssignStatement global::Command
+%semantic csharp type ReplaceStatement global::Command
+%semantic csharp type RunSQLStatement global::Command
+%semantic csharp type AddObjectStatement global::Command
+%semantic csharp type RemoveObjectStatement global::Command
+%semantic csharp type RunObjectsJobStatement global::Command
+%semantic csharp type Value string
 %start Program
 %token Parameters Begin End Replace SQLRun AddObject RemoveObject RunObjectsJob Ident Number String Assign Comma Semi LParen RParen
 

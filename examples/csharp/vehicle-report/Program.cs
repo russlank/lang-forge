@@ -1,47 +1,79 @@
 using System.Globalization;
 using System.Text;
 using LangForge.Examples.VehicleReport.Generated;
+using static LangForge.Examples.VehicleReport.Generated.SemanticReducerContexts;
 
 // Vehicle report parsing demonstrates a data-extraction compiler front-end:
-// generated parser tables validate syntax, while the reducer builds a typed
-// model that reporting code can consume normally.
+// generated parser tables validate syntax, while typed reducers build a model
+// that reporting code can consume normally.
 static Vehicle ParseVehicle(string source)
 {
-    var value = Parser.ParseWithReducer(Scanner.Tokenize(source), new ReducerFunc(Reduce));
-    return (Vehicle)value!;
+    var value = Parser.ParseWithReducer(Scanner.Tokenize(source), CreateReducers());
+    return value is Vehicle vehicle
+        ? vehicle
+        : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Vehicle");
 }
 
-static object? Reduce(Reduction ctx)
+static ReducerMap CreateReducers()
 {
     // The generated SemanticAction enum keeps dispatch fast and avoids matching
-    // raw strings on every reduction.
-    return ctx.ActionID switch
+    // raw strings on every reduction. The typed adapters also verify the named
+    // RHS labels and convert them to C# values before invoking these handlers.
+    return new ReducerMap
     {
-        SemanticAction.Vehicle => new Vehicle(InfoArg(ctx, 3, "vehicle info")),
-        SemanticAction.Info => new VehicleInfo(
-            StringArg(ctx, 0, "model"),
-            StringArg(ctx, 2, "license"),
-            IntArg(ctx, 4, "distance"),
-            FeatureList(ctx, 6, "features"),
-            RepairList(ctx, 8, "repairs")),
-        SemanticAction.FieldModel => DecodeQuoted(Text(ctx, 2, "model literal")),
-        SemanticAction.FieldLicense => DecodeQuoted(Text(ctx, 2, "license literal")),
-        SemanticAction.FieldDistance => int.Parse(Text(ctx, 2, "distance literal"), CultureInfo.InvariantCulture),
-        SemanticAction.FieldFeatures => ctx.Values[3],
-        SemanticAction.FeatureItems => Prepend(FeatureArg(ctx, 0, "feature"), FeatureList(ctx, 1, "feature tail")),
-        SemanticAction.FeatureEmpty => new List<Feature>(),
-        SemanticAction.FeatureTailMore => Prepend(FeatureArg(ctx, 1, "feature"), FeatureList(ctx, 2, "feature tail")),
-        SemanticAction.FeatureTailEmpty => new List<Feature>(),
-        SemanticAction.Feature => new Feature(Text(ctx, 0, "feature name"), DecodeQuoted(Text(ctx, 2, "feature value"))),
-        SemanticAction.FieldRepairs => ctx.Values[3],
-        SemanticAction.RepairItems => Prepend(RepairArg(ctx, 0, "repair"), RepairList(ctx, 1, "repair tail")),
-        SemanticAction.RepairEmpty => new List<Repair>(),
-        SemanticAction.RepairTailMore => Prepend(RepairArg(ctx, 1, "repair"), RepairList(ctx, 2, "repair tail")),
-        SemanticAction.RepairTailEmpty => new List<Repair>(),
-        SemanticAction.Repair => new Repair(DecodeQuoted(Text(ctx, 3, "repair date")), DecodeQuoted(Text(ctx, 7, "repair description"))),
-        _ => DefaultReduce(ctx.Values),
+        [SemanticAction.Vehicle] = TypedVehicle(BuildVehicle),
+        [SemanticAction.Info] = TypedInfo(Info),
+        [SemanticAction.FieldModel] = TypedFieldModel(FieldModel),
+        [SemanticAction.FieldLicense] = TypedFieldLicense(FieldLicense),
+        [SemanticAction.FieldDistance] = TypedFieldDistance(FieldDistance),
+        [SemanticAction.FieldFeatures] = TypedFieldFeatures(FieldFeatures),
+        [SemanticAction.FeatureItems] = TypedFeatureItems(FeatureItems),
+        [SemanticAction.FeatureEmpty] = TypedFeatureEmpty(FeatureEmpty),
+        [SemanticAction.FeatureTailMore] = TypedFeatureTailMore(FeatureTailMore),
+        [SemanticAction.FeatureTailEmpty] = TypedFeatureTailEmpty(FeatureTailEmpty),
+        [SemanticAction.Feature] = TypedFeature(BuildFeature),
+        [SemanticAction.FieldRepairs] = TypedFieldRepairs(FieldRepairs),
+        [SemanticAction.RepairItems] = TypedRepairItems(RepairItems),
+        [SemanticAction.RepairEmpty] = TypedRepairEmpty(RepairEmpty),
+        [SemanticAction.RepairTailMore] = TypedRepairTailMore(RepairTailMore),
+        [SemanticAction.RepairTailEmpty] = TypedRepairTailEmpty(RepairTailEmpty),
+        [SemanticAction.Repair] = TypedRepair(BuildRepair),
     };
 }
+
+static Vehicle BuildVehicle(VehicleReduction ctx) => new(ctx.Info);
+
+static VehicleInfo Info(InfoReduction ctx) => new(ctx.Model, ctx.License, ctx.Distance, ctx.Features, ctx.Repairs);
+
+static string FieldModel(FieldModelReduction ctx) => DecodeQuoted(ctx.Literal.Text);
+
+static string FieldLicense(FieldLicenseReduction ctx) => DecodeQuoted(ctx.Literal.Text);
+
+static int FieldDistance(FieldDistanceReduction ctx) => int.Parse(ctx.Literal.Text, CultureInfo.InvariantCulture);
+
+static List<Feature> FieldFeatures(FieldFeaturesReduction ctx) => ctx.Items;
+
+static List<Feature> FeatureItems(FeatureItemsReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static List<Feature> FeatureEmpty(FeatureEmptyReduction ctx) => [];
+
+static List<Feature> FeatureTailMore(FeatureTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static List<Feature> FeatureTailEmpty(FeatureTailEmptyReduction ctx) => [];
+
+static Feature BuildFeature(FeatureReduction ctx) => new(ctx.Name.Text, DecodeQuoted(ctx.Value.Text));
+
+static List<Repair> FieldRepairs(FieldRepairsReduction ctx) => ctx.Items;
+
+static List<Repair> RepairItems(RepairItemsReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static List<Repair> RepairEmpty(RepairEmptyReduction ctx) => [];
+
+static List<Repair> RepairTailMore(RepairTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static List<Repair> RepairTailEmpty(RepairTailEmptyReduction ctx) => [];
+
+static Repair BuildRepair(RepairReduction ctx) => new(DecodeQuoted(ctx.Date.Text), DecodeQuoted(ctx.Description.Text));
 
 static List<T> Prepend<T>(T head, List<T> tail)
 {
@@ -49,48 +81,6 @@ static List<T> Prepend<T>(T head, List<T> tail)
     result.AddRange(tail);
     return result;
 }
-
-static object? DefaultReduce(IReadOnlyList<object?> values)
-{
-    return values.Count switch
-    {
-        0 => null,
-        1 => values[0],
-        _ => values.ToArray(),
-    };
-}
-
-static T Arg<T>(Reduction ctx, int index, string name)
-{
-    // The grammar gives RHS values names, but current C# generated reducers are
-    // still boxed. Centralizing the cast keeps each switch branch readable and
-    // makes future typed-context migration mechanical.
-    if (index < 0 || index >= ctx.Values.Count)
-    {
-        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name} at argument {index + 1}");
-    }
-    if (ctx.Values[index] is not T value)
-    {
-        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} argument {index + 1} for {name} has type {ctx.Values[index]?.GetType().Name ?? "<null>"}, want {typeof(T).Name}");
-    }
-    return value;
-}
-
-static string Text(Reduction ctx, int index, string name) => Arg<Lexeme>(ctx, index, name).Text;
-
-static string StringArg(Reduction ctx, int index, string name) => Arg<string>(ctx, index, name);
-
-static int IntArg(Reduction ctx, int index, string name) => Arg<int>(ctx, index, name);
-
-static VehicleInfo InfoArg(Reduction ctx, int index, string name) => Arg<VehicleInfo>(ctx, index, name);
-
-static Feature FeatureArg(Reduction ctx, int index, string name) => Arg<Feature>(ctx, index, name);
-
-static Repair RepairArg(Reduction ctx, int index, string name) => Arg<Repair>(ctx, index, name);
-
-static List<Feature> FeatureList(Reduction ctx, int index, string name) => Arg<List<Feature>>(ctx, index, name);
-
-static List<Repair> RepairList(Reduction ctx, int index, string name) => Arg<List<Repair>>(ctx, index, name);
 
 static string DecodeQuoted(string text) => text.Length >= 2 && text[0] == '"' && text[^1] == '"' ? text[1..^1] : text;
 
@@ -129,7 +119,7 @@ static void RunAssertions(string source)
     Check(vehicle.Info.Features.Count == 4, "expected four features");
     Check(vehicle.Info.Repairs.Count == 3, "expected three repairs");
 
-    var parser = new Parser(new ReducerFunc(Reduce));
+    var parser = new Parser(CreateReducers());
     Parallel.For(0, 8, _ => parser.ParseValueInput(Scanner.Tokenize(source)));
 
     var empty = source.Replace(

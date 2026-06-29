@@ -110,7 +110,7 @@ func Generate(input Input, outDir string) error {
 	if err := writeFile(filepath.Join(outDir, "Scanner.g.cs"), renderScanner(namespace, input.Spec.SourceFile, input.DFA, tokens, tokenIDs)); err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(outDir, "Parser.g.cs"), renderParser(namespace, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions)); err != nil {
+	if err := writeFile(filepath.Join(outDir, "Parser.g.cs"), renderParser(namespace, input.Spec.SourceFile, input.Spec, input.ParseTable, tokens, tokenIDs, actions, actionManifest)); err != nil {
 		return err
 	}
 	return nil
@@ -255,7 +255,7 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	return b.String()
 }
 
-func renderParser(namespace string, source string, project *spec.Spec, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction) string {
+func renderParser(namespace string, source string, project *spec.Spec, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction, actionManifest action.Manifest) string {
 	var b strings.Builder
 	b.WriteString(generatedHeader(namespace, source))
 	b.WriteString("using System;\n")
@@ -287,7 +287,7 @@ func renderParser(namespace string, source string, project *spec.Spec, table *pa
 	b.WriteString("/// <remarks>Parser instances are safe for concurrent Parse and ParseValue calls when the installed reducer is also safe.</remarks>\n")
 	b.WriteString("public sealed class Parser\n{\n")
 	b.WriteString("    private readonly IReducer? _reducer;\n\n")
-	b.WriteString("    public Parser(IReducer? reducer = null)\n    {\n        _reducer = reducer;\n    }\n\n")
+	b.WriteString("    public Parser(IReducer? reducer = null)\n    {\n        if (reducer is IReducerCoverage coverage) { coverage.ValidateCoverage(); }\n        _reducer = reducer;\n    }\n\n")
 	b.WriteString("    public static void Parse(IReadOnlyList<Lexeme> input) => new Parser().ParseInput(input);\n")
 	b.WriteString("    public static object? ParseValue(IReadOnlyList<Lexeme> input) => new Parser().ParseValueInput(input);\n")
 	b.WriteString("    public static ParseResult ParseRecovering(IReadOnlyList<Lexeme> input) => new Parser().ParseRecoveringInput(input);\n")
@@ -296,7 +296,7 @@ func renderParser(namespace string, source string, project *spec.Spec, table *pa
 	b.WriteString("    public object? ParseValueInput(IReadOnlyList<Lexeme> input)\n    {\n        var result = ParseRecoveringInput(input);\n        if (result.Diagnostics.Count != 0) { throw new ParseException(result.Diagnostics); }\n        return result.Value;\n    }\n\n")
 	b.WriteString("    /// <summary>Parses with grammar-directed recovery and returns every syntax diagnostic.</summary>\n")
 	b.WriteString("    public ParseResult ParseRecoveringInput(IReadOnlyList<Lexeme> input)\n    {\n        if (input is null) { throw new ArgumentNullException(nameof(input)); }\n        var states = new List<int> { 0 };\n        var values = new List<object?>();\n        var diagnostics = new List<ParseDiagnostic>();\n        int pos = 0;\n        int recovering = 0;\n        int activeDiagnostic = -1;\n        while (true)\n        {\n            string lookahead = ParserLookahead(input, pos);\n            if (!TryFindAction(states[^1], lookahead, out var action))\n            {\n                if (recovering == 0)\n                {\n                    diagnostics.Add(NewParseDiagnostic(states[^1], lookahead, input, pos));\n                    activeDiagnostic = diagnostics.Count - 1;\n                    bool recovered = false;\n                    while (states.Count != 0)\n                    {\n                        if (TryFindAction(states[^1], \"error\", out var errorAction) && errorAction.Kind == \"shift\")\n                        {\n                            states.Add(errorAction.State);\n                            values.Add(ParserErrorLexeme(input, pos));\n                            recovering = 3;\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"shift-error\", 0) };\n                            recovered = true;\n                            break;\n                        }\n                        if (states.Count == 1) { break; }\n                        states.RemoveAt(states.Count - 1);\n                        if (values.Count != 0) { values.RemoveAt(values.Count - 1); }\n                    }\n                    if (recovered) { continue; }\n                    diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"abort\", 0) };\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                if (lookahead == \"$\")\n                {\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"abort\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                pos++;\n                if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Discarded = diagnostics[activeDiagnostic].Recovery.Discarded + 1 } }; }\n                continue;\n            }\n            switch (action.Kind)\n            {\n                case \"shift\":\n                    if (pos >= input.Count) { throw new InvalidOperationException($\"shift past end of input in state {states[^1]}\"); }\n                    states.Add(action.State);\n                    values.Add(input[pos]);\n                    pos++;\n                    if (recovering > 0)\n                    {\n                        recovering--;\n                        if (recovering == 0 && activeDiagnostic >= 0)\n                        {\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } };\n                            activeDiagnostic = -1;\n                        }\n                    }\n                    break;\n                case \"reduce\":\n                    var rule = ParserRules[action.Rule];\n                    if (states.Count < rule.Size + 1) { throw new InvalidOperationException($\"parser stack underflow reducing rule {action.Rule}\"); }\n                    if (values.Count < rule.Size) { throw new InvalidOperationException($\"semantic value stack underflow reducing rule {action.Rule}\"); }\n                    var rhs = values.Skip(values.Count - rule.Size).Take(rule.Size).ToArray();\n                    values.RemoveRange(values.Count - rule.Size, rule.Size);\n                    object? value = Reduce(action.Rule, rule, rhs);\n                    states.RemoveRange(states.Count - rule.Size, rule.Size);\n                    if (!ParserGotos.TryGetValue(states[^1], out var gotoBySymbol) || !gotoBySymbol.TryGetValue(rule.LHS, out int gotoState))\n                    {\n                        throw new InvalidOperationException($\"missing goto from state {states[^1]} on {rule.LHS}\");\n                    }\n                    states.Add(gotoState);\n                    values.Add(value);\n                    break;\n                case \"accept\":\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, true);\n                default:\n                    throw new InvalidOperationException($\"invalid parser action '{action.Kind}'\");\n            }\n        }\n    }\n\n")
-	b.WriteString("    private object? Reduce(int ruleID, ParserRule rule, object?[] values)\n    {\n        var ctx = new Reduction(ruleID, rule.LHS, rule.RHS, rule.Action, SemanticActions.SemanticActionName(rule.Action), values);\n        if (_reducer is not null && rule.Action != SemanticAction.None)\n        {\n            return _reducer.Reduce(ctx);\n        }\n        return DefaultReduce(values);\n    }\n\n")
+	b.WriteString("    private object? Reduce(int ruleID, ParserRule rule, object?[] values)\n    {\n        var ctx = new Reduction(ruleID, rule.LHS, rule.RHS, rule.Labels, rule.Action, SemanticActions.SemanticActionName(rule.Action), values);\n        if (_reducer is not null && rule.Action != SemanticAction.None)\n        {\n            return _reducer.Reduce(ctx);\n        }\n        return DefaultReduce(values);\n    }\n\n")
 	b.WriteString("    private static bool TryFindAction(int state, string symbol, out ParserAction action)\n    {\n        if (ParserActions.TryGetValue(state, out var bySymbol) && bySymbol.TryGetValue(symbol, out action)) { return true; }\n        action = default;\n        return false;\n    }\n\n")
 	b.WriteString("    private static object? CurrentValue(IReadOnlyList<object?> values) => values.Count == 0 ? null : values[^1];\n\n")
 	b.WriteString("    private static object? DefaultReduce(IReadOnlyList<object?> values)\n    {\n        return values.Count switch\n        {\n            0 => null,\n            1 => values[0],\n            _ => values.ToArray(),\n        };\n    }\n\n")
@@ -311,7 +311,7 @@ func renderParser(namespace string, source string, project *spec.Spec, table *pa
 	}
 	b.WriteString("        _ => \"ERROR\",\n    };\n\n")
 	b.WriteString("    private readonly record struct ParserAction(string Kind, int State, int Rule);\n")
-	b.WriteString("    private readonly record struct ParserRule(string LHS, string[] RHS, int Size, SemanticAction Action);\n\n")
+	b.WriteString("    private readonly record struct ParserRule(string LHS, string[] RHS, string[] Labels, int Size, SemanticAction Action);\n\n")
 	b.WriteString("    private static readonly Dictionary<string, string> ParserTokenAliases = new Dictionary<string, string>\n    {\n")
 	for _, alias := range project.Grammar.ExpectedTokens.Aliases {
 		b.WriteString(fmt.Sprintf("        [%s] = %s,\n", csharpString(alias.Token), csharpString(alias.Label)))
@@ -319,7 +319,7 @@ func renderParser(namespace string, source string, project *spec.Spec, table *pa
 	b.WriteString("    };\n\n")
 	renderParserTables(&b, table, actionIDs)
 	b.WriteString("}\n\n")
-	renderSemanticSupport(&b, actions, semantics)
+	renderSemanticSupport(&b, actions, semantics, actionManifest)
 	return b.String()
 }
 
@@ -358,20 +358,28 @@ func renderParserTables(b *strings.Builder, table *parse.Table, actionIDs map[st
 			b.WriteString("        " + comment + "\n")
 		}
 		action := semanticActionExpr(rule.Actions["csharp"], actionIDs)
-		b.WriteString(fmt.Sprintf("        [%d] = new ParserRule(%s, %s, %d, %s),\n", rule.ID, csharpString(rule.LHS), renderStringArray(rule.RHS), len(rule.RHS), action))
+		b.WriteString(fmt.Sprintf("        [%d] = new ParserRule(%s, %s, %s, %d, %s),\n", rule.ID, csharpString(rule.LHS), renderStringArray(rule.RHS), renderStringArray(rule.Labels), len(rule.RHS), action))
 	}
 	b.WriteString("    };\n")
 }
 
-func renderSemanticSupport(b *strings.Builder, actions []SemanticAction, semantics spec.SemanticSpec) {
+func renderSemanticSupport(b *strings.Builder, actions []SemanticAction, semantics spec.SemanticSpec, actionManifest action.Manifest) {
 	b.WriteString("/// <summary>Describes one grammar rule reduction.</summary>\n")
-	b.WriteString("public sealed record Reduction(int Rule, string LHS, IReadOnlyList<string> RHS, SemanticAction ActionID, string Action, IReadOnlyList<object?> Values);\n\n")
+	b.WriteString("public sealed record Reduction(int Rule, string LHS, IReadOnlyList<string> RHS, IReadOnlyList<string> Labels, SemanticAction ActionID, string Action, IReadOnlyList<object?> Values)\n{\n")
+	b.WriteString("    /// <summary>Returns the semantic value associated with a named RHS label.</summary>\n")
+	b.WriteString("    public object? ValueFor(string label)\n    {\n        for (var index = 0; index < Labels.Count; index++)\n        {\n            if (Labels[index] == label)\n            {\n                if (index >= Values.Count)\n                {\n                    throw new InvalidOperationException($\"rule {Rule} action {Action} label {label} has no semantic value\");\n                }\n                return Values[index];\n            }\n        }\n        throw new InvalidOperationException($\"rule {Rule} action {Action} has no RHS label {label}\");\n    }\n}\n\n")
 	b.WriteString("/// <summary>Receives target-tagged action hooks during parser reductions.</summary>\n")
 	b.WriteString("public interface IReducer\n{\n    object? Reduce(Reduction ctx);\n}\n\n")
+	b.WriteString("/// <summary>Validates that a reducer covers the generated semantic action set.</summary>\n")
+	b.WriteString("public interface IReducerCoverage\n{\n    void ValidateCoverage();\n}\n\n")
 	b.WriteString("/// <summary>Adapts a function to the generated reducer interface.</summary>\n")
 	b.WriteString("public sealed class ReducerFunc : IReducer\n{\n    private readonly Func<Reduction, object?> _handler;\n    public ReducerFunc(Func<Reduction, object?> handler) => _handler = handler ?? throw new ArgumentNullException(nameof(handler));\n    public object? Reduce(Reduction ctx) => _handler(ctx);\n}\n\n")
 	b.WriteString("/// <summary>Dispatches reductions by generated semantic action ID.</summary>\n")
-	b.WriteString("public sealed class ReducerMap : Dictionary<SemanticAction, Func<Reduction, object?>>, IReducer\n{\n    public object? Reduce(Reduction ctx)\n    {\n        if (!TryGetValue(ctx.ActionID, out var handler))\n        {\n            throw new InvalidOperationException($\"no reducer registered for action {ctx.ActionID}\");\n        }\n        return handler(ctx);\n    }\n}\n\n")
+	b.WriteString("public sealed class ReducerMap : Dictionary<SemanticAction, Func<Reduction, object?>>, IReducer, IReducerCoverage\n{\n")
+	b.WriteString("    /// <summary>Reports missing or unknown semantic action handlers before parsing starts.</summary>\n")
+	b.WriteString("    public void ValidateCoverage()\n    {\n        var missing = new List<string>();\n        for (var index = 1; index < SemanticActions.Count; index++)\n        {\n            var action = (SemanticAction)index;\n            if (!ContainsKey(action)) { missing.Add(action.ToString()); }\n        }\n        int firstUnknown = 0;\n        var hasUnknown = false;\n        foreach (var action in Keys)\n        {\n            if (action <= SemanticAction.None || (int)action >= SemanticActions.Count)\n            {\n                if (!hasUnknown || (int)action < firstUnknown)\n                {\n                    firstUnknown = (int)action;\n                    hasUnknown = true;\n                }\n            }\n        }\n        if (missing.Count == 0 && !hasUnknown) { return; }\n        var suffix = hasUnknown ? $\" firstUnknown={firstUnknown}\" : string.Empty;\n        throw new InvalidOperationException($\"semantic reducer coverage mismatch: missing=[{string.Join(\", \", missing)}]{suffix}\");\n    }\n\n")
+	b.WriteString("    public object? Reduce(Reduction ctx)\n    {\n        if (!TryGetValue(ctx.ActionID, out var handler))\n        {\n            throw new InvalidOperationException($\"no reducer registered for action {ctx.ActionID}\");\n        }\n        return handler(ctx);\n    }\n}\n\n")
+	renderTypedReductionContexts(b, actionManifest, actions)
 	b.WriteString("/// <summary>Semantic metadata helpers for generated action IDs.</summary>\n")
 	b.WriteString("public static class SemanticActions\n{\n")
 	b.WriteString("    private static readonly string[] Names = new string[]\n    {\n        \"\",\n")
@@ -384,6 +392,7 @@ func renderSemanticSupport(b *strings.Builder, actions []SemanticAction, semanti
 		b.WriteString(fmt.Sprintf("        [%s] = SemanticAction.%s,\n", csharpString(action.Name), action.Constant))
 	}
 	b.WriteString("    };\n\n")
+	b.WriteString("    public static int Count => Names.Length;\n")
 	b.WriteString("    public static string SemanticActionName(SemanticAction action) => (int)action >= 0 && (int)action < Names.Length ? Names[(int)action] : \"UNKNOWN\";\n")
 	b.WriteString("    public static bool TryLookupSemanticAction(string name, out SemanticAction action) => ByName.TryGetValue(name, out action);\n")
 	b.WriteString("}\n\n")
@@ -391,6 +400,103 @@ func renderSemanticSupport(b *strings.Builder, actions []SemanticAction, semanti
 	b.WriteString("public static class SemanticMetadata\n{\n")
 	b.WriteString("    public const string Mode = " + csharpString(string(semantics.ModeFor("csharp"))) + ";\n")
 	b.WriteString("}\n")
+}
+
+func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, actions []SemanticAction) {
+	if len(manifest.Actions) == 0 {
+		return
+	}
+	constants := semanticActionIDs(actions)
+	typedActions := make([]action.Action, 0, len(manifest.Actions))
+	for _, semanticAction := range manifest.Actions {
+		if !semanticAction.Typed || len(semanticAction.Rules) == 0 || constants[semanticAction.Name] == "" {
+			continue
+		}
+		typedActions = append(typedActions, semanticAction)
+	}
+	if len(typedActions) == 0 {
+		return
+	}
+	for _, semanticAction := range typedActions {
+		constant := constants[semanticAction.Name]
+		suffix := strings.TrimPrefix(constant, "SemanticAction.")
+		contextType := suffix + "Reduction"
+		handlerType := suffix + "Handler"
+		fields := typedFields(semanticAction.Rules[0])
+
+		b.WriteString(fmt.Sprintf("/// <summary>Generated typed context for the %s semantic action.</summary>\n", csharpString(semanticAction.Name)))
+		b.WriteString(fmt.Sprintf("internal sealed record %s(Reduction Reduction", contextType))
+		for _, field := range fields {
+			b.WriteString(fmt.Sprintf(", %s %s", field.Type, field.Name))
+		}
+		b.WriteString(");\n\n")
+
+		b.WriteString(fmt.Sprintf("/// <summary>Handles one typed %s reduction.</summary>\n", csharpString(semanticAction.Name)))
+		b.WriteString(fmt.Sprintf("internal delegate %s %s(%s ctx);\n\n", semanticAction.ReturnType, handlerType, contextType))
+	}
+
+	b.WriteString("/// <summary>Factory methods that adapt generated typed reducer handlers.</summary>\n")
+	b.WriteString("internal static class SemanticReducerContexts\n{\n")
+	b.WriteString("    private static T SemanticValueAs<T>(Reduction ctx, string label)\n    {\n        var value = ctx.ValueFor(label);\n        if (value is T typed) { return typed; }\n        throw new InvalidOperationException($\"rule {ctx.Rule} action {ctx.Action} label {label} has type {value?.GetType().Name ?? \"<null>\"}, want {typeof(T).Name}\");\n    }\n\n")
+	for _, semanticAction := range typedActions {
+		constant := constants[semanticAction.Name]
+		if constant == "" {
+			continue
+		}
+		suffix := strings.TrimPrefix(constant, "SemanticAction.")
+		contextType := suffix + "Reduction"
+		handlerType := suffix + "Handler"
+		constructor := "New" + contextType
+		adapter := "Typed" + suffix
+		fields := typedFields(semanticAction.Rules[0])
+
+		b.WriteString(fmt.Sprintf("    /// <summary>Validates and converts an untyped reduction context for %s.</summary>\n", csharpString(semanticAction.Name)))
+		b.WriteString(fmt.Sprintf("    internal static %s %s(Reduction ctx)\n    {\n", contextType, constructor))
+		b.WriteString(fmt.Sprintf("        if (ctx.ActionID != %s) { throw new InvalidOperationException($\"typed context %s requires action %s, got {ctx.ActionID}\"); }\n", constant, contextType, suffix))
+		b.WriteString(fmt.Sprintf("        return new %s(ctx", contextType))
+		for _, field := range fields {
+			b.WriteString(fmt.Sprintf(", SemanticValueAs<%s>(ctx, %s)", field.Type, csharpString(field.Label)))
+		}
+		b.WriteString(");\n    }\n\n")
+
+		b.WriteString("    /// <summary>Adapts a typed handler to the generated reducer map shape.</summary>\n")
+		b.WriteString(fmt.Sprintf("    internal static Func<Reduction, object?> %s(%s handler)\n    {\n", adapter, handlerType))
+		b.WriteString("        if (handler is null) { throw new ArgumentNullException(nameof(handler)); }\n")
+		b.WriteString(fmt.Sprintf("        return ctx => handler(%s(ctx));\n", constructor))
+		b.WriteString("    }\n\n")
+	}
+	b.WriteString("}\n\n")
+}
+
+type typedField struct {
+	Label string
+	Name  string
+	Type  string
+}
+
+func typedFields(rule action.Rule) []typedField {
+	used := map[string]int{}
+	var fields []typedField
+	for _, operand := range rule.RHS {
+		if operand.Label == "" {
+			continue
+		}
+		base := exportedIdentifierSuffix(operand.Label)
+		if base == "" {
+			base = "Value"
+		}
+		used[base]++
+		name := base
+		if used[base] > 1 {
+			name = fmt.Sprintf("%s%d", base, used[base])
+		}
+		fields = append(fields, typedField{
+			Label: operand.Label,
+			Name:  name,
+			Type:  operand.Type,
+		})
+	}
+	return fields
 }
 
 func semanticActions(rules []parse.Rule, target string) []SemanticAction {

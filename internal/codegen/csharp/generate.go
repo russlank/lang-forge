@@ -329,6 +329,11 @@ func renderParserTables(b *strings.Builder, table *parse.Table, actionIDs map[st
 		b.WriteString(fmt.Sprintf("        [%d] = new Dictionary<string, ParserAction>\n        {\n", state))
 		for _, sym := range sortedActionSymbols(table.Actions[state]) {
 			action := table.Actions[state][sym]
+			if action.Kind == parse.ActionReduce {
+				if rule, ok := ruleByID(table.Rules, action.Rule); ok {
+					b.WriteString(indentComment(ruleSourceComment(rule, "csharp", "// "), "            "))
+				}
+			}
 			b.WriteString(fmt.Sprintf("            [%s] = new ParserAction(%s, %d, %d),\n", csharpString(sym), csharpString(string(action.Kind)), action.State, action.Rule))
 		}
 		b.WriteString("        },\n")
@@ -354,9 +359,7 @@ func renderParserTables(b *strings.Builder, table *parse.Table, actionIDs map[st
 	b.WriteString("    };\n\n")
 	b.WriteString("    private static readonly Dictionary<int, ParserRule> ParserRules = new Dictionary<int, ParserRule>\n    {\n")
 	for _, rule := range table.Rules {
-		if comment := sourceComment(rule.Span); comment != "" {
-			b.WriteString("        " + comment + "\n")
-		}
+		b.WriteString(indentComment(ruleSourceComment(rule, "csharp", "// "), "        "))
 		action := semanticActionExpr(rule.Actions["csharp"], actionIDs)
 		b.WriteString(fmt.Sprintf("        [%d] = new ParserRule(%s, %s, %s, %d, %s),\n", rule.ID, csharpString(rule.LHS), renderStringArray(rule.RHS), renderStringArray(rule.Labels), len(rule.RHS), action))
 	}
@@ -677,6 +680,63 @@ func sourceComment(span diagnostics.Span) string {
 		return ""
 	}
 	return "// Source: " + ref
+}
+
+func ruleSourceComment(rule parse.Rule, target string, prefix string) string {
+	var lines []string
+	lines = append(lines, prefix+grammarRuleDisplay(rule, target))
+	if ref := sourceRef(rule.Span); ref != "" {
+		lines = append(lines, prefix+"Source: "+ref)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func grammarRuleDisplay(rule parse.Rule, target string) string {
+	rhs := "%empty"
+	if len(rule.RHS) > 0 {
+		parts := make([]string, 0, len(rule.RHS))
+		for index, symbol := range rule.RHS {
+			label := ""
+			if index < len(rule.Labels) {
+				label = rule.Labels[index]
+			}
+			if label != "" {
+				parts = append(parts, label+"="+symbol)
+			} else {
+				parts = append(parts, symbol)
+			}
+		}
+		rhs = strings.Join(parts, " ")
+	}
+	display := fmt.Sprintf("Grammar rule %d: %s -> %s", rule.ID, rule.LHS, rhs)
+	if action := commentSafe(strings.TrimSpace(rule.Actions[target])); action != "" {
+		display += fmt.Sprintf(" {%s: %s}", target, action)
+	}
+	return display
+}
+
+func commentSafe(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func indentComment(comment string, indent string) string {
+	if comment == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(comment, "\n"), "\n") {
+		b.WriteString(indent + line + "\n")
+	}
+	return b.String()
+}
+
+func ruleByID(rules []parse.Rule, id int) (parse.Rule, bool) {
+	for _, rule := range rules {
+		if rule.ID == id {
+			return rule, true
+		}
+	}
+	return parse.Rule{}, false
 }
 
 func sourceRef(span diagnostics.Span) string {

@@ -1,9 +1,13 @@
 # LangForge Architecture
 
 Document id: `lang-forge-architecture-v1`
+
 Status: `active`
+
 Last updated: `2026-06-19`
+
 Owner: `Project maintainers`
+
 Scope: `Implementation architecture for the LangForge Go tool`
 
 ## Overview

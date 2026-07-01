@@ -1,9 +1,13 @@
 # LangForge Usage
 
 Document id: `lang-forge-usage-v1`
+
 Status: `active`
+
 Last updated: `2026-06-29`
+
 Owner: `Project maintainers`
+
 Scope: `CLI usage guide for the current LangForge implementation`
 
 ## Build and Test

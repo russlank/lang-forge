@@ -29,3 +29,7 @@ code outside `Generated/`.
 The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/csharp/mini-compiler`.
+
+For the recommended handwritten C# reducer, parser facade, reusable library,
+dependency-injection, and multi-parser shapes, read
+[Handwritten Integration Guide](../../doc/handwritten-integration-guide.md).

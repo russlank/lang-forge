@@ -1,9 +1,13 @@
 # Scanner Encoding Architecture
 
 Document id: `lang-forge-encoding-v1`
+
 Status: `active`
+
 Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Scanner source encoding and Unicode support model`
 
 LangForge's first scanner implementation was byte-oriented. The active scanner

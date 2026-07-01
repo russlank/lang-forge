@@ -1,9 +1,13 @@
 # Parser Algorithms
 
 Document id: `lang-forge-parser-algorithms-v1`
+
 Status: `active`
+
 Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Implemented LR parser-table algorithms, automata shape, examples, and usage guidance`
 
 LangForge currently implements the classic deterministic LR family needed by

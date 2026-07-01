@@ -52,3 +52,7 @@ another compiler name when needed.
 The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/c/mini-compiler`.
+
+For the recommended handwritten C reducer, parser adapter, reusable library,
+memory-ownership, and multi-parser shapes, read
+[Handwritten Integration Guide](../../doc/handwritten-integration-guide.md).

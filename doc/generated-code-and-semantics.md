@@ -1,15 +1,24 @@
 # Generated Code And Semantics
 
 Document id: `lang-forge-generated-code-and-semantics-v1`
+
 Status: `active`
-Last updated: `2026-06-29`
+
+Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Beginner guide to generated files, semantic actions, reducers, Go build tags, and Go/C#/C/C++ output`
 
 This page explains what LangForge generates, what the example projects still
 write by hand, and how grammar action labels become real behavior.
 
 It is written for readers who are new to Go, Lex/Yacc, or compiler tools.
+
+For copyable per-language facade, reducer, library, dependency-injection, and
+multi-parser patterns, read
+[Handwritten Integration Guide](handwritten-integration-guide.md) after this
+page.
 
 ## The Short Version
 
@@ -561,16 +570,22 @@ and `ReducerMap` have one definition while editors can still find them.
 
 ## Source References In Generated Code
 
-Generated Go files include source comments that point back to the `.lf`, `.l`,
-or `.y` input used to create them. For example, generated scanner and parser
-tables include comments near rule metadata entries:
+Generated Go, C#, C, and C++ parser files include comments that point back to
+the `.lf`, `.l`, or `.y` input used to create them. Generated parser rule
+metadata and reduce-action table entries also include the normalized grammar
+alternative, so a reader can connect a table row to the source rule without
+opening the JSON table dump first.
 
 ```go
+// Grammar rule 7: Expr -> left=Expr Plus right=Term {go: add}
 // Source: vehicle.lf:57:1
 ```
 
-Those comments are for humans reading generated code or debugging table
-metadata. They do not change how the Go compiler sees generated table data.
+C#, C, and C++ output use the same comment idea with their native comment
+syntax around `ParserRules`, `parser_rules`, and reduce entries in the parser
+action table. These comments are for humans reading generated code or
+debugging table metadata. They do not change runtime table data, action/goto
+lookup, or compiler source mapping.
 
 Inline Go semantic snippets are different because they are user-written Go
 code emitted into generated `parser.go`. LangForge wraps those snippets with
@@ -706,4 +721,6 @@ dist/           contains built binaries and logs
 
 When reading an example, start with the `.lf` file, then look at the reducer or
 adapter code outside `generated`. Open generated files only when you want to
-study the scanner/parser tables or generated API shape.
+study the scanner/parser tables or generated API shape. When starting a new
+project, use [Handwritten Integration Guide](handwritten-integration-guide.md)
+as the checklist for the non-generated code.

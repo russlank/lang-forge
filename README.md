@@ -176,6 +176,7 @@ make docker-smoke
 - [Invocation and layout patterns](doc/invocation-and-layouts.md)
 - [Specification format](doc/specification.md)
 - [Generated code and semantics](doc/generated-code-and-semantics.md)
+- [Handwritten integration guide](doc/handwritten-integration-guide.md)
 - [Parser algorithms](doc/parser-algorithms.md)
 - [Parser error recovery](doc/parser-error-recovery.md)
 - [Examples](doc/examples.md)
@@ -211,7 +212,10 @@ Reusable Codex skills for LangForge live under [skills](skills):
   See
   [Generated code and semantics](doc/generated-code-and-semantics.md) for a
   beginner-friendly explanation of reducer labels, generated directories, and
-  Go build tags used by the runnable examples.
+  Go build tags used by the runnable examples, and
+  [Handwritten integration guide](doc/handwritten-integration-guide.md) for
+  the non-generated reducer, facade, DI, library, and multi-parser code users
+  normally write around generated recognizers.
 
 ## License
 

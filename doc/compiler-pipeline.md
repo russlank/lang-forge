@@ -1,9 +1,13 @@
 # Compiler Pipeline
 
 Document id: `lang-forge-compiler-pipeline-v1`
+
 Status: `active`
+
 Last updated: `2026-06-18`
+
 Owner: `Project maintainers`
+
 Scope: `Plain-language explanation of the LangForge compiler-tooling pipeline`
 
 This guide explains what happens between a grammar file and generated code.

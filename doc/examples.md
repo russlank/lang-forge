@@ -1,9 +1,13 @@
 # LangForge Examples
 
 Document id: `lang-forge-examples-v1`
+
 Status: `active`
-Last updated: `2026-06-29`
+
+Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Examples and fixture guide for LangForge`
 
 ## How To Read The Examples
@@ -31,6 +35,9 @@ has generated the local scanner/parser package and passes
 
 For a fuller beginner guide, including what `{go: add}` means, read
 [Generated Code And Semantics](generated-code-and-semantics.md).
+For reusable per-language parser facade, reducer, library, dependency
+injection, and multi-parser layouts, read
+[Handwritten Integration Guide](handwritten-integration-guide.md).
 
 The examples accept a `LANG_FORGE` Makefile override. That command can be the
 source checkout, a standalone binary, an installed binary, or a Docker image.

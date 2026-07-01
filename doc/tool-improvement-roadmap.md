@@ -1,9 +1,13 @@
 # LangForge Tool Improvement Roadmap
 
 Document id: `lang-forge-tool-improvement-roadmap-v1`
+
 Status: `active`
-Last updated: `2026-06-29`
+
+Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Forward-looking public roadmap for LangForge usability, diagnostics, generated APIs, editor tooling, and production-readiness`
 
 **Document purpose:** Capture suggested improvements to LangForge as a parser/scanner/compiler tooling project.  
@@ -550,6 +554,14 @@ is a CLI bootstrap command that copies and rewrites those templates into a new
 project so developers do not have to assemble the generated/handwritten
 boundary by hand. This is tracked internally as `W-071` and `LF-128`.
 
+The public
+[Handwritten Integration Guide](handwritten-integration-guide.md) now defines
+the code users are expected to write beside generated recognizers: reducers,
+parser facades, domain models, diagnostics, C# dependency-injection adapters,
+C++ semantic policy interfaces, and multi-parser layouts. Follow-up template
+work should turn those patterns into scaffolded files rather than leaving every
+project to recreate them manually.
+
 ### Recommendation
 
 Add:
@@ -559,6 +571,8 @@ lang-forge init calc --target go
 lang-forge init mini-compiler --target csharp
 lang-forge init dsl --target cpp --template compiler
 lang-forge init draw-like --target go --template interpreter --out ./draw-like
+lang-forge init expression --target csharp --with-facade --with-di
+lang-forge init multi-dsl --target cpp --template multi-parser
 ```
 
 ### Templates

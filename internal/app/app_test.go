@@ -282,6 +282,9 @@ func TestRunGenerate_WritesDeterministicManifestAndTokens(t *testing.T) {
 	if !strings.Contains(parser, "// Source: "+specPath) || !strings.Contains(parser, "// Source: "+specPath+":") {
 		t.Fatalf("parser.go does not record source references:\n%s", parser)
 	}
+	if !strings.Contains(parser, "Grammar rule") || !strings.Contains(parser, "{go: add}") {
+		t.Fatalf("parser.go does not annotate generated tables with grammar rules:\n%s", parser)
+	}
 	for _, name := range []string{"scanner.go", "parser.go", "langforge.tables.json"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Fatalf("expected generated %s: %v", name, err)
@@ -335,6 +338,10 @@ S : A B {c: pair} ;
 	parserHeader := readFile(t, filepath.Join(out, "parser.h"))
 	if !strings.Contains(parserHeader, "SEMANTIC_C_ACTION_PAIR") {
 		t.Fatalf("parser.h does not expose C semantic action enum:\n%s", parserHeader)
+	}
+	parserSource := readFile(t, filepath.Join(out, "parser.c"))
+	if !strings.Contains(parserSource, "Grammar rule") || !strings.Contains(parserSource, "S -> A B {c: pair}") || !strings.Contains(parserSource, "Source: "+specPath+":") {
+		t.Fatalf("parser.c does not annotate generated tables with source grammar rules:\n%s", parserSource)
 	}
 }
 
@@ -787,6 +794,10 @@ func TestRunGenerate_GeneratedCppScannerParserCompilesAndParses(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
+	parserSource := readFile(t, filepath.Join(out, "parser.cpp"))
+	if !strings.Contains(parserSource, "Grammar rule") || !strings.Contains(parserSource, "{cpp: add}") || !strings.Contains(parserSource, "Source: "+specPath+":") {
+		t.Fatalf("generated C++ parser does not annotate generated tables with source grammar rules:\n%s", parserSource)
+	}
 	writeFile(t, filepath.Join(dir, "main.cpp"), `#include "generated/parser.hpp"
 
 #include <any>
@@ -1203,6 +1214,9 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 		if !strings.Contains(parserSource, fragment) {
 			t.Fatalf("generated C# parser missing %q:\n%s", fragment, parserSource)
 		}
+	}
+	if !strings.Contains(parserSource, "Grammar rule") || !strings.Contains(parserSource, "{csharp: add}") || !strings.Contains(parserSource, "Source: "+specPath+":") {
+		t.Fatalf("generated C# parser does not annotate generated tables with source grammar rules:\n%s", parserSource)
 	}
 	for _, name := range []string{"Tokens.cs", "Scanner.cs", "Parser.cs"} {
 		if _, err := os.Stat(filepath.Join(out, name)); !os.IsNotExist(err) {

@@ -1,9 +1,13 @@
 # Requirements
 
 Document id: `lang-forge-requirements-v1`
+
 Status: `active`
+
 Last updated: `2026-06-21`
+
 Owner: `Project maintainers`
+
 Scope: `Toolchain requirements for building LangForge and running examples`
 
 LangForge itself is a Go command-line tool. The runnable examples also exercise

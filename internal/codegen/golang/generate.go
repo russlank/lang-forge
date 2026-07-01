@@ -514,13 +514,18 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("var parserActions = map[int]map[string]parserAction{\n")
 	actionStates := sortedActionStates(table.Actions)
 	for _, state := range actionStates {
-		b.WriteString(fmt.Sprintf("\t%d: {", state))
+		b.WriteString(fmt.Sprintf("\t%d: {\n", state))
 		syms := sortedActionSymbols(table.Actions[state])
 		for _, sym := range syms {
 			action := table.Actions[state][sym]
-			b.WriteString(fmt.Sprintf("%q: {kind: %q, state: %d, rule: %d},", sym, action.Kind, action.State, action.Rule))
+			if action.Kind == parse.ActionReduce {
+				if rule, ok := ruleByID(table.Rules, action.Rule); ok {
+					b.WriteString(indentComment(ruleSourceComment(rule, "go", "// "), "\t\t"))
+				}
+			}
+			b.WriteString(fmt.Sprintf("\t\t%q: {kind: %q, state: %d, rule: %d},\n", sym, action.Kind, action.State, action.Rule))
 		}
-		b.WriteString("},\n")
+		b.WriteString("\t},\n")
 	}
 	b.WriteString("}\n\n")
 	b.WriteString("var parserTokenAliases = map[string]string{\n")
@@ -550,9 +555,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("}\n\n")
 	b.WriteString("var parserRules = map[int]parserRule{\n")
 	for _, rule := range table.Rules {
-		if comment := sourceComment(rule.Span); comment != "" {
-			b.WriteString("\t" + comment + "\n")
-		}
+		b.WriteString(indentComment(ruleSourceComment(rule, "go", "// "), "\t"))
 		b.WriteString(fmt.Sprintf("\t%d: {lhs: %q, rhs: %s, labels: %s, size: %d, action: %s},\n", rule.ID, rule.LHS, renderStringSlice(rule.RHS), renderStringSlice(rule.Labels), len(rule.RHS), semanticActionExpr(rule.Actions["go"], actionIDs)))
 	}
 	b.WriteString("}\n")
@@ -692,6 +695,63 @@ func sourceComment(span diagnostics.Span) string {
 		return ""
 	}
 	return "// Source: " + ref
+}
+
+func ruleSourceComment(rule parse.Rule, target string, prefix string) string {
+	var lines []string
+	lines = append(lines, prefix+grammarRuleDisplay(rule, target))
+	if ref := sourceRef(rule.Span); ref != "" {
+		lines = append(lines, prefix+"Source: "+ref)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func grammarRuleDisplay(rule parse.Rule, target string) string {
+	rhs := "%empty"
+	if len(rule.RHS) > 0 {
+		parts := make([]string, 0, len(rule.RHS))
+		for index, symbol := range rule.RHS {
+			label := ""
+			if index < len(rule.Labels) {
+				label = rule.Labels[index]
+			}
+			if label != "" {
+				parts = append(parts, label+"="+symbol)
+			} else {
+				parts = append(parts, symbol)
+			}
+		}
+		rhs = strings.Join(parts, " ")
+	}
+	display := fmt.Sprintf("Grammar rule %d: %s -> %s", rule.ID, rule.LHS, rhs)
+	if action := commentSafe(strings.TrimSpace(rule.Actions[target])); action != "" {
+		display += fmt.Sprintf(" {%s: %s}", target, action)
+	}
+	return display
+}
+
+func commentSafe(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func indentComment(comment string, indent string) string {
+	if comment == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(comment, "\n"), "\n") {
+		b.WriteString(indent + line + "\n")
+	}
+	return b.String()
+}
+
+func ruleByID(rules []parse.Rule, id int) (parse.Rule, bool) {
+	for _, rule := range rules {
+		if rule.ID == id {
+			return rule, true
+		}
+	}
+	return parse.Rule{}, false
 }
 
 func sourceRef(span diagnostics.Span) string {

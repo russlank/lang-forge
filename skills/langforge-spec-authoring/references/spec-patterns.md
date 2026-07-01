@@ -74,6 +74,8 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
 
 For every non-trivial production, line up:
 
+- the handwritten integration shape documented in
+  `doc/handwritten-integration-guide.md`;
 - RHS labels in the `.lf` file;
 - target-specific nonterminal type declarations where the value is meaningful;
 - generated action IDs/enums and `langforge.actions.json`;

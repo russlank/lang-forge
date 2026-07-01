@@ -723,8 +723,8 @@ func renderParserRules(table *parse.Table, actionIDs map[string]string) string {
 		if !present[i] {
 			size = 0
 		}
-		if comment := sourceComment(rule.Span); comment != "" {
-			b.WriteString(comment + "\n")
+		if present[i] {
+			b.WriteString(ruleSourceComment(rule, "cpp", "// "))
 		}
 		b.WriteString(fmt.Sprintf("static constexpr std::array<std::string_view, %d> parser_rule_%d_rhs = {{", size, i))
 		for _, sym := range rule.RHS {
@@ -751,6 +751,7 @@ func renderParserRules(table *parse.Table, actionIDs map[string]string) string {
 		if id, ok := actionIDs[strings.TrimSpace(rule.Actions["cpp"])]; ok {
 			action = id
 		}
+		b.WriteString(indentComment(ruleSourceComment(rule, "cpp", "// "), "    "))
 		b.WriteString(fmt.Sprintf("    {%d, %s, parser_rule_%d_rhs.data(), parser_rule_%d_rhs.size(), parser_rule_%d_labels.data(), parser_rule_%d_labels.size(), %s},\n", rule.ID, cppString(rule.LHS), i, i, i, i, action))
 	}
 	if len(rules) == 0 {
@@ -762,6 +763,7 @@ func renderParserRules(table *parse.Table, actionIDs map[string]string) string {
 
 func renderParserActions(table *parse.Table) string {
 	var entries []string
+	entryCount := 0
 	rowStart := make([]int, len(table.States))
 	rowCount := make([]int, len(table.States))
 	for _, state := range table.States {
@@ -771,7 +773,7 @@ func renderParserActions(table *parse.Table) string {
 			symbols = append(symbols, sym)
 		}
 		sort.Strings(symbols)
-		rowStart[state.ID] = len(entries)
+		rowStart[state.ID] = entryCount
 		for _, sym := range symbols {
 			action := actions[sym]
 			kind := "ParserActionKind::Accept"
@@ -779,8 +781,12 @@ func renderParserActions(table *parse.Table) string {
 				kind = "ParserActionKind::Shift"
 			} else if action.Kind == parse.ActionReduce {
 				kind = "ParserActionKind::Reduce"
+				if rule, ok := ruleByID(table.Rules, action.Rule); ok {
+					entries = append(entries, indentComment(ruleSourceComment(rule, "cpp", "// "), "    "))
+				}
 			}
 			entries = append(entries, fmt.Sprintf("    {%s, %s, %d, %d},\n", cppString(sym), kind, action.State, action.Rule))
+			entryCount++
 			rowCount[state.ID]++
 		}
 	}
@@ -1647,6 +1653,63 @@ func sourceComment(span diagnostics.Span) string {
 		return ""
 	}
 	return "// Source: " + ref
+}
+
+func ruleSourceComment(rule parse.Rule, target string, prefix string) string {
+	var lines []string
+	lines = append(lines, prefix+grammarRuleDisplay(rule, target))
+	if ref := sourceRef(rule.Span); ref != "" {
+		lines = append(lines, prefix+"Source: "+ref)
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func grammarRuleDisplay(rule parse.Rule, target string) string {
+	rhs := "%empty"
+	if len(rule.RHS) > 0 {
+		parts := make([]string, 0, len(rule.RHS))
+		for index, symbol := range rule.RHS {
+			label := ""
+			if index < len(rule.Labels) {
+				label = rule.Labels[index]
+			}
+			if label != "" {
+				parts = append(parts, label+"="+symbol)
+			} else {
+				parts = append(parts, symbol)
+			}
+		}
+		rhs = strings.Join(parts, " ")
+	}
+	display := fmt.Sprintf("Grammar rule %d: %s -> %s", rule.ID, rule.LHS, rhs)
+	if action := commentSafe(strings.TrimSpace(rule.Actions[target])); action != "" {
+		display += fmt.Sprintf(" {%s: %s}", target, action)
+	}
+	return display
+}
+
+func commentSafe(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func indentComment(comment string, indent string) string {
+	if comment == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(comment, "\n"), "\n") {
+		b.WriteString(indent + line + "\n")
+	}
+	return b.String()
+}
+
+func ruleByID(rules []parse.Rule, id int) (parse.Rule, bool) {
+	for _, rule := range rules {
+		if rule.ID == id {
+			return rule, true
+		}
+	}
+	return parse.Rule{}, false
 }
 
 func sourceRef(span diagnostics.Span) string {

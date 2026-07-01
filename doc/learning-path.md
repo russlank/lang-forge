@@ -1,9 +1,13 @@
 # Learning Path
 
 Document id: `lang-forge-learning-path-v1`
+
 Status: `active`
-Last updated: `2026-06-18`
+
+Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `A guided path for learning compiler tooling through LangForge`
 
 LangForge is meant to be useful software and readable compiler-learning
@@ -42,12 +46,15 @@ Then open:
 
 - [examples/go/calc/calc.lf](../examples/go/calc/calc.lf)
 - [doc/generated-code-and-semantics.md](generated-code-and-semantics.md)
+- [doc/handwritten-integration-guide.md](handwritten-integration-guide.md)
 - [doc/specification.md](specification.md)
 - [doc/usage.md](usage.md)
 
 Goal: understand the boundary between lexer rules, parser rules, generated Go
 parser output, and reducer-backed expression evaluation. In particular, learn
-that `{go: add}` is a reducer label, not built-in arithmetic code.
+that `{go: add}` is a reducer label, not built-in arithmetic code. Then use
+the handwritten integration guide to see which reducer, facade, library, and
+test files a LangForge user normally writes beside the `.lf` file.
 
 If a term is unfamiliar, keep [Glossary](glossary.md) open nearby.
 

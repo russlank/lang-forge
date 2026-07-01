@@ -73,6 +73,8 @@ local files and the root targets.
 
 Modern examples should make the grammar-to-code contract obvious:
 
+- keep the public handwritten boundary consistent with
+  `doc/handwritten-integration-guide.md`;
 - `.lf` contains `%semantic <target> type` declarations where useful;
 - RHS labels such as `left=Expr` or `target=FigureReference` match reducer
   helper names;

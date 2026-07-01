@@ -1,9 +1,13 @@
 # Glossary
 
 Document id: `lang-forge-glossary-v1`
+
 Status: `active`
+
 Last updated: `2026-06-18`
+
 Owner: `Project maintainers`
+
 Scope: `Common compiler terms used by LangForge documentation and code`
 
 This glossary uses LangForge's current implementation vocabulary. It is not a

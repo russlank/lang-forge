@@ -1,9 +1,13 @@
 # UCDT Legacy Inspiration
 
 Document id: `lang-forge-ucdt-legacy-inspiration-v1`
+
 Status: `active`
+
 Last updated: `2026-06-19`
+
 Owner: `Project maintainers`
+
 Scope: `How the Pascal UCDT project influenced LangForge without defining a compatibility contract`
 
 LangForge was inspired by the Pascal

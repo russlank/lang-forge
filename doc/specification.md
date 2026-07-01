@@ -1,9 +1,13 @@
 # LangForge Specification Format
 
 Document id: `lang-forge-specification-v1`
+
 Status: `active`
+
 Last updated: `2026-07-01`
+
 Owner: `Project maintainers`
+
 Scope: `Current combined .lf format and supported legacy migration syntax`
 
 ## Combined `.lf`
@@ -231,11 +235,14 @@ Inline Go action text is emitted as statements inside a generated
 Reducer mode remains the default because it avoids target import cycles and
 keeps generated files independent from handwritten semantics.
 
-Generated Go output includes source comments for scanner and parser table
-entries that come from grammar rules. Inline Go action text additionally uses
-Go `//line` directives so compiler diagnostics can point back to the grammar
-source. Reducer-mode labels remain metadata, so they use source comments and
-structured spans rather than compiler line directives.
+Generated Go, C#, C, and C++ output includes source comments for parser table
+entries that come from grammar rules. The generated comments include the
+normalized grammar alternative and, when available, the original source
+filename, line, and column. Generated Go scanner rule tables also carry source
+comments. Inline Go action text additionally uses Go `//line` directives so
+compiler diagnostics can point back to the grammar source. Reducer-mode labels
+remain metadata, so they use source comments and structured spans rather than
+compiler line directives.
 
 Grammar symbols must have one role. A name cannot be both a `%token` and a
 grammar rule name, because parser tables need terminals and nonterminals to map

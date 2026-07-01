@@ -1,9 +1,13 @@
 # Invocation And Layout Patterns
 
 Document id: `lang-forge-invocation-layouts-v1`
+
 Status: `active`
+
 Last updated: `2026-06-18`
+
 Owner: `Project maintainers`
+
 Scope: `Practical guide for invoking LangForge and organizing generated parser projects`
 
 This guide shows how to run LangForge when the binary is not installed, how to

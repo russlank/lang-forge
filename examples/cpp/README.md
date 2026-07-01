@@ -56,3 +56,7 @@ using an external image library.
 The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/cpp/mini-compiler`.
+
+For the recommended handwritten C++ reducer map, parser facade, semantic
+policy/interface, reusable library, and multi-parser shapes, read
+[Handwritten Integration Guide](../../doc/handwritten-integration-guide.md).

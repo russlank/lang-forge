@@ -1,9 +1,13 @@
 # Build, Pipeline, And Docker
 
 Document id: `lang-forge-build-release-v1`
+
 Status: `active`
+
 Last updated: `2026-06-21`
+
 Owner: `Project maintainers`
+
 Scope: `Local build targets, CI pipelines, release artifacts, Docker image, and licensing`
 
 This guide explains how LangForge is built locally, checked in CI, packaged for

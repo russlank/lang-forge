@@ -163,13 +163,15 @@ func BuildSLR(g *Grammar) *Table {
 	}
 	for i, itemSet := range states {
 		state := State{ID: i, Items: sortedItems(itemSet), Transitions: map[string]int{}}
-		for sym, to := range transitions[i] {
-			state.Transitions[sym] = to
+		for _, sym := range sortedTransitionSymbols(transitions[i]) {
+			state.Transitions[sym] = transitions[i][sym]
 		}
 		table.States = append(table.States, state)
 	}
-	for from, bySym := range transitions {
-		for sym, to := range bySym {
+	for _, from := range sortedTransitionStates(transitions) {
+		bySym := transitions[from]
+		for _, sym := range sortedTransitionSymbols(bySym) {
+			to := bySym[sym]
 			if aug.Terminals[sym] && sym != EOF {
 				table.setAction(from, sym, Action{Kind: ActionShift, State: to}, states[from])
 			} else if aug.Nonterminals[sym] {
@@ -181,7 +183,7 @@ func BuildSLR(g *Grammar) *Table {
 		}
 	}
 	for stateID, itemSet := range states {
-		for item := range itemSet {
+		for _, item := range sortedItems(itemSet) {
 			rule := aug.Rules[item.Rule]
 			if item.Dot != len(rule.RHS) {
 				continue
@@ -190,7 +192,7 @@ func BuildSLR(g *Grammar) *Table {
 				table.setAction(stateID, EOF, Action{Kind: ActionAccept, Rule: rule.ID}, itemSet)
 				continue
 			}
-			for tok := range follow[rule.LHS] {
+			for _, tok := range sortedBoolSymbols(follow[rule.LHS]) {
 				table.setAction(stateID, tok, Action{Kind: ActionReduce, Rule: rule.ID}, itemSet)
 			}
 		}
@@ -486,6 +488,33 @@ func sortedItems(items itemSet) []Item {
 		return out[i].Rule < out[j].Rule
 	})
 	return out
+}
+
+func sortedTransitionStates(transitions map[int]map[string]int) []int {
+	states := make([]int, 0, len(transitions))
+	for state := range transitions {
+		states = append(states, state)
+	}
+	sort.Ints(states)
+	return states
+}
+
+func sortedTransitionSymbols(transitions map[string]int) []string {
+	symbols := make([]string, 0, len(transitions))
+	for symbol := range transitions {
+		symbols = append(symbols, symbol)
+	}
+	sort.Strings(symbols)
+	return symbols
+}
+
+func sortedBoolSymbols(values map[string]bool) []string {
+	symbols := make([]string, 0, len(values))
+	for symbol := range values {
+		symbols = append(symbols, symbol)
+	}
+	sort.Strings(symbols)
+	return symbols
 }
 
 func itemSetKey(items itemSet) string {

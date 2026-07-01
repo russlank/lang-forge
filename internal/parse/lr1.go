@@ -38,12 +38,14 @@ func BuildLALR(g *Grammar) *Table {
 		}
 	}
 	transitions := map[int]map[string]int{}
-	for oldFrom, bySym := range canonicalTransitions {
+	for _, oldFrom := range sortedTransitionStates(canonicalTransitions) {
+		bySym := canonicalTransitions[oldFrom]
 		from := oldToMerged[oldFrom]
 		if transitions[from] == nil {
 			transitions[from] = map[string]int{}
 		}
-		for sym, oldTo := range bySym {
+		for _, sym := range sortedTransitionSymbols(bySym) {
+			oldTo := bySym[sym]
 			to := oldToMerged[oldTo]
 			if existing, exists := transitions[from][sym]; exists && existing != to {
 				// Canonical LR(1) states with identical LR(0) cores should have
@@ -163,10 +165,10 @@ func mergedLR1ActionConflicts(g *Grammar, items lr1ItemSet, shiftSymbols map[str
 		Rules:     g.Rules,
 	}
 	core := coreItemSet(items)
-	for sym := range shiftSymbols {
+	for _, sym := range sortedBoolSymbols(shiftSymbols) {
 		table.setAction(0, sym, Action{Kind: ActionShift, State: 1}, core)
 	}
-	for item := range items {
+	for _, item := range sortedLR1Items(items) {
 		rule := g.Rules[item.Rule]
 		if item.Dot != len(rule.RHS) {
 			continue
@@ -248,12 +250,14 @@ func mergedLR1StatesAndTransitions(states []lr1ItemSet, transitions map[int]map[
 	}
 
 	outTransitions := map[int]map[string]int{}
-	for oldFrom, bySym := range transitions {
+	for _, oldFrom := range sortedTransitionStates(transitions) {
+		bySym := transitions[oldFrom]
 		from := oldToPartition[oldFrom]
 		if outTransitions[from] == nil {
 			outTransitions[from] = map[string]int{}
 		}
-		for sym, oldTo := range bySym {
+		for _, sym := range sortedTransitionSymbols(bySym) {
+			oldTo := bySym[sym]
 			to := oldToPartition[oldTo]
 			if existing, exists := outTransitions[from][sym]; exists && existing != to {
 				continue
@@ -392,13 +396,15 @@ func buildLR1Table(algorithm string, g *Grammar, states []lr1ItemSet, transition
 	}
 	for i, itemSet := range states {
 		state := State{ID: i, Items: sortedCoreItems(itemSet), LR1Items: sortedLR1Items(itemSet), Transitions: map[string]int{}}
-		for sym, to := range transitions[i] {
-			state.Transitions[sym] = to
+		for _, sym := range sortedTransitionSymbols(transitions[i]) {
+			state.Transitions[sym] = transitions[i][sym]
 		}
 		table.States = append(table.States, state)
 	}
-	for from, bySym := range transitions {
-		for sym, to := range bySym {
+	for _, from := range sortedTransitionStates(transitions) {
+		bySym := transitions[from]
+		for _, sym := range sortedTransitionSymbols(bySym) {
+			to := bySym[sym]
 			if g.Terminals[sym] && sym != EOF {
 				table.setAction(from, sym, Action{Kind: ActionShift, State: to}, coreItemSet(states[from]))
 			} else if g.Nonterminals[sym] {
@@ -410,7 +416,7 @@ func buildLR1Table(algorithm string, g *Grammar, states []lr1ItemSet, transition
 		}
 	}
 	for stateID, itemSet := range states {
-		for item := range itemSet {
+		for _, item := range sortedLR1Items(itemSet) {
 			rule := g.Rules[item.Rule]
 			if item.Dot != len(rule.RHS) {
 				continue

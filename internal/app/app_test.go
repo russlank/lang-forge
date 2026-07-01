@@ -310,6 +310,24 @@ func TestRunInspect_IELRReportsMergeDecisionsInTextAndJSON(t *testing.T) {
 	}
 }
 
+func TestRunInspect_IELRJSONIsStableAcrossBuilds(t *testing.T) {
+	specPath := filepath.Join("..", "..", "examples", "parser-algorithms", "mysterious-conflict-ielr.lf")
+	var firstOut, firstErr bytes.Buffer
+	code := Run(context.Background(), []string{"inspect", "--spec", specPath, "--format", "json"}, &firstOut, &firstErr)
+	if code != ExitOK {
+		t.Fatalf("first inspect exit = %d, stdout=%s stderr=%s", code, firstOut.String(), firstErr.String())
+	}
+
+	var secondOut, secondErr bytes.Buffer
+	code = Run(context.Background(), []string{"inspect", "--spec", specPath, "--format", "json"}, &secondOut, &secondErr)
+	if code != ExitOK {
+		t.Fatalf("second inspect exit = %d, stdout=%s stderr=%s", code, secondOut.String(), secondErr.String())
+	}
+	if firstOut.String() != secondOut.String() {
+		t.Fatalf("IELR inspect JSON changed between builds")
+	}
+}
+
 func TestRunGenerate_WritesDeterministicManifestAndTokens(t *testing.T) {
 	out := t.TempDir()
 	specPath := filepath.Join("..", "..", "examples", "go", "calc", "calc.lf")

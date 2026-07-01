@@ -27,5 +27,7 @@ image libraries, so it is easy to study alongside the generated C API.
 The grammar uses the same named RHS labels and action names as the Go, C#, and
 C++ variants. Its C pointer/value types are recorded in
 `generated/langforge.actions.json`; shared tail types live in `ast.h` so the
-metadata names real application types. Generated C typed contexts and coverage
-helpers remain tracked backend-parity work.
+metadata names real application types. Generated C typed contexts in
+`generated/parser_typed.h` validate named RHS labels and required handlers
+before parsing while the `--boxed` flag keeps the lower-level compatibility path
+available for comparison.

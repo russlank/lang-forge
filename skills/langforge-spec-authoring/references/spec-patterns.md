@@ -78,8 +78,10 @@ For every non-trivial production, line up:
 - target-specific nonterminal type declarations where the value is meaningful;
 - generated action IDs/enums and `langforge.actions.json`;
 - handwritten reducer map entries or switch branches;
-- tests for missing reducer coverage in Go/C#, or checked boxed-helper failures
-  in C and C++.
+- tests for missing reducer coverage in Go, C#, and C++, or missing required
+  typed-handler pointers in C;
+- explicit `--boxed` smoke coverage when an example keeps the compatibility
+  reducer path.
 
 ## Legacy Split Inputs
 

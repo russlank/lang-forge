@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-encoding-v1`
 Status: `active`
-Last updated: `2026-06-19`
+Last updated: `2026-07-01`
 Owner: `Project maintainers`
 Scope: `Scanner source encoding and Unicode support model`
 
@@ -77,20 +77,27 @@ C runtime:
 - preserve byte offsets and scalar line/column positions on lexemes;
 - report malformed input as a scanner error.
 
+C++ runtime:
+
+- include a small checked UTF-8 decoder over caller-owned `std::string_view`
+  input;
+- preserve byte offsets and scalar line/column positions on lexemes;
+- report malformed input as a scanner error without advancing indefinitely.
+
 ## Implementation Status
 
 - `.lf` specs can declare `%scanner utf8` or structured scanner settings such
   as `%scanner encoding=utf8 invalid=error newline=lf`.
 - Table JSON and manifests record scanner encoding and sparse domain metadata.
-- Regex, NFA, DFA, minimization, in-process matching, generated Go matching,
-  generated C# matching, and generated C matching operate on Unicode scalar
-  values.
+- Regex, NFA, DFA, minimization, in-process matching, and generated
+  Go/C#/C/C++ matching operate on Unicode scalar values.
 - Generated Go lexemes include byte offsets plus scalar line/column positions.
 - Generated C# lexemes include UTF-16 string offsets plus scalar line/column
   positions.
 - Generated C lexemes include byte offsets plus scalar line/column positions.
-- Malformed UTF-8 input in Go/C and malformed UTF-16 surrogate input in C# are
-  reported as scanner errors.
+- Generated C++ lexemes include byte offsets plus scalar line/column positions.
+- Malformed UTF-8 input in Go/C/C++ and malformed UTF-16 surrogate input in C#
+  are reported as scanner errors.
 
 Remaining work:
 

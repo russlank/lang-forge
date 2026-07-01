@@ -267,6 +267,7 @@ func printTextSummary(w io.Writer, r *BuildResult) {
 	fmt.Fprintf(w, "Parser algorithm: %s\n", r.ParseTable.Algorithm)
 	fmt.Fprintf(w, "Grammar rules: %d\n", len(r.Grammar.Rules))
 	fmt.Fprintf(w, "Parser states: %d\n", len(r.ParseTable.States))
+	printIELRReport(w, r.ParseTable.IELR)
 	if len(r.ParseTable.Conflicts) == 0 {
 		fmt.Fprintln(w, "Conflicts: none")
 		return
@@ -275,6 +276,54 @@ func printTextSummary(w io.Writer, r *BuildResult) {
 	for _, conflict := range r.ParseTable.Conflicts {
 		printConflict(w, conflict, "  ")
 	}
+}
+
+func printIELRReport(w io.Writer, report *parse.IELRReport) {
+	if report == nil {
+		return
+	}
+	fmt.Fprintf(w, "IELR state counts: LALR=%d, IELR=%d, canonical=%d\n", report.LALRStates, report.IELRStates, report.CanonicalStates)
+	fmt.Fprintf(w, "IELR merges: accepted=%d, rejected=%d\n", len(report.AcceptedMerges), len(report.RejectedMerges))
+	for _, merge := range report.AcceptedMerges {
+		fmt.Fprintf(w, "  accepted core %s from canonical states %s\n", ielrCoreSummary(merge), formatIntList(merge.CanonicalStates))
+	}
+	for _, merge := range report.RejectedMerges {
+		fmt.Fprintf(w, "  rejected core %s from canonical states %s: %s", ielrCoreSummary(merge), formatIntList(merge.CanonicalStates), merge.Reason)
+		if len(merge.ResultStates) > 0 {
+			fmt.Fprintf(w, " -> %s", formatIntGroups(merge.ResultStates))
+		}
+		if len(merge.Conflicts) > 0 {
+			fmt.Fprintf(w, " (%d candidate conflict(s))", len(merge.Conflicts))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func ielrCoreSummary(merge parse.IELRMergeReport) string {
+	if len(merge.CoreDetails) == 0 {
+		return fmt.Sprintf("%v", merge.Core)
+	}
+	parts := make([]string, 0, len(merge.CoreDetails))
+	for _, detail := range merge.CoreDetails {
+		parts = append(parts, detail.Display)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func formatIntGroups(groups [][]int) string {
+	parts := make([]string, 0, len(groups))
+	for _, group := range groups {
+		parts = append(parts, formatIntList(group))
+	}
+	return strings.Join(parts, " ")
+}
+
+func formatIntList(values []int) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, fmt.Sprint(value))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func printConflicts(w io.Writer, conflicts []parse.Conflict) {

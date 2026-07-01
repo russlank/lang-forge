@@ -85,6 +85,29 @@ type State struct {
 	Transitions map[string]int `json:"transitions,omitempty"`
 }
 
+// IELRReport summarizes how IELR moved between the compact LALR merge and the
+// full canonical LR(1) automaton. It is intentionally small enough for inspect
+// JSON while still explaining why a grammar needed more states than LALR.
+type IELRReport struct {
+	LALRStates      int               `json:"lalrStates"`
+	IELRStates      int               `json:"ielrStates"`
+	CanonicalStates int               `json:"canonicalStates"`
+	AcceptedMerges  []IELRMergeReport `json:"acceptedMerges,omitempty"`
+	RejectedMerges  []IELRMergeReport `json:"rejectedMerges,omitempty"`
+}
+
+// IELRMergeReport describes one LR(0)-core merge decision. Accepted decisions
+// have CanonicalStates only. Rejected decisions also include ResultStates,
+// Reason, and any candidate conflicts detected before the split.
+type IELRMergeReport struct {
+	Core            []Item         `json:"core"`
+	CoreDetails     []ConflictItem `json:"coreDetails,omitempty"`
+	CanonicalStates []int          `json:"canonicalStates"`
+	ResultStates    [][]int        `json:"resultStates,omitempty"`
+	Reason          string         `json:"reason,omitempty"`
+	Conflicts       []Conflict     `json:"conflicts,omitempty"`
+}
+
 // Table is the generated parser automaton and action/goto table.
 type Table struct {
 	Algorithm     string                    `json:"algorithm"`
@@ -92,6 +115,7 @@ type Table struct {
 	Actions       map[int]map[string]Action `json:"actions"`
 	Gotos         map[int]map[string]int    `json:"gotos"`
 	Conflicts     []Conflict                `json:"conflicts,omitempty"`
+	IELR          *IELRReport               `json:"ielr,omitempty"`
 	Rules         []Rule                    `json:"rules"`
 	Expected      map[int][]ExpectedToken   `json:"expected,omitempty"`
 	ErrorRecovery bool                      `json:"errorRecovery,omitempty"`

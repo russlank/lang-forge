@@ -149,11 +149,23 @@ func TestBuildIELR_MatchesLALRWhenCoreMergesAreSafe(t *testing.T) {
 	if len(ielr.Conflicts) != 0 {
 		t.Fatalf("ielr conflicts = %#v", ielr.Conflicts)
 	}
+	if ielr.IELR == nil {
+		t.Fatal("expected IELR merge report")
+	}
 	if ielr.Algorithm != parseralgo.IELR {
 		t.Fatalf("algorithm = %q", ielr.Algorithm)
 	}
 	if len(ielr.States) != len(lalr.States) {
 		t.Fatalf("IELR states = %d, LALR states = %d; want same count for safe core merge", len(ielr.States), len(lalr.States))
+	}
+	if ielr.IELR.LALRStates != len(lalr.States) || ielr.IELR.IELRStates != len(ielr.States) {
+		t.Fatalf("unexpected IELR report counts: %#v", ielr.IELR)
+	}
+	if len(ielr.IELR.AcceptedMerges) == 0 {
+		t.Fatalf("expected accepted merge decisions: %#v", ielr.IELR)
+	}
+	if len(ielr.IELR.RejectedMerges) != 0 {
+		t.Fatalf("unexpected rejected merge decisions for safe grammar: %#v", ielr.IELR.RejectedMerges)
 	}
 }
 
@@ -179,6 +191,54 @@ func TestBuildIELR_SplitsMysteriousLALRConflict(t *testing.T) {
 	}
 	if len(ielr.States) > len(canonical.States) {
 		t.Fatalf("IELR states = %d, canonical states = %d; IELR should not exceed canonical LR(1)", len(ielr.States), len(canonical.States))
+	}
+	if ielr.IELR == nil {
+		t.Fatal("expected IELR merge report")
+	}
+	if ielr.IELR.CanonicalStates != len(canonical.States) || ielr.IELR.IELRStates != len(ielr.States) || ielr.IELR.LALRStates != len(lalr.States) {
+		t.Fatalf("unexpected IELR report counts: %#v", ielr.IELR)
+	}
+	if len(ielr.IELR.RejectedMerges) == 0 {
+		t.Fatalf("expected rejected merge decisions: %#v", ielr.IELR)
+	}
+	foundActionSplit := false
+	for _, merge := range ielr.IELR.RejectedMerges {
+		if merge.Reason == "action-conflict" && len(merge.Conflicts) > 0 && len(merge.ResultStates) > 1 {
+			foundActionSplit = true
+		}
+	}
+	if !foundActionSplit {
+		t.Fatalf("expected rejected action-conflict merge with split groups: %#v", ielr.IELR.RejectedMerges)
+	}
+}
+
+func TestSplitInadequatePartitionsKeepsCompatibleSubgroups(t *testing.T) {
+	g := &Grammar{
+		Terminals: map[string]bool{"a": true, "b": true, "c": true, "d": true, EOF: true},
+		Rules: []Rule{
+			{ID: 0, LHS: "S'", RHS: []string{"S"}},
+			{ID: 1, LHS: "A", RHS: []string{"X"}},
+			{ID: 2, LHS: "B", RHS: []string{"X"}},
+		},
+	}
+	states := []lr1ItemSet{
+		{{Rule: 1, Dot: 1, Lookahead: "a"}: true, {Rule: 2, Dot: 1, Lookahead: "b"}: true},
+		{{Rule: 1, Dot: 1, Lookahead: "c"}: true, {Rule: 2, Dot: 1, Lookahead: "d"}: true},
+		{{Rule: 1, Dot: 1, Lookahead: "b"}: true, {Rule: 2, Dot: 1, Lookahead: "a"}: true},
+	}
+	partitions := []lr1Partition{{Members: []int{0, 1, 2}}}
+	split, _, changed := splitInadequatePartitions(g, states, nil, partitions)
+	if !changed {
+		t.Fatal("expected inadequate partition to split")
+	}
+	if len(split) != 2 {
+		t.Fatalf("split partitions = %#v; want compatible subgroup plus singleton", split)
+	}
+	if got := split[0].Members; len(got) != 2 || got[0] != 0 || got[1] != 1 {
+		t.Fatalf("first split group = %#v, want [0 1]", got)
+	}
+	if got := split[1].Members; len(got) != 1 || got[0] != 2 {
+		t.Fatalf("second split group = %#v, want [2]", got)
 	}
 }
 

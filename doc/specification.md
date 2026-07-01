@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-specification-v1`
 Status: `active`
-Last updated: `2026-06-25`
+Last updated: `2026-07-01`
 Owner: `Project maintainers`
 Scope: `Current combined .lf format and supported legacy migration syntax`
 
@@ -51,7 +51,7 @@ For a guided tour of how this file turns into scanner and parser tables, see
 | `%hide-expected Comma Semi` | Omits low-value terminals from expected-token reports without changing parser behavior. |
 | `%type slr` | Build SLR tables. Useful for small/simple grammars and diagnostics. |
 | `%type lalr` | Build LALR(1) tables. This is the default when `%type` is omitted. |
-| `%type ielr` | Build conservative IELR(1) tables. Useful when LALR introduces a false merge conflict that canonical LR(1) avoids. |
+| `%type ielr` | Build correctness-first IELR(1) tables with merge/split reporting. Useful when LALR introduces a false merge conflict that canonical LR(1) avoids. |
 | `%type canonical` | Build canonical LR(1) tables with full lookahead state separation. |
 
 See [Parser Algorithms](parser-algorithms.md) for how LR(0), SLR, LALR(1),

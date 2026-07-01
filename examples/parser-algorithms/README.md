@@ -38,3 +38,12 @@ Expected behavior:
 - `mysterious-conflict-ielr.lf` validates.
 - `mysterious-conflict-canonical.lf` validates.
 - `mysterious-conflict-lalr.lf` reports the expected LALR merge conflict.
+
+To see why IELR split or kept a core merge, inspect the IELR fixture:
+
+```sh
+go run ../../cmd/lang-forge inspect --spec mysterious-conflict-ielr.lf --format text
+```
+
+The report includes LALR/IELR/canonical state counts and the accepted/rejected
+merge decisions for the LR(0) cores that differ from plain LALR.

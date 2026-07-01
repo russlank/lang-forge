@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -208,6 +209,52 @@ S : A ;
 	}
 	if !strings.Contains(stdout.String(), "Parser algorithm: ielr") {
 		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "IELR state counts:") || !strings.Contains(stdout.String(), "IELR merges:") {
+		t.Fatalf("stdout does not include IELR report:\n%s", stdout.String())
+	}
+}
+
+func TestRunInspect_IELRReportsMergeDecisionsInTextAndJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mysterious-ielr.lf")
+	writeFile(t, path, mysteriousConflictSpec("%type ielr\n"))
+
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"inspect", "--spec", path, "--format", "text"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("text inspect exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	text := stdout.String()
+	for _, fragment := range []string{
+		"IELR state counts: LALR=",
+		"IELR merges: accepted=",
+		"rejected core",
+		"action-conflict",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("text inspect missing %q:\n%s", fragment, text)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = Run(context.Background(), []string{"inspect", "--spec", path, "--format", "json"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("json inspect exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	var summary Summary
+	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
+		t.Fatalf("inspect JSON did not decode: %v\n%s", err, stdout.String())
+	}
+	if summary.ParseTable.IELR == nil {
+		t.Fatalf("inspect JSON missing IELR report:\n%s", stdout.String())
+	}
+	if summary.ParseTable.IELR.LALRStates >= summary.ParseTable.IELR.IELRStates || summary.ParseTable.IELR.IELRStates > summary.ParseTable.IELR.CanonicalStates {
+		t.Fatalf("unexpected IELR state counts: %#v", summary.ParseTable.IELR)
+	}
+	if len(summary.ParseTable.IELR.RejectedMerges) == 0 {
+		t.Fatalf("expected rejected merge details: %#v", summary.ParseTable.IELR)
 	}
 }
 

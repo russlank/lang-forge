@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-parser-algorithms-v1`
 Status: `active`
-Last updated: `2026-06-18`
+Last updated: `2026-07-01`
 Owner: `Project maintainers`
 Scope: `Implemented LR parser-table algorithms, automata shape, examples, and usage guidance`
 
@@ -293,11 +293,12 @@ canonical-LR state count:
 - <https://www.gnu.org/software/bison/manual/html_node/LR-Table-Construction.html>
 - <https://www.gnu.org/software/bison/manual/html_node/Mysterious-Conflicts.html>
 
-LangForge's first IELR implementation is conservative. It starts from
-canonical LR(1), groups states by LR(0) core like LALR, and accepts a merged
-state only when the merged state has deterministic actions and transitions. If
-the merge would create a shift/reduce or reduce/reduce conflict, LangForge
-splits that group back toward canonical LR(1).
+LangForge's IELR implementation starts from canonical LR(1), groups states by
+LR(0) core like LALR, and accepts a merged state only when the merged state has
+deterministic actions and transitions. If the merge would create a
+shift/reduce or reduce/reduce conflict, LangForge splits that group back
+toward canonical LR(1), preserving compatible subgroups when it can do so
+without introducing an action conflict.
 
 Pseudo-code:
 
@@ -311,18 +312,32 @@ buildIELR(grammar):
             mergedItems = union LR(1) items from member states
             shiftTerminals = terminal transitions from member states
             if mergedItems plus shiftTerminals creates an action conflict:
-                split the partition into canonical singleton states
+                split the partition into deterministic compatible subgroups
 
         refine partitions until every member has the same transition signature
         when mapped through the current partitions
 
     build LR(1)-style action/goto tables from the remaining partitions
+    attach an IELR report with LALR/IELR/canonical counts and merge decisions
 ```
 
-This is not yet a fully minimal IELR implementation. It may keep more states
-than Bison's optimized IELR algorithm, but it should never need more states
-than canonical LR(1), and it keeps LALR-sized tables when LALR core merges are
-already safe.
+This is still intentionally correctness-first rather than a verbatim copy of
+Bison's full IELR implementation. It may keep more states than Bison's most
+optimized tables, but it should never need more states than canonical LR(1),
+and it keeps LALR-sized tables when LALR core merges are already safe.
+
+`inspect` explains what happened:
+
+```text
+Parser algorithm: ielr
+Parser states: 20
+IELR state counts: LALR=19, IELR=20, canonical=21
+IELR merges: accepted=1, rejected=1
+  accepted core Type -> ID • from canonical states [15,19]
+  rejected core Type -> ID •; Name -> ID • from canonical states [2,9]: action-conflict -> [2] [9] (1 candidate conflict(s))
+```
+
+The same details are available in JSON under `parseTable.ielr`.
 
 Use `%type ielr` when:
 
@@ -468,7 +483,8 @@ Try it:
 Expected behavior:
 
 - LALR reports the expected reduce/reduce conflict.
-- IELR validates with fewer states than canonical LR(1) for this fixture.
+- IELR validates with fewer states than canonical LR(1) for this fixture and
+  reports the accepted/rejected LR(0)-core merges in `inspect`.
 - Canonical LR(1) validates and remains the precision baseline.
 
 ## Choosing an Algorithm
@@ -557,8 +573,8 @@ For legacy fixture work:
 - Conflict diagnostics record state, symbol, competing actions, involved
   reduce rules, source spans, expanded item displays, and item cores. They do
   not yet generate minimal counterexample strings.
-- IELR is currently conservative rather than fully minimal. It preserves the
-  LR(1)-precision goal by splitting unsafe merges, but a future optimization
-  pass can reduce extra states further.
+- IELR is correctness-first and now reports accepted and rejected core merges.
+  Future research can still compare LangForge's table sizes against Bison's
+  most optimized IELR construction on a broader grammar corpus.
 - LALR is the default today; a future release may add a clearer parser
   directive while preserving `%type` compatibility.

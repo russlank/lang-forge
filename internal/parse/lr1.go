@@ -68,7 +68,9 @@ func BuildLALR(g *Grammar) *Table {
 func BuildIELR(g *Grammar) *Table {
 	aug := augment(g)
 	canonicalStates, canonicalTransitions := canonicalLR1(aug)
-	partitions, oldToPartition := initialCorePartitions(canonicalStates)
+	initialPartitions, _ := initialCorePartitions(canonicalStates)
+	partitions := clonePartitions(initialPartitions)
+	oldToPartition := partitionStateMap(partitions)
 
 	for {
 		splitPartitions, splitMap, splitChanged := splitInadequatePartitions(aug, canonicalStates, canonicalTransitions, partitions)
@@ -85,7 +87,9 @@ func BuildIELR(g *Grammar) *Table {
 	}
 
 	states, transitions := mergedLR1StatesAndTransitions(canonicalStates, canonicalTransitions, partitions, oldToPartition)
-	return finalizeTable(buildLR1Table(parseralgo.IELR, aug, states, transitions), aug)
+	table := buildLR1Table(parseralgo.IELR, aug, states, transitions)
+	table.IELR = buildIELRReport(aug, canonicalStates, canonicalTransitions, initialPartitions, partitions, oldToPartition)
+	return finalizeTable(table, aug)
 }
 
 type lr1Partition struct {
@@ -125,11 +129,30 @@ func splitInadequatePartitions(g *Grammar, states []lr1ItemSet, transitions map[
 			continue
 		}
 		changed = true
-		for _, member := range partition.Members {
-			out = append(out, lr1Partition{Members: []int{member}})
-		}
+		out = append(out, splitPartitionByActionCompatibility(g, states, transitions, partition.Members)...)
 	}
 	return out, partitionStateMap(out), changed
+}
+
+func splitPartitionByActionCompatibility(g *Grammar, states []lr1ItemSet, transitions map[int]map[string]int, members []int) []lr1Partition {
+	var groups []lr1Partition
+	for _, member := range members {
+		placed := false
+		for idx := range groups {
+			candidate := append(append([]int{}, groups[idx].Members...), member)
+			items := unionLR1Items(states, candidate)
+			shifts := shiftTerminalsForMembers(g, transitions, candidate)
+			if len(mergedLR1ActionConflicts(g, items, shifts)) == 0 {
+				groups[idx].Members = candidate
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			groups = append(groups, lr1Partition{Members: []int{member}})
+		}
+	}
+	return groups
 }
 
 func mergedLR1ActionConflicts(g *Grammar, items lr1ItemSet, shiftSymbols map[string]bool) []Conflict {
@@ -241,6 +264,97 @@ func mergedLR1StatesAndTransitions(states []lr1ItemSet, transitions map[int]map[
 	return merged, outTransitions
 }
 
+func buildIELRReport(g *Grammar, canonicalStates []lr1ItemSet, canonicalTransitions map[int]map[string]int, initialPartitions, finalPartitions []lr1Partition, oldToPartition map[int]int) *IELRReport {
+	report := &IELRReport{
+		LALRStates:      len(initialPartitions),
+		IELRStates:      len(finalPartitions),
+		CanonicalStates: len(canonicalStates),
+	}
+	for _, partition := range finalPartitions {
+		if len(partition.Members) <= 1 {
+			continue
+		}
+		report.AcceptedMerges = append(report.AcceptedMerges, IELRMergeReport{
+			Core:            sortedCoreItems(unionLR1Items(canonicalStates, partition.Members)),
+			CoreDetails:     ielrCoreDetails(g, canonicalStates, partition.Members),
+			CanonicalStates: append([]int(nil), partition.Members...),
+		})
+	}
+	for _, partition := range initialPartitions {
+		if len(partition.Members) <= 1 {
+			continue
+		}
+		resultGroups := ielrResultGroups(partition.Members, oldToPartition, finalPartitions)
+		if len(resultGroups) <= 1 {
+			continue
+		}
+		items := unionLR1Items(canonicalStates, partition.Members)
+		shifts := shiftTerminalsForMembers(g, canonicalTransitions, partition.Members)
+		conflicts := mergedLR1ActionConflicts(g, items, shifts)
+		reason := "transition-target-split"
+		if len(conflicts) > 0 {
+			reason = "action-conflict"
+		}
+		report.RejectedMerges = append(report.RejectedMerges, IELRMergeReport{
+			Core:            sortedCoreItems(items),
+			CoreDetails:     ielrCoreDetails(g, canonicalStates, partition.Members),
+			CanonicalStates: append([]int(nil), partition.Members...),
+			ResultStates:    resultGroups,
+			Reason:          reason,
+			Conflicts:       conflicts,
+		})
+	}
+	return report
+}
+
+func ielrResultGroups(members []int, oldToPartition map[int]int, finalPartitions []lr1Partition) [][]int {
+	seen := map[int]bool{}
+	var partitionIDs []int
+	for _, member := range members {
+		id := oldToPartition[member]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		partitionIDs = append(partitionIDs, id)
+	}
+	sort.Ints(partitionIDs)
+	groups := make([][]int, 0, len(partitionIDs))
+	for _, id := range partitionIDs {
+		group := append([]int(nil), finalPartitions[id].Members...)
+		sort.Ints(group)
+		groups = append(groups, group)
+	}
+	return groups
+}
+
+func ielrCoreDetails(g *Grammar, states []lr1ItemSet, members []int) []ConflictItem {
+	items := sortedCoreItems(unionLR1Items(states, members))
+	out := make([]ConflictItem, 0, len(items))
+	for _, item := range items {
+		if item.Rule < 0 || item.Rule >= len(g.Rules) {
+			continue
+		}
+		rule := g.Rules[item.Rule]
+		detail := ConflictItem{
+			Rule:    rule.ID,
+			Dot:     item.Dot,
+			LHS:     rule.LHS,
+			RHS:     append([]string(nil), rule.RHS...),
+			Span:    rule.Span,
+			Display: formatRuleWithDot(rule, item.Dot),
+		}
+		if item.Dot > 0 && item.Dot <= len(rule.RHS) {
+			detail.BeforeDot = rule.RHS[item.Dot-1]
+		}
+		if item.Dot >= 0 && item.Dot < len(rule.RHS) {
+			detail.AfterDot = rule.RHS[item.Dot]
+		}
+		out = append(out, detail)
+	}
+	return out
+}
+
 func unionLR1Items(states []lr1ItemSet, members []int) lr1ItemSet {
 	out := lr1ItemSet{}
 	for _, member := range members {
@@ -257,6 +371,14 @@ func partitionStateMap(partitions []lr1Partition) map[int]int {
 		for _, member := range partition.Members {
 			out[member] = partitionID
 		}
+	}
+	return out
+}
+
+func clonePartitions(partitions []lr1Partition) []lr1Partition {
+	out := make([]lr1Partition, len(partitions))
+	for idx, partition := range partitions {
+		out[idx].Members = append([]int(nil), partition.Members...)
 	}
 	return out
 }

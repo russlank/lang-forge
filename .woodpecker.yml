@@ -168,6 +168,7 @@ steps:
           dist/lang-forge-darwin-arm64 \
           dist/lang-forge-darwin-amd64 \
           dist/lang-forge-windows-amd64.exe \
+          dist/install-lang-forge.sh \
           dist/SHA256SUMS; do
           NAME=$(basename "$FILE")
           curl -sf \

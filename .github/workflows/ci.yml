@@ -190,6 +190,7 @@ jobs:
             dist/lang-forge-darwin-arm64
             dist/lang-forge-darwin-amd64
             dist/lang-forge-windows-amd64.exe
+            dist/install-lang-forge.sh
             dist/SHA256SUMS
           body: |
             LangForge CLI release artifacts are attached with SHA256 checksums.

@@ -40,6 +40,36 @@ layouts, read [Invocation And Layout Patterns](invocation-and-layouts.md).
 
 LangForge can be invoked in several interchangeable ways.
 
+Install or update from the latest release:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+```sh
+wget -qO- https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+Install to a user-writable directory:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh \
+  | LANG_FORGE_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
+Install a pinned release:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/download/v0.1.0/install-lang-forge.sh \
+  | LANG_FORGE_VERSION=v0.1.0 sh
+```
+
+The installer accepts `LANG_FORGE_REPO_URL` for forks and mirrors,
+`LANG_FORGE_INSTALL_DIR` or `PREFIX` for the target directory,
+`LANG_FORGE_BIN_NAME` for the installed executable name, and
+`LANG_FORGE_SKIP_CHECKSUM=1` only when checksum files are intentionally
+unavailable.
+
 From this source checkout:
 
 ```sh

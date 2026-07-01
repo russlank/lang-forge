@@ -99,7 +99,9 @@ windows-amd64:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -ldflags '$(LDFLAGS)' -o $(DIST_DIR)/$(APP_NAME)-windows-amd64.exe $(CMD_PATH)
 
 dist: linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64
-	cd $(DIST_DIR) && sha256sum $(APP_NAME)-linux-* $(APP_NAME)-darwin-* $(APP_NAME)-windows-* > SHA256SUMS
+	cp scripts/install-lang-forge.sh $(DIST_DIR)/install-lang-forge.sh
+	chmod 0755 $(DIST_DIR)/install-lang-forge.sh
+	cd $(DIST_DIR) && sha256sum $(APP_NAME)-linux-* $(APP_NAME)-darwin-* $(APP_NAME)-windows-* install-lang-forge.sh > SHA256SUMS
 
 examples-generate:
 	$(MAKE) -C examples/go/calc GO=$(GO) generate

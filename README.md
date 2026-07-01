@@ -68,6 +68,30 @@ compiler for C++ examples.
 See [Requirements](doc/requirements.md) for the complete toolchain matrix and
 target-specific notes.
 
+## Install Or Update
+
+Install the latest release binary with `curl`:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+Or with `wget`:
+
+```sh
+wget -qO- https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+The installer detects Linux/macOS and `amd64`/`arm64`, downloads the matching
+release binary, verifies `SHA256SUMS`, and installs `lang-forge` to
+`${PREFIX:-/usr/local}/bin`. Use a user-writable directory when you do not want
+`sudo`:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh \
+  | LANG_FORGE_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
 ## Quick Start
 
 ```sh

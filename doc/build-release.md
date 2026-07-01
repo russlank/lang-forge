@@ -4,7 +4,7 @@ Document id: `lang-forge-build-release-v1`
 
 Status: `active`
 
-Last updated: `2026-06-21`
+Last updated: `2026-07-01`
 
 Owner: `Project maintainers`
 
@@ -112,6 +112,7 @@ dist/lang-forge-linux-arm64
 dist/lang-forge-darwin-arm64
 dist/lang-forge-darwin-amd64
 dist/lang-forge-windows-amd64.exe
+dist/install-lang-forge.sh
 dist/SHA256SUMS
 ```
 
@@ -119,6 +120,33 @@ The current release set is intentionally CLI-focused. Generated C# projects
 build with the local .NET SDK from source/output files; future C or
 language-specific runtime packages can be added without changing these base
 artifact names.
+
+`install-lang-forge.sh` is a POSIX shell installer/update script. It downloads
+the platform-specific binary from release assets, verifies it against
+`SHA256SUMS`, and installs it into `${PREFIX:-/usr/local}/bin` unless
+`LANG_FORGE_INSTALL_DIR` is supplied.
+
+Install the latest release with `curl`:
+
+```sh
+curl -fsSL https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+Or with `wget`:
+
+```sh
+wget -qO- https://github.com/russlank/lang-forge/releases/latest/download/install-lang-forge.sh | sh
+```
+
+Useful installer overrides:
+
+```sh
+LANG_FORGE_VERSION=v0.1.0
+LANG_FORGE_REPO_URL=https://github.com/russlank/lang-forge
+LANG_FORGE_INSTALL_DIR="$HOME/.local/bin"
+LANG_FORGE_BIN_NAME=lf
+LANG_FORGE_SKIP_CHECKSUM=1
+```
 
 ## Docker Image
 
@@ -232,7 +260,8 @@ It runs:
 The workflow intentionally does not publish Docker images for now. It does not
 log in to a registry, does not call `docker push`, and does not request package
 write permissions. The local image is built only to smoke-test the Dockerfile.
-GitHub releases attach CLI binaries and `SHA256SUMS`.
+GitHub releases attach CLI binaries, `install-lang-forge.sh`, and
+`SHA256SUMS`.
 
 ## Woodpecker
 

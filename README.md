@@ -19,6 +19,8 @@ Current implementation status:
 - LR(0), SLR, LALR(1), IELR(1), and canonical LR(1) parser-table construction
   with conflict reporting;
 - CLI commands: `version`, `validate`, `inspect`, `generate`;
+- optional CLI verbosity for stage, decision, and table-trace diagnostics while
+  specs are validated or generated;
 - named RHS labels, target-specific nonterminal semantic types, and
   deterministic `langforge.actions.json` contracts across all backends;
 - Go backend output for scanner/parser tables, scanner runtime, parser
@@ -116,6 +118,10 @@ make -C examples/cpp/datakeeper LANG_FORGE=../../../dist/lang-forge run
 make -C examples/cpp/draw LANG_FORGE=../../../dist/lang-forge run
 make -C examples/cpp/vehicle-report LANG_FORGE=../../../dist/lang-forge run
 ```
+
+Example Makefiles default to `LANG_FORGE_VERBOSITY=1` so generation shows
+major LangForge stages on stderr. Use `LANG_FORGE_VERBOSITY=0` for quiet runs,
+or `LANG_FORGE_VERBOSITY=2`/`3` while debugging grammars and parser tables.
 
 If you do not want to install a binary, the Docker image can be used as the
 LangForge command:

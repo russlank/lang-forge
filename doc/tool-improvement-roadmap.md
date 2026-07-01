@@ -156,6 +156,10 @@ APIs for gradual migration.
 - C and C++ examples default to typed validation and keep `--boxed` as an
   explicit compatibility path.
 - Backward compatibility with boxed reducer mode is preserved.
+- The CLI now has optional stderr-only verbosity for `validate`, `inspect`, and
+  `generate`: level 1 reports major build stages, level 2 reports lexer,
+  grammar, semantic-action, and parser-table decisions, and level 3 reports DFA
+  and parser state rows for small-grammar tracing.
 
 ---
 

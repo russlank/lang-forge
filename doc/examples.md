@@ -44,6 +44,17 @@ source checkout, a standalone binary, an installed binary, or a Docker image.
 For the reusable Makefile and Docker patterns, read
 [Invocation And Layout Patterns](invocation-and-layouts.md).
 
+Examples also default `LANG_FORGE_VERBOSITY` to `1`, so `make run`, `make
+test`, and `make generate` show the major LangForge stages while the specs are
+validated and generated. Set it to `0` for quiet script output, or raise it
+while debugging a grammar:
+
+```sh
+make -C examples/go/calc run LANG_FORGE_VERBOSITY=0
+make -C examples/go/calc generate LANG_FORGE_VERBOSITY=2
+make -C examples/parser-algorithms test LANG_FORGE_VERBOSITY=3
+```
+
 ## Example Requirements
 
 The Go examples need Go and `make`. The C# examples need the .NET `10.0` SDK

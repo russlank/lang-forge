@@ -4,7 +4,7 @@ Document id: `lang-forge-invocation-layouts-v1`
 
 Status: `active`
 
-Last updated: `2026-06-18`
+Last updated: `2026-07-01`
 
 Owner: `Project maintainers`
 
@@ -100,6 +100,8 @@ A small generated-on-demand project can use this pattern:
 ```makefile
 GO ?= go
 LANG_FORGE ?= lang-forge
+LANG_FORGE_VERBOSITY ?= 1
+LANG_FORGE_FLAGS ?= --verbosity $(LANG_FORGE_VERBOSITY)
 
 SPEC := grammar.lf
 TARGET := go
@@ -109,10 +111,10 @@ GENERATED_TAG := langforge_generated
 .PHONY: validate generate test clean
 
 validate:
-	$(LANG_FORGE) validate --spec $(SPEC)
+	$(LANG_FORGE) validate --spec $(SPEC) $(LANG_FORGE_FLAGS)
 
 generate: validate
-	$(LANG_FORGE) generate --spec $(SPEC) --target $(TARGET) --out $(GENERATED_DIR)
+	$(LANG_FORGE) generate --spec $(SPEC) --target $(TARGET) --out $(GENERATED_DIR) $(LANG_FORGE_FLAGS)
 
 test: generate
 	$(GO) test -tags $(GENERATED_TAG) -count=1 ./...
@@ -127,7 +129,14 @@ The same Makefile can use different LangForge providers:
 make LANG_FORGE=lang-forge generate
 make LANG_FORGE=./dist/lang-forge generate
 make LANG_FORGE='/usr/local/go/bin/go run ../../../cmd/lang-forge' generate
+make LANG_FORGE_VERBOSITY=0 test
+make LANG_FORGE_VERBOSITY=2 generate
 ```
+
+The `LANG_FORGE_VERBOSITY` variable is optional, but useful in examples and
+developer workflows. Level `1` shows major stages on stderr, level `2` adds
+grammar and lexer decisions, and level `3` prints DFA/parser state rows. Set it
+to `0` in quiet CI jobs or when you only want final command output.
 
 When using Docker, define the command once and pass it through `LANG_FORGE`:
 
@@ -243,19 +252,21 @@ Then generate each parser into its own directory:
 
 ```makefile
 LANG_FORGE ?= lang-forge
+LANG_FORGE_VERBOSITY ?= 1
+LANG_FORGE_FLAGS ?= --verbosity $(LANG_FORGE_VERBOSITY)
 
 .PHONY: generate generate-query generate-policy generate-template
 
 generate: generate-query generate-policy generate-template
 
 generate-query:
-	$(LANG_FORGE) generate --spec grammars/query/query.lf --target go --out internal/generated/queryparser
+	$(LANG_FORGE) generate --spec grammars/query/query.lf --target go --out internal/generated/queryparser $(LANG_FORGE_FLAGS)
 
 generate-policy:
-	$(LANG_FORGE) generate --spec grammars/policy/policy.lf --target go --out internal/generated/policyparser
+	$(LANG_FORGE) generate --spec grammars/policy/policy.lf --target go --out internal/generated/policyparser $(LANG_FORGE_FLAGS)
 
 generate-template:
-	$(LANG_FORGE) generate --spec grammars/template/template.lf --target go --out internal/generated/templateparser
+	$(LANG_FORGE) generate --spec grammars/template/template.lf --target go --out internal/generated/templateparser $(LANG_FORGE_FLAGS)
 ```
 
 Generated Go packages are independent, so one program can import several of

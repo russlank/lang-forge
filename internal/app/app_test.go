@@ -23,6 +23,40 @@ func TestRunValidate_CalcSpec(t *testing.T) {
 	}
 }
 
+func TestRunValidate_VerbosityReportsBuildDecisions(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	specPath := filepath.Join("..", "..", "examples", "go", "calc", "calc.lf")
+	code := Run(context.Background(), []string{"validate", "--spec", specPath, "--verbosity", "2"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "ok:") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	for _, fragment := range []string{
+		"[lf] load: combined spec=",
+		"[lf] lexer: DFA states=",
+		"[lf] grammar rule",
+		"[lf] parser: table algorithm=",
+		"[lf] parser: actionKinds",
+	} {
+		if !strings.Contains(stderr.String(), fragment) {
+			t.Fatalf("stderr missing %q:\n%s", fragment, stderr.String())
+		}
+	}
+}
+
+func TestRunValidate_RejectsInvalidVerbosity(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"validate", "--spec", filepath.Join("..", "..", "examples", "go", "calc", "calc.lf"), "--verbosity", "4"}, &stdout, &stderr)
+	if code != ExitUsage {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--verbosity must be between 0 and 3") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
 func TestRunValidate_UCDTCalcSplitFiles(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := Run(context.Background(), []string{
@@ -215,6 +249,24 @@ S : A ;
 	}
 }
 
+func TestRunInspect_JSONKeepsStdoutCleanWithVerbosity(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"inspect", "--spec", filepath.Join("..", "..", "examples", "go", "calc", "calc.lf"), "--format", "json", "--verbose"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	var summary Summary
+	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
+		t.Fatalf("inspect JSON did not decode: %v\nstdout=%s\nstderr=%s", err, stdout.String(), stderr.String())
+	}
+	if summary.ParseTable == nil || len(summary.ParseTable.States) == 0 {
+		t.Fatalf("inspect JSON missing parse table:\n%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "[lf] load:") || strings.Contains(stdout.String(), "[lf]") {
+		t.Fatalf("verbosity should write only to stderr, stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
 func TestRunInspect_IELRReportsMergeDecisionsInTextAndJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "mysterious-ielr.lf")
@@ -299,6 +351,26 @@ func TestRunGenerate_WritesDeterministicManifestAndTokens(t *testing.T) {
 	manifest2 := readFile(t, filepath.Join(out, "langforge.manifest.json"))
 	if manifest1 != manifest2 {
 		t.Fatalf("manifest changed:\n%s\n---\n%s", manifest1, manifest2)
+	}
+}
+
+func TestRunGenerate_VerbosityReportsGenerationStages(t *testing.T) {
+	out := t.TempDir()
+	specPath := filepath.Join("..", "..", "examples", "go", "calc", "calc.lf")
+	var stdout, stderr bytes.Buffer
+	code := Run(context.Background(), []string{"generate", "--spec", specPath, "--target", "go", "--out", out, "-v", "1"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	for _, fragment := range []string{
+		"[lf] load:",
+		"[lf] parser: table algorithm=",
+		"[lf] generate: target=go",
+		"[lf] generate: completed target=go",
+	} {
+		if !strings.Contains(stderr.String(), fragment) {
+			t.Fatalf("stderr missing %q:\n%s", fragment, stderr.String())
+		}
 	}
 }
 

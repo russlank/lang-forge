@@ -41,9 +41,16 @@ Default variables:
 ```make
 GO ?= /usr/local/go/bin/go
 LANG_FORGE ?= $(GO) run ../../../cmd/lang-forge
+LANG_FORGE_VERBOSITY ?= 1
 GENERATED_DIR := generated
 DIST_DIR := dist
 ```
+
+The shared example Makefile fragment passes `--verbosity
+$(LANG_FORGE_VERBOSITY)` to `validate` and `generate`. Keep the default at `1`
+so manual runs show major LangForge stages. Use `LANG_FORGE_VERBOSITY=0` for
+quiet source-clean checks, `2` while debugging grammar/token/action decisions,
+and `3` only for small table-tracing sessions.
 
 C# examples also remove `bin/` and `obj/` in `clean`. Do not leave generated
 or build output behind after a validation run unless the user asked to inspect

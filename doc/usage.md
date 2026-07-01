@@ -4,7 +4,7 @@ Document id: `lang-forge-usage-v1`
 
 Status: `active`
 
-Last updated: `2026-06-29`
+Last updated: `2026-07-01`
 
 Owner: `Project maintainers`
 
@@ -80,6 +80,49 @@ docker run --rm \
 
 The `-u` option keeps generated files owned by the host user on Linux and WSL.
 It can be omitted on platforms where user mapping is not useful.
+
+## Diagnostic Verbosity
+
+By default, LangForge prints only command results, validation diagnostics, and
+conflicts. When you are learning how the automata are built or debugging a
+grammar, add `--verbosity N` to `validate`, `inspect`, or `generate`.
+
+```sh
+./dist/lang-forge validate --spec examples/go/calc/calc.lf --verbosity 1
+./dist/lang-forge generate --spec examples/go/calc/calc.lf --target go --out examples/go/calc/generated --verbosity 2
+```
+
+Verbosity is intentionally written to stderr. This keeps stdout suitable for
+stable command output and lets JSON inspection be redirected safely:
+
+```sh
+./dist/lang-forge inspect \
+  --spec examples/go/calc/calc.lf \
+  --format json \
+  --verbosity 1 \
+  > calc.inspect.json \
+  2> calc.inspect.log
+```
+
+The levels are:
+
+| Level | Option | Intended Use |
+|---|---|---|
+| 0 | default | quiet command output for scripts and CI |
+| 1 | `--verbosity 1` or `--verbose` | high-level stages: spec loading, DFA size, grammar size, parser table size, generation start/end |
+| 2 | `--verbosity 2` | decision-oriented details: tokens, semantic action labels, lexer rules, grammar rules with source spans, action/goto counts, IELR merge summary |
+| 3 | `--verbosity 3` | trace-style table details: DFA state transitions and parser state action/goto rows |
+
+Use level 1 when you simply want progress feedback. Use level 2 when a token,
+rule, semantic action label, or parser algorithm choice does not look right.
+Use level 3 for small grammars when you need to compare automaton states with
+the documentation or with `inspect --format json`.
+
+The short option `-v N` is equivalent to `--verbosity N`:
+
+```sh
+./dist/lang-forge generate --spec grammar.lf --target cpp --out generated -v 2
+```
 
 ## Validate a Combined Spec
 

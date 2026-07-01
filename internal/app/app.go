@@ -71,17 +71,27 @@ Usage:
   lang-forge generate --spec grammar.lf --target go --out ./generated
   lang-forge generate --spec grammar.lf --target csharp --out ./Generated
   lang-forge generate --spec grammar.lf --target c --out ./generated
-  lang-forge generate --spec grammar.lf --target cpp --out ./generated`)
+  lang-forge generate --spec grammar.lf --target cpp --out ./generated
+
+Common options:
+  --verbosity N   diagnostics on stderr: 0 quiet, 1 stages, 2 decisions, 3 traces
+  --verbose       same as --verbosity 1
+  -v N            short form of --verbosity`)
 }
 
 func runValidate(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	input := addInputFlags(fs)
+	verbosity := addVerbosityFlags(fs)
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
 	}
-	result, code := loadAndBuild(input, stderr)
+	verbosityLevel, ok := verbosity.resolve(stderr)
+	if !ok {
+		return ExitUsage
+	}
+	result, code := loadAndBuild(input, stderr, buildOptions{Verbosity: verbosityLevel})
 	if code != ExitOK {
 		return code
 	}
@@ -97,11 +107,16 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	input := addInputFlags(fs)
+	verbosity := addVerbosityFlags(fs)
 	format := fs.String("format", "text", "output format: text or json")
 	if err := fs.Parse(args); err != nil {
 		return ExitUsage
 	}
-	result, code := loadAndBuild(input, stderr)
+	verbosityLevel, ok := verbosity.resolve(stderr)
+	if !ok {
+		return ExitUsage
+	}
+	result, code := loadAndBuild(input, stderr, buildOptions{Verbosity: verbosityLevel})
 	if code != ExitOK {
 		return code
 	}
@@ -129,16 +144,21 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("generate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	input := addInputFlags(fs)
+	verbosity := addVerbosityFlags(fs)
 	target := fs.String("target", "go", "target backend: go, csharp, c, or cpp")
 	outDir := fs.String("out", "", "output directory")
 	if err := fs.Parse(args); err != nil {
+		return ExitUsage
+	}
+	verbosityLevel, ok := verbosity.resolve(stderr)
+	if !ok {
 		return ExitUsage
 	}
 	if *outDir == "" {
 		fmt.Fprintln(stderr, "--out is required")
 		return ExitUsage
 	}
-	result, code := loadAndBuild(input, stderr)
+	result, code := loadAndBuild(input, stderr, buildOptions{Verbosity: verbosityLevel})
 	if code != ExitOK {
 		return code
 	}
@@ -146,8 +166,12 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 		printConflicts(stderr, result.ParseTable.Conflicts)
 		return ExitConflict
 	}
+	logger := buildLogger{level: verbosityLevel, w: stderr}
+	normalizedTarget := strings.ToLower(strings.TrimSpace(*target))
+	logTarget := displayGenerateTarget(normalizedTarget)
+	logger.Log(1, "generate: target=%s out=%s", logTarget, *outDir)
 	var err error
-	switch strings.ToLower(strings.TrimSpace(*target)) {
+	switch normalizedTarget {
 	case "go":
 		err = gocodegen.Generate(gocodegen.Input{Spec: result.Spec, DFA: result.DFA, Grammar: result.Grammar, ParseTable: result.ParseTable}, *outDir)
 	case "csharp", "cs":
@@ -164,8 +188,22 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "generate: %v\n", err)
 		return ExitIO
 	}
+	logger.Log(1, "generate: completed target=%s out=%s", logTarget, *outDir)
 	fmt.Fprintf(stdout, "generated %s\n", *outDir)
 	return ExitOK
+}
+
+func displayGenerateTarget(target string) string {
+	switch target {
+	case "":
+		return "(empty)"
+	case "csharp", "cs":
+		return "csharp"
+	case "cpp", "c++", "cplusplus":
+		return "cpp"
+	default:
+		return target
+	}
 }
 
 type inputFlags struct {
@@ -203,7 +241,9 @@ func (r BuildResult) Summary() Summary {
 	return Summary{Spec: r.Spec, Lexer: r.DFA, Grammar: r.Grammar, ParseTable: r.ParseTable}
 }
 
-func loadAndBuild(input *inputFlags, stderr io.Writer) (*BuildResult, int) {
+func loadAndBuild(input *inputFlags, stderr io.Writer, options buildOptions) (*BuildResult, int) {
+	logger := buildLogger{level: options.Verbosity, w: stderr}
+	logInput(logger, input)
 	parsed, diags, code := loadSpec(input)
 	if code != ExitOK {
 		for _, diag := range diags {
@@ -211,17 +251,28 @@ func loadAndBuild(input *inputFlags, stderr io.Writer) (*BuildResult, int) {
 		}
 		return nil, code
 	}
+	logSpec(logger, parsed)
+	logger.Log(1, "lexer: building DFA encoding=%s invalid=%s rules=%d definitions=%d", displayValue(string(parsed.Scanner.WithDefaults().Encoding), string(spec.ScannerEncodingUTF8)), displayValue(string(parsed.Scanner.WithDefaults().Invalid), string(spec.ScannerInvalidError)), len(parsed.Lexer.Rules), len(parsed.Lexer.Definitions))
 	dfa, lexDiags := lex.BuildFromSpecWithScanner(parsed.Lexer, parsed.Scanner)
 	diags = append(diags, lexDiags...)
+	if dfa != nil {
+		logDFA(logger, dfa)
+	}
+	logger.Log(1, "grammar: normalizing start=%s algorithm=%s", displayValue(parsed.Grammar.Start, "first rule"), displayAlgorithm(parsed.Grammar.Algorithm))
 	grammar, grammarDiags := parse.FromSpec(*parsed)
 	diags = append(diags, grammarDiags...)
+	if grammar != nil {
+		logGrammar(logger, grammar)
+	}
 	if diags.HasErrors() {
 		for _, diag := range diags {
 			fmt.Fprintln(stderr, diag.Error())
 		}
 		return nil, ExitValidate
 	}
+	logger.Log(1, "parser: building table algorithm=%s", displayAlgorithm(parsed.Grammar.Algorithm))
 	table := parse.Build(grammar, parsed.Grammar.Algorithm)
+	logParseTable(logger, table)
 	return &BuildResult{Spec: parsed, DFA: dfa, Grammar: grammar, ParseTable: table}, ExitOK
 }
 

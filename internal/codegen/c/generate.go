@@ -427,7 +427,15 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("} " + prefix + "_semantic_action;\n\n")
 	b.WriteString("typedef void *" + prefix + "_value;\n\n")
 	b.WriteString("typedef struct " + prefix + "_reduction {\n    int rule;\n    const char *lhs;\n    const char **rhs;\n    size_t rhs_count;\n    const char **labels;\n    size_t label_count;\n    " + prefix + "_semantic_action action_id;\n    const char *action;\n    " + prefix + "_value *values;\n} " + prefix + "_reduction;\n\n")
+	b.WriteString("/* Reducers may read ctx and terminal lexeme pointers during the callback.\n")
+	b.WriteString(" * Copy any lexeme struct or text your semantic result must retain after the\n")
+	b.WriteString(" * parse call, especially when parsing from a scanner/source. */\n")
 	b.WriteString("typedef " + prefix + "_value (*" + prefix + "_reduce_fn)(const " + prefix + "_reduction *ctx, void *user, " + prefix + "_error *error);\n\n")
+	b.WriteString("typedef struct " + prefix + "_lexeme_source {\n    void *user;\n    int (*next)(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n} " + prefix + "_lexeme_source;\n\n")
+	b.WriteString("typedef struct " + prefix + "_lexeme_array_source {\n    const " + prefix + "_lexeme *tokens;\n    size_t count;\n    size_t pos;\n} " + prefix + "_lexeme_array_source;\n\n")
+	b.WriteString("void " + prefix + "_lexeme_array_source_init(" + prefix + "_lexeme_array_source *array_source, const " + prefix + "_lexeme *tokens, size_t count);\n")
+	b.WriteString("int " + prefix + "_lexeme_array_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n\n")
 	b.WriteString("/* One expected terminal or reporting group. */\n")
 	b.WriteString("typedef struct " + prefix + "_expected_token {\n    const char *symbol;\n    const char *display;\n    const char *const *members;\n    size_t member_count;\n} " + prefix + "_expected_token;\n\n")
 	b.WriteString("/* One source-rich parser syntax diagnostic. */\n")
@@ -437,9 +445,13 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("const char *" + prefix + "_semantic_action_name(" + prefix + "_semantic_action action);\n")
 	b.WriteString("int " + prefix + "_reduction_value_for(const " + prefix + "_reduction *ctx, const char *label, " + prefix + "_value *out, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_source(" + prefix + "_lexeme_source *source, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_parse_value_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
 	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_recovering_source(" + prefix + "_lexeme_source *source, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_parse_result_init(" + prefix + "_parse_result *result);\n")
 	b.WriteString("void " + prefix + "_parse_result_free(" + prefix + "_parse_result *result);\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
@@ -544,9 +556,17 @@ func renderTypedParserHeader(prefix string, source string, manifest action.Manif
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
 	b.WriteString("    return " + prefix + "_parse_value(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
 	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
+	b.WriteString("    return " + prefix + "_parse_value_source(source, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("}\n\n")
 	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *tokens, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
 	b.WriteString("    return " + prefix + "_parse_value_recovering(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering_source(source, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
 	b.WriteString("}\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
 	return b.String()
@@ -582,10 +602,147 @@ static void lf_clear_error(` + prefix + `_error *error) {
     }
 }
 
-static const char *lf_lookahead(const ` + prefix + `_lexeme *tokens, size_t count, size_t pos) {
-    if (pos >= count) { return "$"; }
-    if (tokens[pos].token == ` + tokenEOF(prefix) + `) { return "$"; }
-    return ` + prefix + `_token_name(tokens[pos].token);
+typedef struct lf_cursor {
+    ` + prefix + `_lexeme_source *source;
+    ` + prefix + `_lexeme lookahead;
+    ` + prefix + `_lexeme last;
+    const char *symbol;
+    int ready;
+    int saw_eof;
+    int have_last;
+} lf_cursor;
+
+typedef struct lf_owned_lexeme {
+    ` + prefix + `_lexeme lexeme;
+    struct lf_owned_lexeme *next;
+} lf_owned_lexeme;
+
+void ` + prefix + `_lexeme_array_source_init(` + prefix + `_lexeme_array_source *array_source, const ` + prefix + `_lexeme *tokens, size_t count) {
+    if (array_source == NULL) { return; }
+    array_source->tokens = tokens;
+    array_source->count = count;
+    array_source->pos = 0;
+}
+
+int ` + prefix + `_lexeme_array_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+    ` + prefix + `_lexeme_array_source *source = (` + prefix + `_lexeme_array_source *)user;
+    if (ok != NULL) { *ok = 0; }
+    if (source == NULL || lexeme == NULL || ok == NULL) { lf_set_error(error, "lexeme array source arguments are required"); return 0; }
+    if (source->tokens == NULL && source->count != 0) { lf_set_error(error, "parser tokens are required"); return 0; }
+    if (source->pos >= source->count) { return 1; }
+    *lexeme = source->tokens[source->pos++];
+    *ok = 1;
+    return 1;
+}
+
+int ` + prefix + `_scanner_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+    return ` + prefix + `_scanner_next((` + prefix + `_scanner *)user, lexeme, ok, error);
+}
+
+static ` + prefix + `_lexeme lf_eof_lexeme(const lf_cursor *cursor) {
+    ` + prefix + `_lexeme lexeme;
+    memset(&lexeme, 0, sizeof(lexeme));
+    lexeme.token = ` + tokenEOF(prefix) + `;
+    lexeme.channel = "";
+    if (cursor->have_last) {
+        lexeme.text = cursor->last.text + cursor->last.length;
+        lexeme.start = cursor->last.end;
+        lexeme.end = cursor->last.end;
+        lexeme.start_line = cursor->last.end_line;
+        lexeme.start_column = cursor->last.end_column;
+        lexeme.end_line = cursor->last.end_line;
+        lexeme.end_column = cursor->last.end_column;
+    } else {
+        lexeme.text = "";
+        lexeme.start_line = lexeme.end_line = 1;
+        lexeme.start_column = lexeme.end_column = 1;
+    }
+    return lexeme;
+}
+
+static ` + prefix + `_lexeme lf_normalize_eof_lexeme(const lf_cursor *cursor, ` + prefix + `_lexeme lexeme) {
+    ` + prefix + `_lexeme fallback = lf_eof_lexeme(cursor);
+    if (lexeme.start_line <= 0) { lexeme.start_line = fallback.start_line; }
+    if (lexeme.start_column <= 0) { lexeme.start_column = fallback.start_column; }
+    if (lexeme.end_line <= 0) { lexeme.end_line = fallback.end_line; }
+    if (lexeme.end_column <= 0) { lexeme.end_column = fallback.end_column; }
+    if (lexeme.start == 0 && lexeme.end == 0 && cursor->have_last) {
+        lexeme.start = fallback.start;
+        lexeme.end = fallback.end;
+    }
+    return lexeme;
+}
+
+static int lf_cursor_peek(lf_cursor *cursor, const char **symbol, ` + prefix + `_error *error) {
+    if (cursor->ready) { *symbol = cursor->symbol; return 1; }
+    if (cursor->saw_eof) {
+        cursor->lookahead = lf_eof_lexeme(cursor);
+        cursor->symbol = "$";
+        cursor->ready = 1;
+        *symbol = cursor->symbol;
+        return 1;
+    }
+    ` + prefix + `_lexeme lexeme;
+    int ok = 0;
+    if (!cursor->source->next(cursor->source->user, &lexeme, &ok, error)) { return 0; }
+    if (!ok) {
+        cursor->lookahead = lf_eof_lexeme(cursor);
+        cursor->symbol = "$";
+        cursor->ready = 1;
+        cursor->saw_eof = 1;
+        *symbol = cursor->symbol;
+        return 1;
+    }
+    if (lexeme.token == ` + tokenEOF(prefix) + `) {
+        ` + prefix + `_lexeme extra;
+        int more = 0;
+        lexeme = lf_normalize_eof_lexeme(cursor, lexeme);
+        if (!cursor->source->next(cursor->source->user, &extra, &more, error)) { return 0; }
+        if (more) { lf_set_error(error, "token after EOF in lexeme source"); return 0; }
+        cursor->lookahead = lexeme;
+        cursor->symbol = "$";
+        cursor->ready = 1;
+        cursor->saw_eof = 1;
+        *symbol = cursor->symbol;
+        return 1;
+    }
+    cursor->last = lexeme;
+    cursor->have_last = 1;
+    cursor->lookahead = lexeme;
+    cursor->symbol = ` + prefix + `_token_name(lexeme.token);
+    cursor->ready = 1;
+    *symbol = cursor->symbol;
+    return 1;
+}
+
+static int lf_cursor_advance(lf_cursor *cursor, ` + prefix + `_lexeme *lexeme, ` + prefix + `_error *error) {
+    const char *symbol = NULL;
+    if (!lf_cursor_peek(cursor, &symbol, error)) { return 0; }
+    if (strcmp(symbol, "$") == 0) { lf_set_error(error, "shift past end of input"); return 0; }
+    *lexeme = cursor->lookahead;
+    cursor->ready = 0;
+    return 1;
+}
+
+static ` + prefix + `_lexeme lf_cursor_diagnostic_lexeme(const lf_cursor *cursor) {
+    return cursor->ready ? cursor->lookahead : lf_eof_lexeme(cursor);
+}
+
+static ` + prefix + `_value lf_make_lexeme_value(` + prefix + `_lexeme lexeme, lf_owned_lexeme **owned, ` + prefix + `_error *error) {
+    lf_owned_lexeme *node = (lf_owned_lexeme *)malloc(sizeof(lf_owned_lexeme));
+    if (node == NULL) { lf_set_error(error, "out of memory"); return NULL; }
+    node->lexeme = lexeme;
+    node->next = *owned;
+    *owned = node;
+    return (` + prefix + `_value)&node->lexeme;
+}
+
+static void lf_free_owned_lexemes(lf_owned_lexeme *owned) {
+    while (owned != NULL) {
+        lf_owned_lexeme *next = owned->next;
+        free(owned);
+        owned = next;
+    }
 }
 
 static const lf_action_entry *lf_find_action(int state, const char *symbol) {
@@ -638,7 +795,7 @@ static const char *lf_unexpected_display(const char *symbol) {
     return symbol;
 }
 
-static int lf_append_diagnostic(` + prefix + `_parse_result *result, int state, const char *unexpected, const ` + prefix + `_lexeme *tokens, size_t count, size_t pos, ` + prefix + `_error *error) {
+static int lf_append_diagnostic(` + prefix + `_parse_result *result, int state, const char *unexpected, const lf_cursor *cursor, ` + prefix + `_error *error) {
     size_t next_count = result->diagnostic_count + 1;
     ` + prefix + `_parse_diagnostic *next = (` + prefix + `_parse_diagnostic *)realloc(result->diagnostics, next_count * sizeof(` + prefix + `_parse_diagnostic));
     if (next == NULL) { lf_set_error(error, "out of memory"); return 0; }
@@ -653,24 +810,13 @@ static int lf_append_diagnostic(` + prefix + `_parse_result *result, int state, 
         diagnostic->expected = &` + prefix + `_expected_tokens[row.start];
         diagnostic->expected_count = row.count;
     }
-    if (pos < count) {
-        diagnostic->start = tokens[pos].start;
-        diagnostic->end = tokens[pos].end;
-        diagnostic->start_line = tokens[pos].start_line;
-        diagnostic->start_column = tokens[pos].start_column;
-        diagnostic->end_line = tokens[pos].end_line;
-        diagnostic->end_column = tokens[pos].end_column;
-    } else if (count > 0) {
-        diagnostic->start = tokens[count - 1].end;
-        diagnostic->end = tokens[count - 1].end;
-        diagnostic->start_line = tokens[count - 1].end_line;
-        diagnostic->start_column = tokens[count - 1].end_column;
-        diagnostic->end_line = tokens[count - 1].end_line;
-        diagnostic->end_column = tokens[count - 1].end_column;
-    } else {
-        diagnostic->start_line = diagnostic->end_line = 1;
-        diagnostic->start_column = diagnostic->end_column = 1;
-    }
+    ` + prefix + `_lexeme lexeme = lf_cursor_diagnostic_lexeme(cursor);
+    diagnostic->start = lexeme.start;
+    diagnostic->end = lexeme.end;
+    diagnostic->start_line = lexeme.start_line;
+    diagnostic->start_column = lexeme.start_column;
+    diagnostic->end_line = lexeme.end_line;
+    diagnostic->end_column = lexeme.end_column;
     diagnostic->recovery = "none";
     result->diagnostic_count = next_count;
     return 1;
@@ -700,9 +846,22 @@ int ` + prefix + `_parse(const ` + prefix + `_lexeme *tokens, size_t count, ` + 
     return ` + prefix + `_parse_value(tokens, count, NULL, NULL, NULL, error);
 }
 
+int ` + prefix + `_parse_source(` + prefix + `_lexeme_source *source, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_source(source, NULL, NULL, NULL, error);
+}
+
 int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+    ` + prefix + `_lexeme_array_source array_source;
+    ` + prefix + `_lexeme_source source;
+    ` + prefix + `_lexeme_array_source_init(&array_source, tokens, count);
+    source.user = &array_source;
+    source.next = ` + prefix + `_lexeme_array_source_next;
+    return ` + prefix + `_parse_value_source(&source, reducer, user, out, error);
+}
+
+int ` + prefix + `_parse_value_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
     ` + prefix + `_parse_result result = {0};
-    int ok = ` + prefix + `_parse_value_recovering(tokens, count, reducer, user, &result, error);
+    int ok = ` + prefix + `_parse_value_recovering_source(source, reducer, user, &result, error);
     if (!ok) { ` + prefix + `_parse_result_free(&result); return 0; }
     if (out != NULL) { *out = result.value; }
     if (result.diagnostic_count != 0) {
@@ -718,35 +877,52 @@ int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *tokens, size_t 
     return ` + prefix + `_parse_value_recovering(tokens, count, NULL, NULL, result, error);
 }
 
+int ` + prefix + `_parse_recovering_source(` + prefix + `_lexeme_source *source, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering_source(source, NULL, NULL, result, error);
+}
+
 int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    ` + prefix + `_lexeme_array_source array_source;
+    ` + prefix + `_lexeme_source source;
+    ` + prefix + `_lexeme_array_source_init(&array_source, tokens, count);
+    source.user = &array_source;
+    source.next = ` + prefix + `_lexeme_array_source_next;
+    return ` + prefix + `_parse_value_recovering_source(&source, reducer, user, result, error);
+}
+
+int ` + prefix + `_parse_value_recovering_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     lf_clear_error(error);
     if (result == NULL) { lf_set_error(error, "parser result is required"); return 0; }
     ` + prefix + `_parse_result_init(result);
-    if (tokens == NULL && count != 0) { lf_set_error(error, "parser tokens are required"); return 0; }
+    if (source == NULL || source->next == NULL) { lf_set_error(error, "lexeme source is required"); return 0; }
     size_t state_capacity = 64, state_count = 0;
     size_t value_capacity = 64, value_count = 0;
     int *states = (int *)malloc(state_capacity * sizeof(int));
     ` + prefix + `_value *values = (` + prefix + `_value *)malloc(value_capacity * sizeof(` + prefix + `_value));
     if (states == NULL || values == NULL) { free(states); free(values); lf_set_error(error, "out of memory"); return 0; }
     states[state_count++] = 0;
-    size_t pos = 0;
+    lf_cursor cursor;
+    memset(&cursor, 0, sizeof(cursor));
+    cursor.source = source;
+    lf_owned_lexeme *owned_lexemes = NULL;
     int recovering = 0;
     size_t active_diagnostic = 0;
     int has_active_diagnostic = 0;
     while (1) {
-        const char *lookahead = lf_lookahead(tokens, count, pos);
+        const char *lookahead = NULL;
+        if (!lf_cursor_peek(&cursor, &lookahead, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
         const lf_action_entry *action = lf_find_action(states[state_count - 1], lookahead);
         if (action == NULL) {
             if (recovering == 0) {
-                if (!lf_append_diagnostic(result, states[state_count - 1], lookahead, tokens, count, pos, error)) { free(states); free(values); return 0; }
+                if (!lf_append_diagnostic(result, states[state_count - 1], lookahead, &cursor, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
                 active_diagnostic = result->diagnostic_count - 1;
                 has_active_diagnostic = 1;
                 int recovered = 0;
                 while (state_count > 0) {
                     const lf_action_entry *error_action = lf_find_action(states[state_count - 1], "error");
                     if (error_action != NULL && error_action->kind == LF_ACT_SHIFT) {
-                        if (!lf_push_state(&states, &state_count, &state_capacity, error_action->state, error)) { free(states); free(values); return 0; }
-                        if (!lf_push_value(&values, &value_count, &value_capacity, NULL, error)) { free(states); free(values); return 0; }
+                        if (!lf_push_state(&states, &state_count, &state_capacity, error_action->state, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
+                        if (!lf_push_value(&values, &value_count, &value_capacity, NULL, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
                         recovering = 3;
                         result->diagnostics[active_diagnostic].recovery = "shift-error";
                         recovered = 1;
@@ -761,6 +937,7 @@ int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, s
                 result->value = value_count == 0 ? NULL : values[value_count - 1];
                 free(states);
                 free(values);
+                lf_free_owned_lexemes(owned_lexemes);
                 return 1;
             }
             if (strcmp(lookahead, "$") == 0) {
@@ -768,17 +945,21 @@ int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, s
                 result->value = value_count == 0 ? NULL : values[value_count - 1];
                 free(states);
                 free(values);
+                lf_free_owned_lexemes(owned_lexemes);
                 return 1;
             }
-            pos++;
+            ` + prefix + `_lexeme discarded;
+            if (!lf_cursor_advance(&cursor, &discarded, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
             if (has_active_diagnostic) { result->diagnostics[active_diagnostic].discarded++; }
             continue;
         }
         if (action->kind == LF_ACT_SHIFT) {
-            if (pos >= count) { free(states); free(values); lf_set_error(error, "shift past end of input"); return 0; }
-            if (!lf_push_state(&states, &state_count, &state_capacity, action->state, error)) { free(states); free(values); return 0; }
-            if (!lf_push_value(&values, &value_count, &value_capacity, (` + prefix + `_value)&tokens[pos], error)) { free(states); free(values); return 0; }
-            pos++;
+            ` + prefix + `_lexeme shifted;
+            if (!lf_cursor_advance(&cursor, &shifted, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
+            ` + prefix + `_value shifted_value = lf_make_lexeme_value(shifted, &owned_lexemes, error);
+            if (shifted_value == NULL) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
+            if (!lf_push_state(&states, &state_count, &state_capacity, action->state, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
+            if (!lf_push_value(&values, &value_count, &value_capacity, shifted_value, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
             if (recovering > 0) {
                 recovering--;
                 if (recovering == 0 && has_active_diagnostic) {
@@ -790,9 +971,9 @@ int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, s
         }
         if (action->kind == LF_ACT_REDUCE) {
             const lf_rule *rule = &` + prefix + `_rules[action->rule];
-            if (state_count < rule->rhs_count + 1 || value_count < rule->rhs_count) { free(states); free(values); lf_set_error(error, "parser stack underflow"); return 0; }
+            if (state_count < rule->rhs_count + 1 || value_count < rule->rhs_count) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); lf_set_error(error, "parser stack underflow"); return 0; }
             ` + prefix + `_value *rhs_values = (` + prefix + `_value *)calloc(rule->rhs_count == 0 ? 1 : rule->rhs_count, sizeof(` + prefix + `_value));
-            if (rhs_values == NULL) { free(states); free(values); lf_set_error(error, "out of memory"); return 0; }
+            if (rhs_values == NULL) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); lf_set_error(error, "out of memory"); return 0; }
             for (size_t i = 0; i < rule->rhs_count; i++) {
                 rhs_values[i] = values[value_count - rule->rhs_count + i];
             }
@@ -800,28 +981,26 @@ int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, s
             if (reducer != NULL && rule->action != ` + actionNone(prefix) + `) {
                 ` + prefix + `_reduction ctx = {rule->id, rule->lhs, rule->rhs, rule->rhs_count, rule->labels, rule->label_count, rule->action, ` + prefix + `_semantic_action_name(rule->action), rhs_values};
                 result = reducer(&ctx, user, error);
-                if (error != NULL && error->message[0] != '\0') { free(rhs_values); free(states); free(values); return 0; }
+                if (error != NULL && error->message[0] != '\0') { free(rhs_values); free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
             } else if (rule->rhs_count == 1) {
                 result = rhs_values[0];
             }
             value_count -= rule->rhs_count;
             state_count -= rule->rhs_count;
             int goto_state = 0;
-            if (!lf_find_goto(states[state_count - 1], rule->lhs, &goto_state)) { free(rhs_values); free(states); free(values); lf_set_error(error, "missing goto"); return 0; }
+            if (!lf_find_goto(states[state_count - 1], rule->lhs, &goto_state)) { free(rhs_values); free(states); free(values); lf_free_owned_lexemes(owned_lexemes); lf_set_error(error, "missing goto"); return 0; }
             free(rhs_values);
-            if (!lf_push_state(&states, &state_count, &state_capacity, goto_state, error)) { free(states); free(values); return 0; }
-            if (!lf_push_value(&values, &value_count, &value_capacity, result, error)) { free(states); free(values); return 0; }
+            if (!lf_push_state(&states, &state_count, &state_capacity, goto_state, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
+            if (!lf_push_value(&values, &value_count, &value_capacity, result, error)) { free(states); free(values); lf_free_owned_lexemes(owned_lexemes); return 0; }
             continue;
         }
         if (action->kind == LF_ACT_ACCEPT) {
-            if (pos < count && !(tokens[pos].token == ` + tokenEOF(prefix) + ` && pos + 1 == count)) {
-                free(states); free(values); lf_set_error(error, "tokens after EOF"); return 0;
-            }
             if (has_active_diagnostic) { result->diagnostics[active_diagnostic].recovery = "recovered"; }
             result->value = value_count == 0 ? NULL : values[value_count - 1];
             result->accepted = 1;
             free(states);
             free(values);
+            lf_free_owned_lexemes(owned_lexemes);
             return 1;
         }
     }

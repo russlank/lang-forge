@@ -45,8 +45,8 @@ void run_assertions(const std::string& source, const std::string& output_path) {
     require(boxed_result.image.width == 960 && boxed_result.image.height == 640, "expected boxed 960x640 canvas");
 
     draw::Parser parser(lfdraw::make_typed_reducers());
-    const auto tokens = draw::tokenize(source);
-    parser.parse_value(tokens);
+    draw::Scanner scanner(source);
+    parser.parse_value(scanner);
 
     try {
         draw::tokenize("canvas 1, @");

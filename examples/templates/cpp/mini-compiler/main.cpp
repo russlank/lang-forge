@@ -119,7 +119,8 @@ static mini::ReducerMap reducers() {
 }
 
 static Program parse_program(std::string_view source) {
-    return std::any_cast<Program>(mini::parse_value(mini::tokenize(source), reducers()));
+    mini::Scanner scanner(source);
+    return std::any_cast<Program>(mini::parse_value(scanner, reducers()));
 }
 
 static void compile_expr(const ExprPtr& expr, std::vector<Instruction>& code) {

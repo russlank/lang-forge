@@ -7,8 +7,7 @@ using static LangForge.Examples.Calc.Generated.SemanticReducerContexts;
 // give each grammar action label its semantic meaning.
 static double Eval(string source)
 {
-    var tokens = Scanner.Tokenize(source);
-    return (double)Parser.ParseWithReducer(tokens, CreateReducers())!;
+    return (double)Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers())!;
 }
 
 static ReducerMap CreateReducers()
@@ -71,10 +70,11 @@ static void RunAssertions()
     // synchronization, and the two most common failure paths.
     Check(Math.Abs(Eval("1 + 2 * (3 - 4.5)") - -2) < 0.0001, "wrong arithmetic result");
     Check(Math.Abs(Eval("7.5/2.5") - 3) < 0.0001, "wrong decimal division result");
+    Parser.ParseFromSource(new Scanner("1+2"));
     Parser.Parse(Scanner.Tokenize("1+2"));
 
     var parser = new Parser();
-    Parallel.For(0, 16, _ => parser.ParseInput(Scanner.Tokenize("1 + 2 * (3 - 4.5)")));
+    Parallel.For(0, 16, _ => parser.ParseSource(new Scanner("1 + 2 * (3 - 4.5)")));
 
     var shared = new Scanner("1 + 2 * (3 - 4.5)");
     var count = 0;
@@ -107,7 +107,7 @@ static void RunAssertions()
 
     try
     {
-        Parser.Parse(Scanner.Tokenize("1+"));
+        Parser.ParseFromSource(new Scanner("1+"));
         throw new InvalidOperationException("expected parse error");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

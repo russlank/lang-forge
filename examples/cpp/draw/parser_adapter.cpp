@@ -295,7 +295,8 @@ draw::ReducerMap make_typed_reducers() {
 }
 
 ProgramPtr parse_program(const std::string& source, bool typed) {
-    return std::any_cast<ProgramPtr>(draw::parse_value(draw::tokenize(source), typed ? make_typed_reducers() : make_reducers()));
+    draw::Scanner scanner(source);
+    return std::any_cast<ProgramPtr>(draw::parse_value(scanner, typed ? make_typed_reducers() : make_reducers()));
 }
 
 } // namespace lfdraw

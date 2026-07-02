@@ -234,29 +234,26 @@ static datakeeper_value dks_reduce(const datakeeper_reduction *ctx, void *user, 
 
 static int dks_parse(dks_demo *demo, const char *source, dks_reducer_mode mode, char *message, size_t message_size) {
     datakeeper_error error;
-    datakeeper_lexeme *tokens = NULL;
-    size_t count = 0;
+    datakeeper_scanner scanner;
+    datakeeper_lexeme_source token_source;
     int parsed = 0;
     error.message[0] = '\0';
-    if (!datakeeper_tokenize(source, &tokens, &count, &error)) {
-        return demo_set_error(message, message_size, "scan failed: %s", error.message);
-    }
+    datakeeper_scanner_init(&scanner, source);
+    token_source.user = &scanner;
+    token_source.next = datakeeper_scanner_source_next;
     if (!demo_text_append(&demo->report, "DataKeeper C mock compiler\nparameters:\n", message, message_size)) {
-        datakeeper_free_lexemes(tokens);
         return 0;
     }
     if (mode == DKS_REDUCER_TYPED) {
         datakeeper_boxed_typed_reducer boxed = {0};
         datakeeper_typed_reducer typed = datakeeper_typed_reducer_from_boxed(&boxed, dks_reduce, demo);
-        parsed = datakeeper_parse_value_typed(tokens, count, &typed, NULL, &error);
+        parsed = datakeeper_parse_value_source_typed(&token_source, &typed, NULL, &error);
     } else {
-        parsed = datakeeper_parse_value(tokens, count, dks_reduce, demo, NULL, &error);
+        parsed = datakeeper_parse_value_source(&token_source, dks_reduce, demo, NULL, &error);
     }
     if (!parsed) {
-        datakeeper_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
-    datakeeper_free_lexemes(tokens);
     if (!demo_text_appendf(&demo->report, message, message_size, "summary: %d parameters, %d mock stack instructions\n", demo->parameters, demo->commands)) {
         return 0;
     }

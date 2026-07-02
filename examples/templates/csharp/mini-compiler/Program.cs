@@ -4,7 +4,7 @@ using LangForge.Examples.Templates.MiniCompiler.Generated;
 
 static ProgramNode ParseProgram(string source)
 {
-    var value = Parser.ParseWithReducer(Scanner.Tokenize(source), new ReducerFunc(Reduce));
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), new ReducerFunc(Reduce));
     return CastArg<ProgramNode>(value, "program");
 }
 

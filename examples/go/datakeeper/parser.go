@@ -15,11 +15,7 @@ import (
 // parser turns those declarations into typed reducer contexts, so this adapter
 // can describe each reduction in domain terms instead of numeric stack slots.
 func Parse(source string) (*Script, error) {
-	lexemes, err := dksgenerated.Tokenize(source)
-	if err != nil {
-		return nil, err
-	}
-	value, err := dksgenerated.ParseWithReducer(lexemes, dataKeeperReducers)
+	value, err := dksgenerated.ParseWithReducerFromSource(dksgenerated.NewScanner(source), dataKeeperReducers)
 	if err != nil {
 		return nil, err
 	}

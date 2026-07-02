@@ -8,7 +8,7 @@ using static LangForge.Examples.VehicleReport.Generated.SemanticReducerContexts;
 // that reporting code can consume normally.
 static Vehicle ParseVehicle(string source)
 {
-    var value = Parser.ParseWithReducer(Scanner.Tokenize(source), CreateReducers());
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
     return value is Vehicle vehicle
         ? vehicle
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Vehicle");
@@ -120,7 +120,7 @@ static void RunAssertions(string source)
     Check(vehicle.Info.Repairs.Count == 3, "expected three repairs");
 
     var parser = new Parser(CreateReducers());
-    Parallel.For(0, 8, _ => parser.ParseValueInput(Scanner.Tokenize(source)));
+    Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
 
     var empty = source.Replace(
         """
@@ -153,7 +153,7 @@ static void RunAssertions(string source)
 
     try
     {
-        Parser.Parse(Scanner.Tokenize("car = { model = \"KIA\" }"));
+        Parser.ParseFromSource(new Scanner("car = { model = \"KIA\" }"));
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

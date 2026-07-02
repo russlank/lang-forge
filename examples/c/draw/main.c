@@ -13,7 +13,7 @@
  * live in separate modules so this file stays focused on CLI orchestration. */
 static int draw_render_source(draw_context *ctx, const char *source, draw_reducer_mode mode, const char *input_path, const char *output_path, draw_renderer *renderer, demo_text *report, char *message, size_t message_size) {
     draw_program *program = NULL;
-    if (!draw_parse_source_with_mode(ctx, source, mode, &program, message, message_size) ||
+    if (!draw_compile_source_with_mode(ctx, source, mode, &program, message, message_size) ||
         !draw_render(program, renderer, message, message_size) ||
         !demo_write_png(output_path, &renderer->image, message, message_size) ||
         !draw_build_report(renderer, input_path, output_path, report, message, message_size)) {

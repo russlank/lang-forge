@@ -95,11 +95,7 @@ func run(code []instruction) ([]int, error) {
 }
 
 func parse(source string) (program, error) {
-	lexemes, err := minigen.Tokenize(source)
-	if err != nil {
-		return program{}, err
-	}
-	value, err := minigen.ParseWithReducer(lexemes, minigen.ReducerFunc(reduce))
+	value, err := minigen.ParseWithReducerFromSource(minigen.NewScanner(source), minigen.ReducerFunc(reduce))
 	if err != nil {
 		return program{}, err
 	}

@@ -14,13 +14,14 @@ make run
 ```
 
 The target validates `calc.lf`, generates a Go scanner/parser under
-`generated`, builds `dist/calc-demo`, tokenizes and parses `input.calc`,
-evaluates the expression through rule-reduction actions, and writes the same
-report to `dist/calc-demo.log`.
+`generated`, builds `dist/calc-demo`, parses `input.calc` through a generated
+scanner token source, evaluates the expression through rule-reduction actions,
+and writes the same report to `dist/calc-demo.log`. The demo also tokenizes the
+input afterward only to print the teaching token stream.
 
 The grammar declares a reducer-mode semantic import for
 `examples/go/calc/semantics`; the demo passes that handwritten package to the
-generated parser with `ParseWithReducer`.
+generated parser with `ParseWithReducerFromSource`.
 
 In reducer mode, action blocks such as `{go: add}` and `{go: subtract}` are
 labels, not generated arithmetic code. LangForge stores the label on the
@@ -33,9 +34,9 @@ fields (`ctx.Left`, `ctx.Right`) rather than positional indexes and casts.
 
 The generated `ReducerMap` is keyed by constants such as
 `SemanticActionAdd` and `SemanticActionSubtract`. Its coverage is validated
-before `ParseWithReducer` starts parsing, so adding a grammar action without a
-handler fails immediately. There is still no calculator-specific arithmetic
-hard coded in LangForge.
+before `ParseWithReducerFromSource` starts parsing, so adding a grammar action
+without a handler fails immediately. There is still no calculator-specific
+arithmetic hard coded in LangForge.
 
 Only the `generated` directory is produced by LangForge. The `semantics` and
 `cmd` directories are ordinary source code that imports the generated package.

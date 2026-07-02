@@ -33,7 +33,7 @@ handwritten example code:
 | `datakeeper.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
 | `model/` | Cycle-free AST model shared by generated typed contexts and handwritten code |
-| `parser.go` | Handwritten adapter that calls `ParseWithReducer` and builds the AST |
+| `parser.go` | Handwritten adapter that calls `ParseWithReducerFromSource` and builds the AST |
 | `compiler.go` | Handwritten lowering from AST to stack-machine instructions |
 | `vm.go` | Handwritten mock execution engine |
 | `cmd/datakeeper-demo` | Handwritten command-line demo |

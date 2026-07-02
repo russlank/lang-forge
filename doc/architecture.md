@@ -116,17 +116,22 @@ algorithm-selection guidance, see [Parser Algorithms](parser-algorithms.md).
 The generated Go package is reentrant and thread-safe for the common service
 shape: scanner state is stored in a mutex-protected `Scanner` instance, and
 parser state is local to each parse call. Generated public Go APIs include doc
-comments for editor help. The parser accepts either the token
-slice returned by `Tokenize` or the same slice with one trailing `TokenEOF`;
+comments for editor help. The parser core consumes a synchronous `TokenSource`
+with `Next`, and generated scanners implement that source contract directly.
+`ParseFromSource`, `ParseValueFromSource`, `ParseWithReducerFromSource`, and
+`ParseRecoveringFromSource` are the preferred production APIs. Token-slice
+APIs such as `Parse`, `ParseValue`, and `ParseWithReducer` remain convenience
+wrappers for testing, debugging, and token reports; they accept the slice
+returned by `Tokenize` or the same slice with one trailing `TokenEOF`, and
 tokens after explicit EOF are rejected. `Parse` keeps the recognizer-only path,
-while `ParseValue` and `ParseWithReducer` maintain a semantic value stack and
-dispatch target-tagged rule actions to user reducers. Generated parsers expose
+while value parse APIs maintain a semantic value stack and dispatch
+target-tagged rule actions to user reducers. Generated parsers expose
 `SemanticAction` IDs, source action labels, and `ReducerMap` so reducers can
 dispatch by enum-like constants while keeping readable diagnostics.
 Named RHS labels and `%semantic go type` declarations additionally generate
 typed action contexts and adapters when an action has one consistent
 signature. `ReducerMap` coverage validation catches missing and unknown
-handlers before the standard `ParseWithReducer` path parses input.
+handlers before the reducer-backed parse path consumes input.
 `ParseRecovering` adds grammar-directed synchronization through the reserved
 `error` terminal and returns a possibly partial value, structured diagnostics,
 and an accepted flag. Expected-token entries are precomputed from parser action
@@ -159,10 +164,14 @@ diagnostic collections remain local to each parse call.
   reducer-backed semantic APIs.
 
 Generated C# output targets nullable-aware .NET code. Scanner instances
-serialize access to their mutable cursor, parser state is local to each parse
-call, and parser instances can be reused concurrently when the installed
-reducer is also safe. C# reducer mode mirrors Go reducer mode: `{csharp: add}`
-becomes a `SemanticAction.Add` enum value and a `Reduction.Action` string that
+implement `ILexemeSource`, serialize access to their mutable cursor, and can be
+passed directly to `ParseFromSource`, `ParseValueFromSource`,
+`ParseWithReducerFromSource`, or `ParseRecoveringFromSource`. Collection APIs
+such as `Scanner.Tokenize` and `Parser.Parse(tokens, ...)` remain wrappers for
+compatibility and token inspection. Parser state is local to each parse call,
+and parser instances can be reused concurrently when the installed reducer is
+also safe. C# reducer mode mirrors Go reducer mode: `{csharp: add}` becomes a
+`SemanticAction.Add` enum value and a `Reduction.Action` string that
 handwritten code can dispatch through `ReducerMap`.
 
 ## C Backend
@@ -181,8 +190,12 @@ handwritten code can dispatch through `ReducerMap`.
 Generated C output is dependency-free C11. Scanner state is stored in a
 caller-owned `*_scanner` struct, parser stacks are allocated per parse call,
 and semantic state is supplied through a reducer callback plus `void *user`.
-The generated API is reentrant for independent scanner/parser instances.
-Sharing one scanner struct across threads requires caller synchronization.
+The preferred parser path wraps a scanner in a generated `*_lexeme_source`
+callback struct and calls `*_parse_source`, `*_parse_value_source`, or
+`*_parse_value_source_typed`. Existing `*_tokenize` and token-array parse APIs
+remain available for diagnostics and compatibility. The generated API is
+reentrant for independent scanner/parser instances. Sharing one scanner struct
+across threads requires caller synchronization.
 Action labels such as `{c: add}` become target-prefixed enum values such as
 `CALC_ACTION_ADD`, and shifted terminals are passed to reducers as pointers to
 generated `*_lexeme` records. `parser_typed.h` adds typed reduction context
@@ -206,8 +219,11 @@ handwritten code.
 
 Generated C++ output targets C++17. Scanner instances store a
 `std::string_view` into caller-owned source text and serialize shared cursor
-access with a mutex. Parser state is local to each parse call, so a parser can
-be reused concurrently when the installed reducer is also safe. Action labels
+access with a mutex. Generated scanners implement `LexemeSource`, and parser
+overloads accept either a `LexemeSource&` for lazy parsing or a
+`std::vector<Lexeme>` for compatibility. Parser state is local to each parse
+call, so a parser can be reused concurrently when the installed reducer is also
+safe. Action labels
 such as `{cpp: add}` become `enum class SemanticAction` values such as
 `SemanticAction::Add`. Parser action/goto lookup uses static sorted arrays and
 binary search, while handwritten semantics normally dispatch through the

@@ -6,7 +6,7 @@ using static LangForge.Examples.DataKeeper.Generated.SemanticReducerContexts;
 // DataKeeper-specific lowering in ordinary typed C# reducer code.
 static Script ParseScript(string source)
 {
-    var value = Parser.ParseWithReducer(Scanner.Tokenize(source), CreateReducers());
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
     return value is Script script
         ? script
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Script");
@@ -136,7 +136,7 @@ static void RunAssertions(string source)
     Check(script.Commands.Any(command => command.Kind == "runobjectsjob"), "expected runobjectsjob command");
 
     var parser = new Parser(CreateReducers());
-    Parallel.For(0, 8, _ => parser.ParseValueInput(Scanner.Tokenize(source)));
+    Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
 
     try
     {
@@ -149,7 +149,7 @@ static void RunAssertions(string source)
 
     try
     {
-        Parser.Parse(Scanner.Tokenize("begin end"));
+        Parser.ParseFromSource(new Scanner("begin end"));
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

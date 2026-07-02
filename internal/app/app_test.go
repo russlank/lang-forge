@@ -509,12 +509,74 @@ func TestRunGenerate_GeneratedGoScannerParserCompilesAndParses(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
 	}
+	parserSource := readFile(t, filepath.Join(out, "parser.go"))
+	for _, fragment := range []string{"type TokenSource interface", "ParseFromSource", "ParseRecoveringFromSource", "newLexemeSliceSource"} {
+		if !strings.Contains(parserSource, fragment) {
+			t.Fatalf("generated parser missing %q:\n%s", fragment, parserSource)
+		}
+	}
+	for _, forbidden := range []string{"chan ", "go func", "go "} {
+		if strings.Contains(parserSource, forbidden) {
+			t.Fatalf("generated parser contains forbidden streaming primitive %q:\n%s", forbidden, parserSource)
+		}
+	}
 	writeFile(t, filepath.Join(out, "generated_test.go"), `package calc
 
 import (
+	"errors"
+	"strings"
 	"sync"
 	"testing"
 )
+
+type spySource struct {
+	tokens []Lexeme
+	pulls int
+}
+
+func (s *spySource) Next() (Lexeme, bool, error) {
+	s.pulls++
+	if len(s.tokens) == 0 {
+		return Lexeme{}, false, nil
+	}
+	lexeme := s.tokens[0]
+	s.tokens = s.tokens[1:]
+	return lexeme, true, nil
+}
+
+type failingSource struct {
+	tokens []Lexeme
+	pulls int
+	failAfter int
+	err error
+}
+
+func (s *failingSource) Next() (Lexeme, bool, error) {
+	if s.pulls >= s.failAfter {
+		return Lexeme{}, false, s.err
+	}
+	s.pulls++
+	if len(s.tokens) == 0 {
+		return Lexeme{}, false, nil
+	}
+	lexeme := s.tokens[0]
+	s.tokens = s.tokens[1:]
+	return lexeme, true, nil
+}
+
+func completeReducer(handler ReductionHandler) ReducerMap {
+	return ReducerMap{
+		SemanticActionStart: handler,
+		SemanticActionAdd: handler,
+		SemanticActionSubtract: handler,
+		SemanticActionPass: handler,
+		SemanticActionMultiply: handler,
+		SemanticActionDivide: handler,
+		SemanticActionNumber: handler,
+		SemanticActionGroup: handler,
+		SemanticActionNegate: handler,
+	}
+}
 
 func TestGeneratedScannerParser(t *testing.T) {
 	tokens, err := Tokenize("1+2*(3-4)")
@@ -530,6 +592,16 @@ func TestGeneratedScannerParser(t *testing.T) {
 	if err := Parse(tokens); err != nil {
 		t.Fatal(err)
 	}
+	if err := ParseFromSource(NewScanner("1+2*(3-4)")); err != nil {
+		t.Fatalf("scanner source parse failed: %v", err)
+	}
+	source := &spySource{tokens: append([]Lexeme{}, tokens...)}
+	if err := ParseFromSource(source); err != nil {
+		t.Fatalf("source parse failed: %v", err)
+	}
+	if source.pulls != len(tokens)+1 {
+		t.Fatalf("source pulls = %d, want %d", source.pulls, len(tokens)+1)
+	}
 	withEOF := append(append([]Lexeme{}, tokens...), Lexeme{Token: TokenEOF})
 	if err := Parse(withEOF); err != nil {
 		t.Fatalf("explicit EOF should be accepted: %v", err)
@@ -538,6 +610,9 @@ func TestGeneratedScannerParser(t *testing.T) {
 	if err := Parse(trailingAfterEOF); err == nil {
 		t.Fatal("expected token-after-EOF parse error")
 	}
+	if err := ParseFromSource(&spySource{tokens: trailingAfterEOF}); err == nil || !strings.Contains(err.Error(), "token after EOF") {
+		t.Fatalf("source token-after-EOF error = %v", err)
+	}
 	bad, err := Tokenize("1+")
 	if err != nil {
 		t.Fatal(err)
@@ -545,8 +620,43 @@ func TestGeneratedScannerParser(t *testing.T) {
 	if err := Parse(bad); err == nil {
 		t.Fatal("expected parse error for incomplete expression")
 	}
+	if err := ParseFromSource(NewScanner("1+")); err == nil {
+		t.Fatal("expected source parse error for incomplete expression")
+	}
 	if _, err := Tokenize("1@"); err == nil {
 		t.Fatal("expected scanner error for unmatched input")
+	}
+	if err := ParseFromSource(NewScanner("1@")); err == nil || !strings.Contains(err.Error(), "no lexical rule") {
+		t.Fatalf("source scanner error = %v", err)
+	}
+	if err := ParseFromSource(nil); err == nil || !strings.Contains(err.Error(), "nil token source") {
+		t.Fatalf("nil source error = %v", err)
+	}
+	boom := errors.New("source failed")
+	errorSource := &failingSource{tokens: append([]Lexeme{}, tokens...), failAfter: 2, err: boom}
+	if err := ParseFromSource(errorSource); !errors.Is(err, boom) {
+		t.Fatalf("source error = %v", err)
+	}
+	coverageSource := &spySource{tokens: append([]Lexeme{}, tokens...)}
+	if _, err := ParseWithReducerFromSource(coverageSource, ReducerMap{}); err == nil || !strings.Contains(err.Error(), "coverage") {
+		t.Fatalf("coverage error = %v", err)
+	}
+	if coverageSource.pulls != 0 {
+		t.Fatalf("coverage validation pulled %d tokens", coverageSource.pulls)
+	}
+	reducerErr := errors.New("reducer failed")
+	reducerSource := &spySource{tokens: append([]Lexeme{}, tokens...)}
+	_, err = ParseWithReducerFromSource(reducerSource, completeReducer(func(ctx Reduction) (Value, error) {
+		if ctx.ActionID == SemanticActionNumber {
+			return nil, reducerErr
+		}
+		return defaultReduce(ctx.Values), nil
+	}))
+	if !errors.Is(err, reducerErr) {
+		t.Fatalf("reducer error = %v", err)
+	}
+	if reducerSource.pulls >= len(tokens)+1 {
+		t.Fatalf("reducer failure pulled full source: got %d pulls", reducerSource.pulls)
 	}
 }
 
@@ -565,6 +675,9 @@ func TestGeneratedScannerParserConcurrentUse(t *testing.T) {
 				return
 			}
 			if err := parser.Parse(tokens); err != nil {
+				errs <- err
+			}
+			if err := parser.ParseFromSource(NewScanner(input)); err != nil {
 				errs <- err
 			}
 		}()
@@ -682,6 +795,18 @@ func TestRecoveryAndExpectedTokens(t *testing.T) {
 	if first.Recovery.Kind != "recovered" || first.Recovery.Discarded != 1 {
 		t.Fatalf("recovery = %#v", first.Recovery)
 	}
+	sourceResult, err := ParseRecoveringFromSource(NewScanner("x=y; y=2; z=; w=3;"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sourceResult.Accepted || len(sourceResult.Diagnostics) != len(result.Diagnostics) {
+		t.Fatalf("source result = %#v", sourceResult)
+	}
+	if sourceResult.Diagnostics[0].Unexpected != first.Unexpected ||
+		sourceResult.Diagnostics[0].Expected[0].Display != first.Expected[0].Display ||
+		sourceResult.Diagnostics[0].Recovery != first.Recovery {
+		t.Fatalf("source diagnostic = %#v, want %#v", sourceResult.Diagnostics[0], first)
+	}
 	_, err = ParseValue(tokens)
 	var parseErr *ParseError
 	if !errors.As(err, &parseErr) || len(parseErr.Diagnostics) != 2 {
@@ -700,6 +825,13 @@ func TestUnrecoverableInputTerminates(t *testing.T) {
 	}
 	if result.Accepted || len(result.Diagnostics) != 1 || result.Diagnostics[0].Recovery.Kind != "abort" {
 		t.Fatalf("result = %#v", result)
+	}
+	sourceResult, err := ParseRecoveringFromSource(NewScanner("="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sourceResult.Accepted || len(sourceResult.Diagnostics) != 1 || sourceResult.Diagnostics[0].Recovery.Kind != "abort" {
+		t.Fatalf("source result = %#v", sourceResult)
 	}
 }
 `)
@@ -721,6 +853,17 @@ func TestRunGenerate_GeneratedCParserRecoversAndReportsExpectedTokens(t *testing
 	if code != ExitOK {
 		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
 	}
+	parserSource := readFile(t, filepath.Join(out, "parser.c"))
+	for _, fragment := range []string{"_lexeme_source", "_parse_source", "_parse_recovering_source", "_scanner_source_next"} {
+		if !strings.Contains(parserSource, fragment) {
+			t.Fatalf("generated C parser missing %q:\n%s", fragment, parserSource)
+		}
+	}
+	for _, forbidden := range []string{"pthread", "thrd_", "queue"} {
+		if strings.Contains(parserSource, forbidden) {
+			t.Fatalf("generated C parser contains forbidden streaming primitive %q:\n%s", forbidden, parserSource)
+		}
+	}
 	writeFile(t, filepath.Join(dir, "main.c"), `#include "generated/parser.h"
 
 #include <stdio.h>
@@ -731,6 +874,28 @@ static int require(int condition, const char *message) {
         fprintf(stderr, "%s\n", message);
         return 0;
     }
+    return 1;
+}
+
+typedef struct failing_source {
+    const recovery_lexeme *tokens;
+    size_t count;
+    size_t pos;
+    size_t pulls;
+    size_t fail_after;
+} failing_source;
+
+static int failing_source_next(void *user, recovery_lexeme *lexeme, int *ok, recovery_error *error) {
+    failing_source *source = (failing_source *)user;
+    if (ok != NULL) { *ok = 0; }
+    if (source->pulls >= source->fail_after) {
+        snprintf(error->message, sizeof(error->message), "source failed");
+        return 0;
+    }
+    source->pulls++;
+    if (source->pos >= source->count) { return 1; }
+    *lexeme = source->tokens[source->pos++];
+    *ok = 1;
     return 1;
 }
 
@@ -749,6 +914,38 @@ int main(void) {
     if (!require(strcmp(first->recovery, "recovered") == 0 && first->discarded == 1, "wrong recovery action")) { return 6; }
     recovery_parse_result_free(&result);
     if (recovery_parse(tokens, count, &error) || strstr(error.message, "parse error at 1:3") == NULL) { return 7; }
+    recovery_lexeme_array_source array_source;
+    recovery_lexeme_source source;
+    recovery_lexeme_array_source_init(&array_source, tokens, count);
+    source.user = &array_source;
+    source.next = recovery_lexeme_array_source_next;
+    if (!recovery_parse_recovering_source(&source, &result, &error)) { return 11; }
+    if (!require(result.accepted && result.diagnostic_count == 2, "wrong array-source recovery result")) { return 12; }
+    recovery_parse_result_free(&result);
+    recovery_scanner scanner;
+    recovery_scanner_init(&scanner, "x=y; y=2; z=; w=3;");
+    source.user = &scanner;
+    source.next = recovery_scanner_source_next;
+    if (!recovery_parse_recovering_source(&source, &result, &error)) { return 13; }
+    if (!require(result.accepted && result.diagnostic_count == 2, "wrong scanner-source recovery result")) { return 14; }
+    recovery_parse_result_free(&result);
+    recovery_lexeme eof_then_token[2];
+    memset(eof_then_token, 0, sizeof(eof_then_token));
+    eof_then_token[0].token = RECOVERY_TOKEN_EOF;
+    eof_then_token[0].start_line = eof_then_token[0].end_line = 1;
+    eof_then_token[0].start_column = eof_then_token[0].end_column = 1;
+    eof_then_token[1].token = RECOVERY_TOKEN_IDENT;
+    eof_then_token[1].start_line = eof_then_token[1].end_line = 1;
+    eof_then_token[1].start_column = 1;
+    eof_then_token[1].end_column = 2;
+    recovery_lexeme_array_source_init(&array_source, eof_then_token, 2);
+    source.user = &array_source;
+    source.next = recovery_lexeme_array_source_next;
+    if (recovery_parse_source(&source, &error) || strstr(error.message, "token after EOF") == NULL) { return 15; }
+    failing_source failing = {tokens, count, 0, 0, 2};
+    source.user = &failing;
+    source.next = failing_source_next;
+    if (recovery_parse_source(&source, &error) || strstr(error.message, "source failed") == NULL) { return 16; }
     recovery_free_lexemes(tokens);
 
     tokens = NULL;
@@ -800,6 +997,10 @@ int main() {
     require(first.unexpected == "Ident" && first.unexpected_display == "identifier" && first.start_column == 3, "wrong first diagnostic");
     require(first.expected.size() == 1 && first.expected.front().display == "number literal", "wrong expected token");
     require(first.recovery.kind == "recovered" && first.recovery.discarded == 1, "wrong recovery action");
+    Scanner source_scanner("x=y; y=2; z=; w=3;");
+    const auto source_result = parse_recovering(source_scanner);
+    require(source_result.accepted && source_result.diagnostics.size() == result.diagnostics.size(), "wrong source recovery result");
+    require(source_result.diagnostics.front().unexpected == first.unexpected && source_result.diagnostics.front().recovery.kind == first.recovery.kind, "wrong source recovery diagnostic");
     try {
         parse(tokens);
         throw std::runtime_error("compatibility parse should fail");
@@ -808,6 +1009,9 @@ int main() {
     }
     const auto aborted = parse_recovering(tokenize("="));
     require(!aborted.accepted && aborted.diagnostics.size() == 1 && aborted.diagnostics.front().recovery.kind == "abort", "unrecoverable input did not terminate");
+    Scanner abort_scanner("=");
+    const auto aborted_source = parse_recovering(abort_scanner);
+    require(!aborted_source.accepted && aborted_source.diagnostics.size() == 1 && aborted_source.diagnostics.front().recovery.kind == "abort", "source unrecoverable input did not terminate");
     return 0;
 }
 `)
@@ -855,6 +1059,9 @@ var first = result.Diagnostics[0];
 Require(first.Unexpected == "Ident" && first.UnexpectedDisplay == "identifier" && first.StartColumn == 3, "wrong first diagnostic");
 Require(first.Expected.Count == 1 && first.Expected[0].Display == "number literal", "wrong expected token");
 Require(first.Recovery.Kind == "recovered" && first.Recovery.Discarded == 1, "wrong recovery action");
+var sourceResult = Parser.ParseRecoveringFromSource(new Scanner("x=y; y=2; z=; w=3;"));
+Require(sourceResult.Accepted && sourceResult.Diagnostics.Count == result.Diagnostics.Count, "wrong source recovery result");
+Require(sourceResult.Diagnostics[0].Unexpected == first.Unexpected && sourceResult.Diagnostics[0].Recovery.Kind == first.Recovery.Kind, "wrong source recovery diagnostic");
 try
 {
     Parser.Parse(tokens);
@@ -866,6 +1073,8 @@ catch (ParseException error)
 }
 var aborted = Parser.ParseRecovering(Scanner.Tokenize("="));
 Require(!aborted.Accepted && aborted.Diagnostics.Count == 1 && aborted.Diagnostics[0].Recovery.Kind == "abort", "unrecoverable input did not terminate");
+var abortedSource = Parser.ParseRecoveringFromSource(new Scanner("="));
+Require(!abortedSource.Accepted && abortedSource.Diagnostics.Count == 1 && abortedSource.Diagnostics[0].Recovery.Kind == "abort", "source unrecoverable input did not terminate");
 `)
 	run(t, dir, dotnet, "run", "--project", "Recovery.csproj")
 }
@@ -885,8 +1094,20 @@ func TestRunGenerate_GeneratedCppScannerParserCompilesAndParses(t *testing.T) {
 		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	parserSource := readFile(t, filepath.Join(out, "parser.cpp"))
+	parserHeader := readFile(t, filepath.Join(out, "parser.hpp"))
+	scannerHeader := readFile(t, filepath.Join(out, "scanner.hpp"))
 	if !strings.Contains(parserSource, "Grammar rule") || !strings.Contains(parserSource, "{cpp: add}") || !strings.Contains(parserSource, "Source: "+specPath+":") {
 		t.Fatalf("generated C++ parser does not annotate generated tables with source grammar rules:\n%s", parserSource)
+	}
+	for _, fragment := range []string{"class LexemeSource", "class VectorLexemeSource", "parse(LexemeSource&", "parse_recovering(LexemeSource&"} {
+		if !strings.Contains(parserHeader+scannerHeader, fragment) {
+			t.Fatalf("generated C++ source API missing %q:\nparser.hpp:\n%s\nscanner.hpp:\n%s", fragment, parserHeader, scannerHeader)
+		}
+	}
+	for _, forbidden := range []string{"std::async", "std::future", "std::queue"} {
+		if strings.Contains(parserSource, forbidden) {
+			t.Fatalf("generated C++ parser contains forbidden streaming primitive %q:\n%s", forbidden, parserSource)
+		}
 	}
 	writeFile(t, filepath.Join(dir, "main.cpp"), `#include "generated/parser.hpp"
 
@@ -909,9 +1130,8 @@ static Lexeme lexeme_arg(const Reduction& ctx, std::size_t index) {
     return std::any_cast<Lexeme>(ctx.values.at(index));
 }
 
-static double eval(const std::string& source) {
-    auto tokens = tokenize(source);
-    ReducerMap reducers{
+static ReducerMap reducers() {
+    return ReducerMap{
         {SemanticAction::Start, [](const Reduction& ctx) -> Value { return ctx.values.at(0); }},
         {SemanticAction::Pass, [](const Reduction& ctx) -> Value { return ctx.values.at(0); }},
         {SemanticAction::Group, [](const Reduction& ctx) -> Value { return ctx.values.at(1); }},
@@ -925,7 +1145,16 @@ static double eval(const std::string& source) {
         {SemanticAction::Multiply, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) * number_arg(ctx, 2); }},
         {SemanticAction::Divide, [](const Reduction& ctx) -> Value { return number_arg(ctx, 0) / number_arg(ctx, 2); }},
     };
-    return std::any_cast<double>(parse_value(tokens, reducers));
+}
+
+static double eval(const std::string& source) {
+    auto tokens = tokenize(source);
+    return std::any_cast<double>(parse_value(tokens, reducers()));
+}
+
+static double eval_source(const std::string& source) {
+    Scanner scanner(source);
+    return std::any_cast<double>(parse_value(scanner, reducers()));
 }
 
 static void require(bool condition, const char* message) {
@@ -934,10 +1163,60 @@ static void require(bool condition, const char* message) {
     }
 }
 
+class SpySource : public LexemeSource {
+public:
+    explicit SpySource(std::vector<Lexeme> tokens) : tokens_(std::move(tokens)) {}
+
+    bool next(Lexeme& lexeme) override {
+        ++pulls;
+        if (pos_ >= tokens_.size()) {
+            return false;
+        }
+        lexeme = tokens_[pos_++];
+        return true;
+    }
+
+    int pulls = 0;
+
+private:
+    std::vector<Lexeme> tokens_;
+    std::size_t pos_ = 0;
+};
+
+class FailingSource : public LexemeSource {
+public:
+    FailingSource(std::vector<Lexeme> tokens, int fail_after) : tokens_(std::move(tokens)), fail_after_(fail_after) {}
+
+    bool next(Lexeme& lexeme) override {
+        if (pulls >= fail_after_) {
+            throw std::runtime_error("source failed");
+        }
+        ++pulls;
+        if (pos_ >= tokens_.size()) {
+            return false;
+        }
+        lexeme = tokens_[pos_++];
+        return true;
+    }
+
+    int pulls = 0;
+
+private:
+    std::vector<Lexeme> tokens_;
+    int fail_after_;
+    std::size_t pos_ = 0;
+};
+
 int main() {
     require(std::fabs(eval("1+2*(3-4)") - -1.0) < 0.000001, "wrong expression result");
+    require(std::fabs(eval_source("1+2*(3-4)") - -1.0) < 0.000001, "wrong source expression result");
     auto visible = tokenize("1+2");
     parse(visible);
+    Scanner source_scanner("1+2");
+    parse(source_scanner);
+    SpySource spy(visible);
+    parse(spy);
+    require(spy.pulls == static_cast<int>(visible.size() + 1), "wrong spy source pull count");
     auto with_eof = visible;
     with_eof.push_back(Lexeme{Token::End, "", "", 0, 0, 1, 1, 1, 1});
     parse(with_eof);
@@ -949,10 +1228,24 @@ int main() {
         require(std::string(ex.what()).find("token after EOF") != std::string::npos, "wrong EOF error");
     }
     try {
+        SpySource eof_source(with_eof);
+        parse(eof_source);
+        throw std::runtime_error("expected source token-after-EOF parse error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("token after EOF") != std::string::npos, "wrong source EOF error");
+    }
+    try {
         tokenize("1@");
         throw std::runtime_error("expected scanner error");
     } catch (const std::runtime_error& ex) {
         require(std::string(ex.what()).find("no lexical rule") != std::string::npos, "wrong scanner error");
+    }
+    try {
+        Scanner bad_scanner("1@");
+        parse(bad_scanner);
+        throw std::runtime_error("expected source scanner error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("no lexical rule") != std::string::npos, "wrong source scanner error");
     }
     try {
         tokenize(std::string("1") + static_cast<char>(0xff));
@@ -960,12 +1253,41 @@ int main() {
     } catch (const std::runtime_error& ex) {
         require(std::string(ex.what()).find("invalid UTF-8") != std::string::npos, "wrong UTF-8 error");
     }
+    SpySource coverage_source(visible);
+    try {
+        parse_value(coverage_source, ReducerMap{});
+        throw std::runtime_error("expected reducer coverage error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("no reducer registered") != std::string::npos, "wrong coverage error");
+    }
+    require(coverage_source.pulls == 0, "coverage validation pulled from source");
+    try {
+        FailingSource failing(visible, 2);
+        parse(failing);
+        throw std::runtime_error("expected source failure");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("source failed") != std::string::npos, "wrong source failure");
+    }
+    try {
+        SpySource reducer_source(visible);
+        parse_value(reducer_source, Reducer([](const Reduction& ctx) -> Value {
+            if (ctx.action_id == SemanticAction::Number) {
+                throw std::runtime_error("reducer failed");
+            }
+            return ctx.values.empty() ? Value{} : ctx.values.front();
+        }));
+        throw std::runtime_error("expected reducer failure");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("reducer failed") != std::string::npos, "wrong reducer failure");
+    }
 
     Parser parser;
     std::vector<std::thread> workers;
     for (int i = 0; i < 8; ++i) {
         workers.emplace_back([&parser]() {
             parser.parse(tokenize("1+2*(3-4)"));
+            Scanner scanner("1+2*(3-4)");
+            parser.parse(scanner);
         });
     }
     for (auto& worker : workers) {
@@ -1300,9 +1622,14 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 		}
 	}
 	parserSource := readFile(t, filepath.Join(out, "Parser.g.cs"))
-	for _, fragment := range []string{"record ParseResult", "class ParseException", "ParseRecovering"} {
+	for _, fragment := range []string{"interface ILexemeSource", "record ParseResult", "class ParseException", "ParseFromSource", "ParseRecoveringFromSource"} {
 		if !strings.Contains(parserSource, fragment) {
 			t.Fatalf("generated C# parser missing %q:\n%s", fragment, parserSource)
+		}
+	}
+	for _, forbidden := range []string{"async ", "Task<", "Thread", "Queue<"} {
+		if strings.Contains(parserSource, forbidden) {
+			t.Fatalf("generated C# parser contains forbidden streaming primitive %q:\n%s", forbidden, parserSource)
 		}
 	}
 	if !strings.Contains(parserSource, "Grammar rule") || !strings.Contains(parserSource, "{csharp: add}") || !strings.Contains(parserSource, "Source: "+specPath+":") {
@@ -1323,14 +1650,14 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 </Project>
 `)
 	writeFile(t, filepath.Join(dir, "Program.cs"), `using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using LangForge.Examples.Calc.Generated;
 
-static double Eval(string source)
+static ReducerMap Reducers()
 {
-    var tokens = Scanner.Tokenize(source);
-    var reducers = new ReducerMap
+    return new ReducerMap
     {
         [SemanticAction.Start] = ctx => ctx.Values[0],
         [SemanticAction.Pass] = ctx => ctx.Values[0],
@@ -1342,7 +1669,17 @@ static double Eval(string source)
         [SemanticAction.Multiply] = ctx => (double)ctx.Values[0]! * (double)ctx.Values[2]!,
         [SemanticAction.Divide] = ctx => (double)ctx.Values[0]! / (double)ctx.Values[2]!,
     };
-    return (double)Parser.ParseWithReducer(tokens, reducers)!;
+}
+
+static double Eval(string source)
+{
+    var tokens = Scanner.Tokenize(source);
+    return (double)Parser.ParseWithReducer(tokens, Reducers())!;
+}
+
+static double EvalFromSource(string source)
+{
+    return (double)Parser.ParseWithReducerFromSource(new Scanner(source), Reducers())!;
 }
 
 static void Check(bool condition, string message)
@@ -1354,8 +1691,13 @@ static void Check(bool condition, string message)
 }
 
 Check(Math.Abs(Eval("1+2*(3-4)") - -1) < 0.0001, "wrong expression result");
+Check(Math.Abs(EvalFromSource("1+2*(3-4)") - -1) < 0.0001, "wrong source expression result");
 var visible = Scanner.Tokenize("1+2");
 Parser.Parse(visible);
+Parser.ParseFromSource(new Scanner("1+2"));
+var spy = new SpySource(visible);
+Parser.ParseFromSource(spy);
+Check(spy.Pulls == visible.Count + 1, $"source pulls {spy.Pulls}");
 Parser.Parse(visible.Concat(new[] { new Lexeme(Token.EOF, "", "", 0, 0, 1, 1, 1, 1) }).ToArray());
 try
 {
@@ -1370,8 +1712,27 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("token after EOF"
 }
 try
 {
+    Parser.ParseFromSource(new SpySource(visible.Concat(new[] {
+        new Lexeme(Token.EOF, "", "", 0, 0, 1, 1, 1, 1),
+        new Lexeme(Token.Plus, "+", "", 0, 1, 1, 1, 1, 2),
+    }).ToArray()));
+    throw new InvalidOperationException("expected source token-after-EOF parse error");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("token after EOF"))
+{
+}
+try
+{
     Scanner.Tokenize("1@");
     throw new InvalidOperationException("expected scanner error");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
+{
+}
+try
+{
+    Parser.ParseFromSource(new Scanner("1@"));
+    throw new InvalidOperationException("expected source scanner error");
 }
 catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
 {
@@ -1384,9 +1745,45 @@ try
 catch (InvalidOperationException ex) when (ex.Message.Contains("invalid UTF-16"))
 {
 }
+try
+{
+    Parser.ParseFromSource(null!);
+    throw new InvalidOperationException("expected null source error");
+}
+catch (ArgumentNullException)
+{
+}
+var sourceFailure = new InvalidOperationException("source failed");
+try
+{
+    Parser.ParseFromSource(new FailingSource(visible, 2, sourceFailure));
+    throw new InvalidOperationException("expected source failure");
+}
+catch (InvalidOperationException ex) when (ReferenceEquals(ex, sourceFailure))
+{
+}
+var coverageSource = new SpySource(visible);
+try
+{
+    Parser.ParseWithReducerFromSource(coverageSource, new ReducerMap());
+    throw new InvalidOperationException("expected reducer coverage error");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("coverage"))
+{
+}
+Check(coverageSource.Pulls == 0, $"coverage pulled {coverageSource.Pulls}");
+try
+{
+    Parser.ParseWithReducerFromSource(new SpySource(visible), new ReducerFunc(_ => throw new InvalidOperationException("reducer failed")));
+    throw new InvalidOperationException("expected reducer failure");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("reducer failed"))
+{
+}
 
 var parser = new Parser();
 Parallel.For(0, 16, _ => parser.ParseInput(Scanner.Tokenize("1+2*(3-4)")));
+Parallel.For(0, 16, _ => parser.ParseSource(new Scanner("1+2*(3-4)")));
 var shared = new Scanner("1+2*(3-4)");
 int count = 0;
 Parallel.For(0, 4, _ =>
@@ -1398,6 +1795,61 @@ Parallel.For(0, 4, _ =>
 });
 Check(count == Scanner.Tokenize("1+2*(3-4)").Count, $"shared scanner count {count}");
 Console.WriteLine("ok");
+
+sealed class SpySource : ILexemeSource
+{
+    private readonly IReadOnlyList<Lexeme> _tokens;
+    private int _index;
+
+    public SpySource(IEnumerable<Lexeme> tokens)
+    {
+        _tokens = tokens.ToArray();
+    }
+
+    public int Pulls { get; private set; }
+
+    public bool Next(out Lexeme lexeme)
+    {
+        Pulls++;
+        if (_index >= _tokens.Count)
+        {
+            lexeme = default;
+            return false;
+        }
+        lexeme = _tokens[_index++];
+        return true;
+    }
+}
+
+sealed class FailingSource : ILexemeSource
+{
+    private readonly IReadOnlyList<Lexeme> _tokens;
+    private readonly int _failAfter;
+    private readonly Exception _failure;
+    private int _index;
+
+    public FailingSource(IEnumerable<Lexeme> tokens, int failAfter, Exception failure)
+    {
+        _tokens = tokens.ToArray();
+        _failAfter = failAfter;
+        _failure = failure;
+    }
+
+    public bool Next(out Lexeme lexeme)
+    {
+        if (_index >= _failAfter)
+        {
+            throw _failure;
+        }
+        if (_index >= _tokens.Count)
+        {
+            lexeme = default;
+            return false;
+        }
+        lexeme = _tokens[_index++];
+        return true;
+    }
+}
 `)
 	run(t, dir, dotnet, "run", "--project", filepath.Join(dir, "CalcCSharp.csproj"))
 }

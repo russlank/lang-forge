@@ -273,20 +273,18 @@ Generated Go packages are independent, so one program can import several of
 them with aliases:
 
 ```go
-queryTokens, err := queryparser.Tokenize(querySource)
-if err != nil {
-	return err
-}
-queryAST, err := queryparser.ParseWithReducer(queryTokens, queryparser.ReducerFunc(query.Reduce))
+queryAST, err := queryparser.ParseWithReducerFromSource(
+	queryparser.NewScanner(querySource),
+	queryparser.ReducerFunc(query.Reduce),
+)
 if err != nil {
 	return err
 }
 
-policyTokens, err := policyparser.Tokenize(policySource)
-if err != nil {
-	return err
-}
-policyAST, err := policyparser.ParseWithReducer(policyTokens, policyparser.ReducerFunc(policy.Reduce))
+policyAST, err := policyparser.ParseWithReducerFromSource(
+	policyparser.NewScanner(policySource),
+	policyparser.ReducerFunc(policy.Reduce),
+)
 if err != nil {
 	return err
 }

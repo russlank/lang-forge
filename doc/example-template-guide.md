@@ -107,7 +107,8 @@ A good starter project usually has:
 
 - a `.lf` grammar;
 - a small model or AST module;
-- one parser adapter that tokenizes, parses, and wires reducers;
+- one parser adapter that feeds a generated scanner/token source into the
+  parser and wires reducers;
 - reducer helpers that turn generated values into domain values;
 - a compiler/interpreter/report layer that consumes the AST;
 - tests for valid input, scanner failures, parser failures, empty productions,

@@ -126,28 +126,26 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
 
 static int vehicle_parse_source(vehicle_demo *demo, const char *source, vehicle_reducer_mode mode, char *message, size_t message_size) {
     vehicle_report_error error;
-    vehicle_report_lexeme *tokens = NULL;
-    size_t count = 0;
+    vehicle_report_scanner scanner;
+    vehicle_report_lexeme_source token_source;
     int parsed = 0;
     error.message[0] = '\0';
     if (!demo_text_append(&demo->report, "Vehicle report C generated-parser demo\n", message, message_size)) {
         return 0;
     }
-    if (!vehicle_report_tokenize(source, &tokens, &count, &error)) {
-        return demo_set_error(message, message_size, "scan failed: %s", error.message);
-    }
+    vehicle_report_scanner_init(&scanner, source);
+    token_source.user = &scanner;
+    token_source.next = vehicle_report_scanner_source_next;
     if (mode == VEHICLE_REDUCER_TYPED) {
         vehicle_report_boxed_typed_reducer boxed = {0};
         vehicle_report_typed_reducer typed = vehicle_report_typed_reducer_from_boxed(&boxed, vehicle_reduce, demo);
-        parsed = vehicle_report_parse_value_typed(tokens, count, &typed, NULL, &error);
+        parsed = vehicle_report_parse_value_source_typed(&token_source, &typed, NULL, &error);
     } else {
-        parsed = vehicle_report_parse_value(tokens, count, vehicle_reduce, demo, NULL, &error);
+        parsed = vehicle_report_parse_value_source(&token_source, vehicle_reduce, demo, NULL, &error);
     }
     if (!parsed) {
-        vehicle_report_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
-    vehicle_report_free_lexemes(tokens);
     return demo_text_appendf(&demo->report, message, message_size, "summary: %d features, %d repairs\n", demo->features, demo->repairs);
 }
 

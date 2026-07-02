@@ -86,7 +86,10 @@ Values   = values for Expr, Plus, and Term
 Then the parser calls user code:
 
 ```go
-value, err := parser.ParseWithReducer(tokens, parser.ReducerFunc(reduce))
+value, err := parser.ParseWithReducerFromSource(
+	parser.NewScanner(source),
+	parser.ReducerFunc(reduce),
+)
 ```
 
 The reducer is ordinary Go code:
@@ -378,7 +381,10 @@ the generated parser imports the package because its typed context references
 that type. The application still wires reducer behavior explicitly:
 
 ```go
-value, err := calc.ParseWithReducer(tokens, calc.ReducerFunc(calcsem.Reduce))
+value, err := calc.ParseWithReducerFromSource(
+	calc.NewScanner(source),
+	calc.ReducerFunc(calcsem.Reduce),
+)
 ```
 
 In inline mode, the declared import is emitted into generated `parser.go`
@@ -500,32 +506,36 @@ internal/policy/reducer.go
 ```
 
 Each generated package is independent. A Go program can import several of
-them, tokenize each source with the matching scanner, and call
-`ParseWithReducer` with the matching reducer:
+them, build a scanner from the matching generated package, and call
+`ParseWithReducerFromSource` with the matching reducer:
 
 ```go
-queryTokens, err := queryparser.Tokenize(querySource)
-queryAST, err := queryparser.ParseWithReducer(queryTokens, queryparser.ReducerFunc(query.Reduce))
+queryAST, err := queryparser.ParseWithReducerFromSource(
+	queryparser.NewScanner(querySource),
+	queryparser.ReducerFunc(query.Reduce),
+)
 
-policyTokens, err := policyparser.Tokenize(policySource)
-policyAST, err := policyparser.ParseWithReducer(policyTokens, policyparser.ReducerFunc(policy.Reduce))
+policyAST, err := policyparser.ParseWithReducerFromSource(
+	policyparser.NewScanner(policySource),
+	policyparser.ReducerFunc(policy.Reduce),
+)
 ```
 
 A C program follows the same shape with generated prefixes:
 
 ```c
-calc_lexeme *tokens = NULL;
-size_t count = 0;
+calc_scanner scanner;
+calc_lexeme_source source_reader;
 calc_value value = NULL;
 calc_error error = {{0}};
 
-if (!calc_tokenize(source, &tokens, &count, &error)) {
+calc_scanner_init(&scanner, source);
+source_reader.user = &scanner;
+source_reader.next = calc_scanner_source_next;
+
+if (!calc_parse_value_source(&source_reader, calc_reduce, &user_state, &value, &error)) {
     /* handle error.message */
 }
-if (!calc_parse_value(tokens, count, calc_reduce, &user_state, &value, &error)) {
-    /* handle error.message */
-}
-calc_free_lexemes(tokens);
 ```
 
 A C++ program follows the same shape with generated namespaces and reducer
@@ -534,14 +544,14 @@ maps:
 ```cpp
 namespace generated = LangForge::Examples::Calc::Generated;
 
-auto tokens = generated::tokenize(source);
+generated::Scanner scanner(source);
 generated::ReducerMap reducers{
     {generated::SemanticAction::Add, [](const generated::Reduction& ctx) {
         return std::any_cast<double>(ctx.values[0]) +
                std::any_cast<double>(ctx.values[2]);
     }},
 };
-auto value = generated::parse_value(tokens, reducers);
+auto value = generated::parse_value(scanner, reducers);
 ```
 
 The generated C++ parser tables use static arrays and binary search for

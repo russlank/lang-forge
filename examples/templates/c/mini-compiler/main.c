@@ -198,20 +198,17 @@ static mini_compiler_value reduce(const mini_compiler_reduction *ctx, void *user
 
 static program *parse_source(context *state, const char *source, char *message, size_t message_size) {
     mini_compiler_error error;
-    mini_compiler_lexeme *tokens = NULL;
-    size_t count = 0;
+    mini_compiler_scanner scanner;
+    mini_compiler_lexeme_source token_source;
     mini_compiler_value value = NULL;
     error.message[0] = '\0';
-    if (!mini_compiler_tokenize(source, &tokens, &count, &error)) {
-        snprintf(message, message_size, "scan failed: %s", error.message);
-        return NULL;
-    }
-    if (!mini_compiler_parse_value(tokens, count, reduce, state, &value, &error)) {
-        mini_compiler_free_lexemes(tokens);
+    mini_compiler_scanner_init(&scanner, source);
+    token_source.user = &scanner;
+    token_source.next = mini_compiler_scanner_source_next;
+    if (!mini_compiler_parse_value_source(&token_source, reduce, state, &value, &error)) {
         snprintf(message, message_size, "parse failed: %s", error.message);
         return NULL;
     }
-    mini_compiler_free_lexemes(tokens);
     return (program *)value;
 }
 

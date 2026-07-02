@@ -172,14 +172,13 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
 static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode, double *out, char *message, size_t message_size)
 {
     calc_error error;
-    calc_lexeme *tokens = NULL;
-    size_t count = 0;
+    calc_scanner scanner;
+    calc_lexeme_source token_source;
     calc_value value = NULL;
     error.message[0] = '\0';
-    if (!calc_tokenize(source, &tokens, &count, &error))
-    {
-        return demo_set_error(message, message_size, "scan failed: %s", error.message);
-    }
+    calc_scanner_init(&scanner, source);
+    token_source.user = &scanner;
+    token_source.next = calc_scanner_source_next;
     if (mode == CALC_REDUCER_TYPED)
     {
         /*
@@ -189,18 +188,15 @@ static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode
          */
         calc_boxed_typed_reducer boxed = {0};
         calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, demo);
-        if (!calc_parse_value_typed(tokens, count, &typed, &value, &error))
+        if (!calc_parse_value_source_typed(&token_source, &typed, &value, &error))
         {
-            calc_free_lexemes(tokens);
             return demo_set_error(message, message_size, "parse failed: %s", error.message);
         }
     }
-    else if (!calc_parse_value(tokens, count, calc_reduce, demo, &value, &error))
+    else if (!calc_parse_value_source(&token_source, calc_reduce, demo, &value, &error))
     {
-        calc_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
-    calc_free_lexemes(tokens);
     *out = calc_value_as_number(value);
     return 1;
 }

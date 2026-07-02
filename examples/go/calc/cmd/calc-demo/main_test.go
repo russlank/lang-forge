@@ -35,7 +35,7 @@ func TestRunCalcDemoRejectsDivisionByZero(t *testing.T) {
 
 func TestRunCalcDemoRejectsUnmatchedInput(t *testing.T) {
 	_, err := runCalcDemo("bad", "1@2")
-	if err == nil || !strings.Contains(err.Error(), "tokenize") {
-		t.Fatalf("error = %v, want tokenize error", err)
+	if err == nil || !strings.Contains(err.Error(), "parse") || !strings.Contains(err.Error(), "lexical") && !strings.Contains(err.Error(), "no lexical rule") {
+		t.Fatalf("error = %v, want streaming scanner error", err)
 	}
 }

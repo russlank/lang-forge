@@ -179,7 +179,8 @@ static dks::ReducerMap make_typed_reducers(Demo& demo) {
 
 static std::string parse_source(const std::string& source, Demo& demo, bool typed = true) {
     demo.report << "DataKeeper C++ mock compiler\nparameters:\n";
-    dks::parse_value(dks::tokenize(source), typed ? make_typed_reducers(demo) : make_reducers(demo));
+    dks::Scanner scanner(source);
+    dks::parse_value(scanner, typed ? make_typed_reducers(demo) : make_reducers(demo));
     demo.report << "summary: " << demo.parameters << " parameters, " << demo.commands << " mock stack instructions\n";
     return demo.report.str();
 }

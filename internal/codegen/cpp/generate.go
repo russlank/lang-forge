@@ -189,16 +189,25 @@ func renderScannerHeader(namespace []string, source string) string {
 	b.WriteString("    int end_line = 1;\n")
 	b.WriteString("    int end_column = 1;\n")
 	b.WriteString("};\n\n")
+	b.WriteString("/// Synchronous pull source consumed by generated parsers.\n")
+	b.WriteString("///\n")
+	b.WriteString("/// Returning false means natural end-of-input. A source may also return one\n")
+	b.WriteString("/// explicit Token::End lexeme; later tokens are rejected by the parser.\n")
+	b.WriteString("class LexemeSource {\n")
+	b.WriteString("public:\n")
+	b.WriteString("    virtual ~LexemeSource() = default;\n")
+	b.WriteString("    virtual bool next(Lexeme& lexeme) = 0;\n")
+	b.WriteString("};\n\n")
 	b.WriteString("/// Incrementally tokenizes UTF-8 source text.\n")
 	b.WriteString("///\n")
 	b.WriteString("/// The scanner stores a string_view into caller-owned input. Keep the input\n")
 	b.WriteString("/// string alive while lexemes are being read. Calls that mutate scanner cursor\n")
 	b.WriteString("/// state are serialized, so a shared Scanner can be consumed concurrently.\n")
-	b.WriteString("class Scanner {\n")
+	b.WriteString("class Scanner : public LexemeSource {\n")
 	b.WriteString("public:\n")
 	b.WriteString("    explicit Scanner(std::string_view input);\n")
 	b.WriteString("    void include_hidden(bool include);\n")
-	b.WriteString("    bool next(Lexeme& lexeme);\n")
+	b.WriteString("    bool next(Lexeme& lexeme) override;\n")
 	b.WriteString("    std::vector<Lexeme> all();\n\n")
 	b.WriteString("private:\n")
 	b.WriteString("    std::mutex gate_;\n")
@@ -499,6 +508,15 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    std::size_t operator()(SemanticAction action) const noexcept;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("using ReducerTable = std::unordered_map<SemanticAction, ReductionHandler, SemanticActionHash>;\n\n")
+	b.WriteString("/// Adapts an existing token vector to the pull source parser API.\n")
+	b.WriteString("class VectorLexemeSource final : public LexemeSource {\n")
+	b.WriteString("public:\n")
+	b.WriteString("    explicit VectorLexemeSource(const std::vector<Lexeme>& tokens);\n")
+	b.WriteString("    bool next(Lexeme& lexeme) override;\n\n")
+	b.WriteString("private:\n")
+	b.WriteString("    const std::vector<Lexeme>& tokens_;\n")
+	b.WriteString("    std::size_t pos_ = 0;\n")
+	b.WriteString("};\n\n")
 	b.WriteString("/// Dispatches reductions by generated semantic action ID.\n")
 	b.WriteString("class ReducerMap {\n")
 	b.WriteString("public:\n")
@@ -521,8 +539,11 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    explicit Parser(Reducer reducer = Reducer{});\n")
 	b.WriteString("    explicit Parser(const ReducerMap& reducer);\n")
 	b.WriteString("    void parse(const std::vector<Lexeme>& tokens) const;\n")
+	b.WriteString("    void parse(LexemeSource& source) const;\n")
 	b.WriteString("    Value parse_value(const std::vector<Lexeme>& tokens) const;\n\n")
-	b.WriteString("    ParseResult parse_recovering(const std::vector<Lexeme>& tokens) const;\n\n")
+	b.WriteString("    Value parse_value(LexemeSource& source) const;\n\n")
+	b.WriteString("    ParseResult parse_recovering(const std::vector<Lexeme>& tokens) const;\n")
+	b.WriteString("    ParseResult parse_recovering(LexemeSource& source) const;\n\n")
 	b.WriteString("private:\n")
 	b.WriteString("    Reducer reducer_;\n")
 	b.WriteString("};\n\n")
@@ -532,14 +553,24 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("bool lookup_semantic_action(std::string_view name, SemanticAction& action) noexcept;\n")
 	b.WriteString("/// Recognizes a token stream without user semantics.\n")
 	b.WriteString("void parse(const std::vector<Lexeme>& tokens);\n")
+	b.WriteString("/// Recognizes tokens pulled from source without user semantics.\n")
+	b.WriteString("void parse(LexemeSource& source);\n")
 	b.WriteString("/// Parses with an explicit reducer and returns the final semantic value.\n")
 	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses tokens pulled from source with an explicit reducer and returns the final semantic value.\n")
+	b.WriteString("Value parse_value(LexemeSource& source, Reducer reducer = Reducer{});\n\n")
 	b.WriteString("/// Parses with a checked reducer map and returns the final semantic value.\n")
 	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
+	b.WriteString("/// Parses tokens pulled from source with a checked reducer map and returns the final semantic value.\n")
+	b.WriteString("Value parse_value(LexemeSource& source, const ReducerMap& reducer);\n\n")
 	b.WriteString("/// Parses with grammar-directed recovery and returns every syntax diagnostic.\n")
 	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses tokens pulled from source with grammar-directed recovery.\n")
+	b.WriteString("ParseResult parse_recovering(LexemeSource& source, Reducer reducer = Reducer{});\n\n")
 	b.WriteString("/// Parses with grammar-directed recovery and a checked reducer map.\n")
 	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
+	b.WriteString("/// Parses tokens pulled from source with grammar-directed recovery and a checked reducer map.\n")
+	b.WriteString("ParseResult parse_recovering(LexemeSource& source, const ReducerMap& reducer);\n\n")
 	b.WriteString(closeNamespace(namespace))
 	return b.String()
 }
@@ -905,18 +936,91 @@ func parserRuntime() string {
     return token_name(token);
 }
 
-std::string_view lookahead(const std::vector<Lexeme>& tokens, std::size_t pos) {
-    if (pos >= tokens.size()) {
-        return "$";
-    }
-    if (tokens[pos].token == Token::End) {
-        if (pos + 1 != tokens.size()) {
-            throw std::runtime_error("token after EOF at input index " + std::to_string(pos + 1));
+class SourceCursor {
+public:
+    explicit SourceCursor(LexemeSource& source) : source_(source) {}
+
+    std::string_view peek_symbol() {
+        if (ready_) {
+            return symbol_;
         }
-        return "$";
+        if (saw_eof_) {
+            lookahead_ = eof_lexeme();
+            symbol_ = "$";
+            ready_ = true;
+            return symbol_;
+        }
+        Lexeme lexeme{};
+        if (!source_.next(lexeme)) {
+            lookahead_ = eof_lexeme();
+            symbol_ = "$";
+            ready_ = true;
+            saw_eof_ = true;
+            return symbol_;
+        }
+        if (lexeme.token == Token::End) {
+            lexeme = normalize_eof(lexeme);
+            Lexeme extra{};
+            if (source_.next(extra)) {
+                throw std::runtime_error("token after EOF in lexeme source");
+            }
+            lookahead_ = lexeme;
+            symbol_ = "$";
+            ready_ = true;
+            saw_eof_ = true;
+            return symbol_;
+        }
+        last_ = lexeme;
+        have_last_ = true;
+        lookahead_ = lexeme;
+        symbol_ = terminal_name(lexeme.token);
+        ready_ = true;
+        return symbol_;
     }
-    return terminal_name(tokens[pos].token);
-}
+
+    Lexeme advance() {
+        const auto symbol = peek_symbol();
+        if (symbol == "$") {
+            throw std::runtime_error("shift past end of input");
+        }
+        auto lexeme = lookahead_;
+        ready_ = false;
+        return lexeme;
+    }
+
+    Lexeme diagnostic_lexeme() const {
+        return ready_ ? lookahead_ : eof_lexeme();
+    }
+
+private:
+    Lexeme eof_lexeme() const {
+        if (have_last_) {
+            return Lexeme{Token::End, {}, {}, last_.end, last_.end, last_.end_line, last_.end_column, last_.end_line, last_.end_column};
+        }
+        return Lexeme{Token::End, {}, {}, 0, 0, 1, 1, 1, 1};
+    }
+
+    Lexeme normalize_eof(Lexeme lexeme) const {
+        const auto fallback = eof_lexeme();
+        if (lexeme.start_line <= 0) { lexeme.start_line = fallback.start_line; }
+        if (lexeme.start_column <= 0) { lexeme.start_column = fallback.start_column; }
+        if (lexeme.end_line <= 0) { lexeme.end_line = fallback.end_line; }
+        if (lexeme.end_column <= 0) { lexeme.end_column = fallback.end_column; }
+        if (lexeme.start == 0 && lexeme.end == 0 && have_last_) {
+            lexeme.start = fallback.start;
+            lexeme.end = fallback.end;
+        }
+        return lexeme;
+    }
+
+    LexemeSource& source_;
+    Lexeme lookahead_{};
+    Lexeme last_{};
+    std::string_view symbol_ = "$";
+    bool ready_ = false;
+    bool saw_eof_ = false;
+    bool have_last_ = false;
+};
 
 const ParserActionEntry* find_action(int state, std::string_view symbol) {
     if (state < 0 || static_cast<std::size_t>(state) >= parser_action_rows.size()) {
@@ -998,24 +1102,13 @@ std::vector<ExpectedToken> expected_tokens(int state) {
     return out;
 }
 
-Lexeme diagnostic_lexeme(const std::vector<Lexeme>& tokens, std::size_t pos) {
-    if (pos < tokens.size()) {
-        return tokens[pos];
-    }
-    if (tokens.empty()) {
-        return Lexeme{Token::End, {}, {}, 0, 0, 1, 1, 1, 1};
-    }
-    const auto& last = tokens.back();
-    return Lexeme{Token::End, {}, {}, last.end, last.end, last.end_line, last.end_column, last.end_line, last.end_column};
-}
-
-Lexeme error_lexeme(const std::vector<Lexeme>& tokens, std::size_t pos) {
-    const auto source = diagnostic_lexeme(tokens, pos);
+Lexeme error_lexeme(const SourceCursor& cursor) {
+    const auto source = cursor.diagnostic_lexeme();
     return Lexeme{Token::Error, {}, {}, source.start, source.start, source.start_line, source.start_column, source.start_line, source.start_column};
 }
 
-ParseDiagnostic make_diagnostic(int state, std::string_view unexpected, const std::vector<Lexeme>& tokens, std::size_t pos) {
-    const auto source = diagnostic_lexeme(tokens, pos);
+ParseDiagnostic make_diagnostic(int state, std::string_view unexpected, const SourceCursor& cursor) {
+    const auto source = cursor.diagnostic_lexeme();
     return ParseDiagnostic{
         state,
         unexpected,
@@ -1175,12 +1268,31 @@ Parser::Parser(const ReducerMap& reducer) : reducer_([reducer](const Reduction& 
     reducer.validate_coverage();
 }
 
+VectorLexemeSource::VectorLexemeSource(const std::vector<Lexeme>& tokens) : tokens_(tokens) {}
+
+bool VectorLexemeSource::next(Lexeme& lexeme) {
+    if (pos_ >= tokens_.size()) {
+        return false;
+    }
+    lexeme = tokens_[pos_++];
+    return true;
+}
+
 void Parser::parse(const std::vector<Lexeme>& tokens) const {
     (void)parse_value(tokens);
 }
 
+void Parser::parse(LexemeSource& source) const {
+    (void)parse_value(source);
+}
+
 Value Parser::parse_value(const std::vector<Lexeme>& tokens) const {
-    auto result = parse_recovering(tokens);
+    VectorLexemeSource source(tokens);
+    return parse_value(source);
+}
+
+Value Parser::parse_value(LexemeSource& source) const {
+    auto result = parse_recovering(source);
     if (!result.diagnostics.empty()) {
         throw ParseError(std::move(result.diagnostics));
     }
@@ -1188,29 +1300,34 @@ Value Parser::parse_value(const std::vector<Lexeme>& tokens) const {
 }
 
 ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
+    VectorLexemeSource source(tokens);
+    return parse_recovering(source);
+}
+
+ParseResult Parser::parse_recovering(LexemeSource& source) const {
     std::vector<int> states;
     std::vector<Value> values;
     states.reserve(64);
     values.reserve(64);
     states.push_back(0);
-    std::size_t pos = 0;
+    SourceCursor cursor(source);
     int recovering = 0;
     std::ptrdiff_t active_diagnostic = -1;
     ParseResult result;
 
     while (true) {
-        const auto symbol = lookahead(tokens, pos);
+        const auto symbol = cursor.peek_symbol();
         const auto action = find_action(states.back(), symbol);
         if (action == nullptr) {
             if (recovering == 0) {
-                result.diagnostics.push_back(make_diagnostic(states.back(), symbol, tokens, pos));
+                result.diagnostics.push_back(make_diagnostic(states.back(), symbol, cursor));
                 active_diagnostic = static_cast<std::ptrdiff_t>(result.diagnostics.size() - 1);
                 bool recovered = false;
                 while (!states.empty()) {
                     const auto error_action = find_action(states.back(), "error");
                     if (error_action != nullptr && error_action->kind == ParserActionKind::Shift) {
                         states.push_back(error_action->state);
-                        values.push_back(error_lexeme(tokens, pos));
+                        values.push_back(error_lexeme(cursor));
                         recovering = 3;
                         result.diagnostics[static_cast<std::size_t>(active_diagnostic)].recovery.kind = "shift-error";
                         recovered = true;
@@ -1238,7 +1355,7 @@ ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
                 result.value = current_value(values);
                 return result;
             }
-            ++pos;
+            (void)cursor.advance();
             if (active_diagnostic >= 0) {
                 ++result.diagnostics[static_cast<std::size_t>(active_diagnostic)].recovery.discarded;
             }
@@ -1246,12 +1363,8 @@ ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
         }
 
         if (action->kind == ParserActionKind::Shift) {
-            if (pos >= tokens.size()) {
-                throw std::runtime_error("shift past end of input in state " + std::to_string(states.back()));
-            }
             states.push_back(action->state);
-            values.push_back(tokens[pos]);
-            ++pos;
+            values.push_back(cursor.advance());
             if (recovering > 0) {
                 --recovering;
                 if (recovering == 0 && active_diagnostic >= 0) {
@@ -1296,9 +1409,6 @@ ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
         }
 
         if (action->kind == ParserActionKind::Accept) {
-            if (pos < tokens.size() && !(tokens[pos].token == Token::End && pos + 1 == tokens.size())) {
-                throw std::runtime_error("tokens after EOF");
-            }
             if (active_diagnostic >= 0) {
                 result.diagnostics[static_cast<std::size_t>(active_diagnostic)].recovery.kind = "recovered";
             }
@@ -1313,20 +1423,40 @@ void parse(const std::vector<Lexeme>& tokens) {
     Parser{}.parse(tokens);
 }
 
+void parse(LexemeSource& source) {
+    Parser{}.parse(source);
+}
+
 Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer) {
     return Parser(std::move(reducer)).parse_value(tokens);
+}
+
+Value parse_value(LexemeSource& source, Reducer reducer) {
+    return Parser(std::move(reducer)).parse_value(source);
 }
 
 Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
     return Parser(reducer).parse_value(tokens);
 }
 
+Value parse_value(LexemeSource& source, const ReducerMap& reducer) {
+    return Parser(reducer).parse_value(source);
+}
+
 ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer) {
     return Parser(std::move(reducer)).parse_recovering(tokens);
 }
 
+ParseResult parse_recovering(LexemeSource& source, Reducer reducer) {
+    return Parser(std::move(reducer)).parse_recovering(source);
+}
+
 ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
     return Parser(reducer).parse_recovering(tokens);
+}
+
+ParseResult parse_recovering(LexemeSource& source, const ReducerMap& reducer) {
+    return Parser(reducer).parse_recovering(source);
 }
 
 `

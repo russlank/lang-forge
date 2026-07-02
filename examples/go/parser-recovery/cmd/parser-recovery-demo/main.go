@@ -45,11 +45,7 @@ func main() {
 }
 
 func parseSource(source string) (recovery.ParseResult, error) {
-	tokens, err := recovery.Tokenize(source)
-	if err != nil {
-		return recovery.ParseResult{}, err
-	}
-	return recovery.ParseRecovering(tokens)
+	return recovery.ParseRecoveringFromSource(recovery.NewScanner(source))
 }
 
 func expectedDisplay(expected []recovery.ExpectedToken) string {

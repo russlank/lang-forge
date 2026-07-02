@@ -230,8 +230,11 @@ Reusable Codex skills for LangForge live under [skills](skills):
   in-process engine plus generated Go, C#, C, and C++ output. Additional source
   encodings remain planned. See
   [Scanner encoding architecture](doc/encoding.md).
-- Generated Go, C#, C, and C++ parsers accept visible tokens from `Tokenize`
-  and optionally one trailing explicit EOF token. Target-tagged parser actions are
+- Generated Go, C#, C, and C++ parsers prefer pull-based token sources so a
+  generated scanner can feed the parser lazily. The older collection APIs
+  (`Tokenize`, `All`, `Parse(tokens, ...)`, and equivalents) remain supported
+  for tests, debugging, and token-stream reports, and they still accept one
+  trailing explicit EOF token. Target-tagged parser actions are
   exposed through reducer callbacks with generated action IDs/enums and
   reducer-map helpers where the target has that convenience layer. Specs can
   also opt into Go inline action mode with target-tagged semantic imports for

@@ -110,8 +110,8 @@ static lfcalc::ReducerMap make_reducers(bool typed) {
 
 /// Scans, parses, and evaluates one calculator expression.
 static double evaluate(std::string_view source, bool typed = true) {
-    const auto tokens = lfcalc::tokenize(source);
-    const auto value = lfcalc::parse_value(tokens, make_reducers(typed));
+    lfcalc::Scanner scanner(source);
+    const auto value = lfcalc::parse_value(scanner, make_reducers(typed));
     return std::any_cast<double>(value);
 }
 
@@ -160,7 +160,8 @@ static void run_assertions() {
     std::vector<std::thread> workers;
     for (int i = 0; i < 8; ++i) {
         workers.emplace_back([&parser]() {
-            parser.parse(lfcalc::tokenize("1 + 2 * (3 - 4.5)"));
+            lfcalc::Scanner scanner("1 + 2 * (3 - 4.5)");
+            parser.parse(scanner);
         });
     }
     for (auto& worker : workers) {

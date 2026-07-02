@@ -474,20 +474,260 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("func WithReducer(reducer Reducer) Option { return func(p *Parser) { p.reducer = reducer } }\n\n")
 	b.WriteString("// NewParser creates a parser instance.\n")
 	b.WriteString("func NewParser(options ...Option) *Parser {\n\tp := &Parser{}\n\tfor _, option := range options { option(p) }\n\treturn p\n}\n\n")
-	b.WriteString("// Parse recognizes input with a new parser instance.\n")
-	b.WriteString("func Parse(input []Lexeme) error { return NewParser().Parse(input) }\n\n")
-	b.WriteString("// ParseValue recognizes input and returns the final reduced semantic value.\n")
-	b.WriteString("func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }\n\n")
-	b.WriteString("// ParseRecovering recognizes input and returns all syntax diagnostics.\n")
-	b.WriteString("func ParseRecovering(input []Lexeme) (ParseResult, error) { return NewParser().ParseRecovering(input) }\n\n")
-	b.WriteString("// ParseWithReducer recognizes input using reducer for target-tagged grammar actions.\n")
-	b.WriteString("func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {\n\tif validator, ok := reducer.(interface{ ValidateCoverage() error }); ok {\n\t\tif err := validator.ValidateCoverage(); err != nil { return nil, err }\n\t}\n\treturn NewParser(WithReducer(reducer)).ParseValue(input)\n}\n\n")
-	b.WriteString("// Parse recognizes input using this parser instance.\n")
-	b.WriteString("func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }\n\n")
-	b.WriteString("// ParseValue recognizes input using this parser instance and returns the final semantic value.\n")
-	b.WriteString("func (p *Parser) ParseValue(input []Lexeme) (Value, error) {\n\tresult, err := p.ParseRecovering(input)\n\tif err != nil { return result.Value, err }\n\tif len(result.Diagnostics) > 0 { return result.Value, &ParseError{Diagnostics: result.Diagnostics} }\n\treturn result.Value, nil\n}\n\n")
-	b.WriteString("// ParseRecovering performs grammar-directed recovery and returns every syntax diagnostic.\n")
-	b.WriteString("func (p *Parser) ParseRecovering(input []Lexeme) (ParseResult, error) {\n\tstates := []int{0}\n\tvalues := []Value{}\n\tpos := 0\n\trecovering := 0\n\tactiveDiagnostic := -1\n\tresult := ParseResult{}\n\tfor {\n\t\tlookahead, err := parserLookahead(input, pos)\n\t\tif err != nil { result.Value = parserCurrentValue(values); return result, err }\n\t\taction, ok := parserActions[states[len(states)-1]][lookahead]\n\t\tif !ok {\n\t\t\tif recovering == 0 {\n\t\t\t\tresult.Diagnostics = append(result.Diagnostics, newParseDiagnostic(states[len(states)-1], lookahead, input, pos))\n\t\t\t\tactiveDiagnostic = len(result.Diagnostics) - 1\n\t\t\t\trecovered := false\n\t\t\t\tfor len(states) > 0 {\n\t\t\t\t\terrorAction, canShiftError := parserActions[states[len(states)-1]][\"error\"]\n\t\t\t\t\tif canShiftError && errorAction.kind == \"shift\" {\n\t\t\t\t\t\tstates = append(states, errorAction.state)\n\t\t\t\t\t\tvalues = append(values, parserErrorLexeme(input, pos))\n\t\t\t\t\t\trecovering = 3\n\t\t\t\t\t\tresult.Diagnostics[activeDiagnostic].Recovery.Kind = \"shift-error\"\n\t\t\t\t\t\trecovered = true\n\t\t\t\t\t\tbreak\n\t\t\t\t\t}\n\t\t\t\t\tif len(states) == 1 { break }\n\t\t\t\t\tstates = states[:len(states)-1]\n\t\t\t\t\tif len(values) > 0 { values = values[:len(values)-1] }\n\t\t\t\t}\n\t\t\t\tif recovered { continue }\n\t\t\t\tresult.Diagnostics[activeDiagnostic].Recovery.Kind = \"abort\"\n\t\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\t\treturn result, nil\n\t\t\t}\n\t\t\tif lookahead == \"$\" {\n\t\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"abort\" }\n\t\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\t\treturn result, nil\n\t\t\t}\n\t\t\tpos++\n\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Discarded++ }\n\t\t\tcontinue\n\t\t}\n\t\tswitch action.kind {\n\t\tcase \"shift\":\n\t\t\tif pos >= len(input) { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"shift past end of input in state %d\", states[len(states)-1]) }\n\t\t\tstates = append(states, action.state)\n\t\t\tvalues = append(values, input[pos])\n\t\t\tpos++\n\t\t\tif recovering > 0 {\n\t\t\t\trecovering--\n\t\t\t\tif recovering == 0 && activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"recovered\"; activeDiagnostic = -1 }\n\t\t\t}\n\t\tcase \"reduce\":\n\t\t\trule := parserRules[action.rule]\n\t\t\tif len(states) < rule.size + 1 { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"parser stack underflow reducing rule %d\", action.rule) }\n\t\t\tif len(values) < rule.size { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"semantic value stack underflow reducing rule %d\", action.rule) }\n\t\t\trhs := append([]Value(nil), values[len(values)-rule.size:]...)\n\t\t\tvalues = values[:len(values)-rule.size]\n\t\t\tvalue, reduceErr := p.reduce(action.rule, rule, rhs)\n\t\t\tif reduceErr != nil { result.Value = parserCurrentValue(values); return result, reduceErr }\n\t\t\tstates = states[:len(states)-rule.size]\n\t\t\tgotoState, exists := parserGotos[states[len(states)-1]][rule.lhs]\n\t\t\tif !exists { result.Value = parserCurrentValue(values); return result, fmt.Errorf(\"missing goto from state %d on %s\", states[len(states)-1], rule.lhs) }\n\t\t\tstates = append(states, gotoState)\n\t\t\tvalues = append(values, value)\n\t\tcase \"accept\":\n\t\t\tif activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = \"recovered\" }\n\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\tresult.Accepted = true\n\t\t\treturn result, nil\n\t\tdefault:\n\t\t\tresult.Value = parserCurrentValue(values)\n\t\t\treturn result, fmt.Errorf(\"invalid parser action %q\", action.kind)\n\t\t}\n\t}\n}\n\n")
+	b.WriteString(`// TokenSource is the synchronous pull interface consumed by generated parsers.
+//
+// Next returns a visible grammar lexeme and true, or false when the source
+// naturally reaches the end of input. A source may also return one explicit
+// TokenEOF lexeme with ok=true; tokens returned after explicit EOF are errors.
+type TokenSource interface { Next() (Lexeme, bool, error) }
+
+type lexemeSliceSource struct {
+	input []Lexeme
+	pos int
+}
+
+func newLexemeSliceSource(input []Lexeme) *lexemeSliceSource {
+	return &lexemeSliceSource{input: input}
+}
+
+func (s *lexemeSliceSource) Next() (Lexeme, bool, error) {
+	if s.pos >= len(s.input) { return Lexeme{}, false, nil }
+	lexeme := s.input[s.pos]
+	s.pos++
+	return lexeme, true, nil
+}
+
+type parserTokenCursor struct {
+	source TokenSource
+	lookahead Lexeme
+	symbol string
+	ready bool
+	sawEOF bool
+	last Lexeme
+	haveLast bool
+}
+
+func newParserTokenCursor(source TokenSource) (*parserTokenCursor, error) {
+	if source == nil { return nil, fmt.Errorf("nil token source") }
+	return &parserTokenCursor{source: source}, nil
+}
+
+func (c *parserTokenCursor) peekSymbol() (string, error) {
+	if c.ready { return c.symbol, nil }
+	if c.sawEOF {
+		c.lookahead = c.eofLexeme()
+		c.symbol = "$"
+		c.ready = true
+		return c.symbol, nil
+	}
+	lexeme, ok, err := c.source.Next()
+	if err != nil { return "", err }
+	if !ok {
+		c.lookahead = c.eofLexeme()
+		c.symbol = "$"
+		c.ready = true
+		c.sawEOF = true
+		return c.symbol, nil
+	}
+	if lexeme.Token == TokenEOF {
+		lexeme = c.normalizeEOFLexeme(lexeme)
+		extra, more, err := c.source.Next()
+		if err != nil { return "", err }
+		if more {
+			return "", fmt.Errorf("token after EOF in token source: %s at %d:%d", terminalName(extra.Token), extra.StartLine, extra.StartColumn)
+		}
+		c.lookahead = lexeme
+		c.symbol = "$"
+		c.ready = true
+		c.sawEOF = true
+		return c.symbol, nil
+	}
+	c.last = lexeme
+	c.haveLast = true
+	c.lookahead = lexeme
+	c.symbol = terminalName(lexeme.Token)
+	c.ready = true
+	return c.symbol, nil
+}
+
+func (c *parserTokenCursor) advance() (Lexeme, error) {
+	symbol, err := c.peekSymbol()
+	if err != nil { return Lexeme{}, err }
+	if symbol == "$" { return Lexeme{}, fmt.Errorf("shift past end of input") }
+	lexeme := c.lookahead
+	c.ready = false
+	return lexeme, nil
+}
+
+func (c *parserTokenCursor) diagnosticLexeme() Lexeme {
+	if c.ready { return c.lookahead }
+	return c.eofLexeme()
+}
+
+func (c *parserTokenCursor) eofLexeme() Lexeme {
+	if c.haveLast {
+		return Lexeme{Token: TokenEOF, Start: c.last.End, End: c.last.End, StartLine: c.last.EndLine, StartColumn: c.last.EndColumn, EndLine: c.last.EndLine, EndColumn: c.last.EndColumn}
+	}
+	return Lexeme{Token: TokenEOF, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1}
+}
+
+func (c *parserTokenCursor) normalizeEOFLexeme(lexeme Lexeme) Lexeme {
+	fallback := c.eofLexeme()
+	if lexeme.StartLine <= 0 { lexeme.StartLine = fallback.StartLine }
+	if lexeme.StartColumn <= 0 { lexeme.StartColumn = fallback.StartColumn }
+	if lexeme.EndLine <= 0 { lexeme.EndLine = fallback.EndLine }
+	if lexeme.EndColumn <= 0 { lexeme.EndColumn = fallback.EndColumn }
+	if lexeme.Start == 0 && lexeme.End == 0 && c.haveLast {
+		lexeme.Start = fallback.Start
+		lexeme.End = fallback.End
+	}
+	return lexeme
+}
+
+// Parse recognizes input with a new parser instance.
+func Parse(input []Lexeme) error { return NewParser().Parse(input) }
+
+// ParseFromSource recognizes tokens pulled from source with a new parser instance.
+func ParseFromSource(source TokenSource) error { return NewParser().ParseFromSource(source) }
+
+// ParseValue recognizes input and returns the final reduced semantic value.
+func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }
+
+// ParseValueFromSource recognizes tokens pulled from source and returns the final reduced semantic value.
+func ParseValueFromSource(source TokenSource) (Value, error) { return NewParser().ParseValueFromSource(source) }
+
+// ParseRecovering recognizes input and returns all syntax diagnostics.
+func ParseRecovering(input []Lexeme) (ParseResult, error) { return NewParser().ParseRecovering(input) }
+
+// ParseRecoveringFromSource recognizes tokens pulled from source and returns all syntax diagnostics.
+func ParseRecoveringFromSource(source TokenSource) (ParseResult, error) {
+	return NewParser().ParseRecoveringFromSource(source)
+}
+
+// ParseWithReducer recognizes input using reducer for target-tagged grammar actions.
+func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {
+	return ParseWithReducerFromSource(newLexemeSliceSource(input), reducer)
+}
+
+// ParseWithReducerFromSource recognizes tokens pulled from source using reducer for target-tagged grammar actions.
+func ParseWithReducerFromSource(source TokenSource, reducer Reducer) (Value, error) {
+	return NewParser(WithReducer(reducer)).ParseValueFromSource(source)
+}
+
+// Parse recognizes input using this parser instance.
+func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }
+
+// ParseFromSource recognizes tokens pulled from source using this parser instance.
+func (p *Parser) ParseFromSource(source TokenSource) error {
+	_, err := p.ParseValueFromSource(source)
+	return err
+}
+
+// ParseValue recognizes input using this parser instance and returns the final semantic value.
+func (p *Parser) ParseValue(input []Lexeme) (Value, error) {
+	return p.ParseValueFromSource(newLexemeSliceSource(input))
+}
+
+// ParseValueFromSource recognizes tokens pulled from source using this parser instance.
+func (p *Parser) ParseValueFromSource(source TokenSource) (Value, error) {
+	result, err := p.ParseRecoveringFromSource(source)
+	if err != nil { return result.Value, err }
+	if len(result.Diagnostics) > 0 { return result.Value, &ParseError{Diagnostics: result.Diagnostics} }
+	return result.Value, nil
+}
+
+// ParseRecovering performs grammar-directed recovery and returns every syntax diagnostic.
+func (p *Parser) ParseRecovering(input []Lexeme) (ParseResult, error) {
+	return p.ParseRecoveringFromSource(newLexemeSliceSource(input))
+}
+
+// ParseRecoveringFromSource performs grammar-directed recovery over a pull token source.
+func (p *Parser) ParseRecoveringFromSource(source TokenSource) (ParseResult, error) {
+	result := ParseResult{}
+	if p.reducer != nil {
+		if validator, ok := p.reducer.(interface{ ValidateCoverage() error }); ok {
+			if err := validator.ValidateCoverage(); err != nil { return result, err }
+		}
+	}
+	cursor, err := newParserTokenCursor(source)
+	if err != nil { return result, err }
+	states := []int{0}
+	values := []Value{}
+	recovering := 0
+	activeDiagnostic := -1
+	for {
+		lookahead, err := cursor.peekSymbol()
+		if err != nil { result.Value = parserCurrentValue(values); return result, err }
+		action, ok := parserActions[states[len(states)-1]][lookahead]
+		if !ok {
+			if recovering == 0 {
+				result.Diagnostics = append(result.Diagnostics, newParseDiagnostic(states[len(states)-1], lookahead, cursor))
+				activeDiagnostic = len(result.Diagnostics) - 1
+				recovered := false
+				for len(states) > 0 {
+					errorAction, canShiftError := parserActions[states[len(states)-1]]["error"]
+					if canShiftError && errorAction.kind == "shift" {
+						states = append(states, errorAction.state)
+						values = append(values, parserErrorLexeme(cursor))
+						recovering = 3
+						result.Diagnostics[activeDiagnostic].Recovery.Kind = "shift-error"
+						recovered = true
+						break
+					}
+					if len(states) == 1 { break }
+					states = states[:len(states)-1]
+					if len(values) > 0 { values = values[:len(values)-1] }
+				}
+				if recovered { continue }
+				result.Diagnostics[activeDiagnostic].Recovery.Kind = "abort"
+				result.Value = parserCurrentValue(values)
+				return result, nil
+			}
+			if lookahead == "$" {
+				if activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = "abort" }
+				result.Value = parserCurrentValue(values)
+				return result, nil
+			}
+			if _, err := cursor.advance(); err != nil { result.Value = parserCurrentValue(values); return result, err }
+			if activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Discarded++ }
+			continue
+		}
+		switch action.kind {
+		case "shift":
+			lexeme, err := cursor.advance()
+			if err != nil { result.Value = parserCurrentValue(values); return result, fmt.Errorf("shift in state %d: %w", states[len(states)-1], err) }
+			states = append(states, action.state)
+			values = append(values, lexeme)
+			if recovering > 0 {
+				recovering--
+				if recovering == 0 && activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = "recovered"; activeDiagnostic = -1 }
+			}
+		case "reduce":
+			rule := parserRules[action.rule]
+			if len(states) < rule.size + 1 { result.Value = parserCurrentValue(values); return result, fmt.Errorf("parser stack underflow reducing rule %d", action.rule) }
+			if len(values) < rule.size { result.Value = parserCurrentValue(values); return result, fmt.Errorf("semantic value stack underflow reducing rule %d", action.rule) }
+			rhs := append([]Value(nil), values[len(values)-rule.size:]...)
+			values = values[:len(values)-rule.size]
+			value, reduceErr := p.reduce(action.rule, rule, rhs)
+			if reduceErr != nil { result.Value = parserCurrentValue(values); return result, reduceErr }
+			states = states[:len(states)-rule.size]
+			gotoState, exists := parserGotos[states[len(states)-1]][rule.lhs]
+			if !exists { result.Value = parserCurrentValue(values); return result, fmt.Errorf("missing goto from state %d on %s", states[len(states)-1], rule.lhs) }
+			states = append(states, gotoState)
+			values = append(values, value)
+		case "accept":
+			if activeDiagnostic >= 0 { result.Diagnostics[activeDiagnostic].Recovery.Kind = "recovered" }
+			result.Value = parserCurrentValue(values)
+			result.Accepted = true
+			return result, nil
+		default:
+			result.Value = parserCurrentValue(values)
+			return result, fmt.Errorf("invalid parser action %q", action.kind)
+		}
+	}
+}
+
+`)
 	b.WriteString("func (p *Parser) reduce(ruleID int, rule parserRule, values []Value) (Value, error) {\n\tctx := reductionContext(ruleID, rule, values)\n\tif p.reducer != nil && rule.action != SemanticActionNone {\n\t\treturn p.reducer.Reduce(ctx)\n\t}\n")
 	if goMode == spec.SemanticModeInline {
 		b.WriteString("\tif rule.action != SemanticActionNone {\n\t\treturn reduceInline(ctx)\n\t}\n")
@@ -499,10 +739,8 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	}
 	b.WriteString("func defaultReduce(values []Value) Value {\n\tswitch len(values) {\n\tcase 0:\n\t\treturn nil\n\tcase 1:\n\t\treturn values[0]\n\tdefault:\n\t\treturn append([]Value(nil), values...)\n\t}\n}\n\n")
 	b.WriteString("func parserCurrentValue(values []Value) Value {\n\tif len(values) == 0 { return nil }\n\treturn values[len(values)-1]\n}\n\n")
-	b.WriteString("func parserLookahead(input []Lexeme, pos int) (string, error) {\n\tif pos >= len(input) { return \"$\", nil }\n\tif input[pos].Token == TokenEOF {\n\t\tif pos != len(input)-1 { return \"\", fmt.Errorf(\"token after EOF at input index %d\", pos+1) }\n\t\treturn \"$\", nil\n\t}\n\treturn terminalName(input[pos].Token), nil\n}\n\n")
-	b.WriteString("func newParseDiagnostic(state int, unexpected string, input []Lexeme, pos int) ParseDiagnostic {\n\tlexeme := parserDiagnosticLexeme(input, pos)\n\texpected := append([]ExpectedToken(nil), parserExpected[state]...)\n\tfor index := range expected { expected[index].Members = append([]string(nil), expected[index].Members...) }\n\treturn ParseDiagnostic{State: state, Unexpected: unexpected, UnexpectedDisplay: parserUnexpectedDisplay(unexpected), Expected: expected, Start: lexeme.Start, End: lexeme.End, StartLine: lexeme.StartLine, StartColumn: lexeme.StartColumn, EndLine: lexeme.EndLine, EndColumn: lexeme.EndColumn}\n}\n\n")
-	b.WriteString("func parserDiagnosticLexeme(input []Lexeme, pos int) Lexeme {\n\tif pos < len(input) { return input[pos] }\n\tif len(input) == 0 { return Lexeme{Token: TokenEOF, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1} }\n\tlast := input[len(input)-1]\n\treturn Lexeme{Token: TokenEOF, Start: last.End, End: last.End, StartLine: last.EndLine, StartColumn: last.EndColumn, EndLine: last.EndLine, EndColumn: last.EndColumn}\n}\n\n")
-	b.WriteString("func parserErrorLexeme(input []Lexeme, pos int) Lexeme {\n\tlexeme := parserDiagnosticLexeme(input, pos)\n\tlexeme.Token = TokenError\n\tlexeme.Text = \"\"\n\tlexeme.Channel = \"\"\n\tlexeme.End = lexeme.Start\n\tlexeme.EndLine = lexeme.StartLine\n\tlexeme.EndColumn = lexeme.StartColumn\n\treturn lexeme\n}\n\n")
+	b.WriteString("func newParseDiagnostic(state int, unexpected string, cursor *parserTokenCursor) ParseDiagnostic {\n\tlexeme := cursor.diagnosticLexeme()\n\texpected := append([]ExpectedToken(nil), parserExpected[state]...)\n\tfor index := range expected { expected[index].Members = append([]string(nil), expected[index].Members...) }\n\treturn ParseDiagnostic{State: state, Unexpected: unexpected, UnexpectedDisplay: parserUnexpectedDisplay(unexpected), Expected: expected, Start: lexeme.Start, End: lexeme.End, StartLine: lexeme.StartLine, StartColumn: lexeme.StartColumn, EndLine: lexeme.EndLine, EndColumn: lexeme.EndColumn}\n}\n\n")
+	b.WriteString("func parserErrorLexeme(cursor *parserTokenCursor) Lexeme {\n\tlexeme := cursor.diagnosticLexeme()\n\tlexeme.Token = TokenError\n\tlexeme.Text = \"\"\n\tlexeme.Channel = \"\"\n\tlexeme.End = lexeme.Start\n\tlexeme.EndLine = lexeme.StartLine\n\tlexeme.EndColumn = lexeme.StartColumn\n\treturn lexeme\n}\n\n")
 	b.WriteString("func parserUnexpectedDisplay(symbol string) string {\n\tif symbol == \"$\" { return \"end of input\" }\n\tif display, ok := parserTokenAliases[symbol]; ok { return display }\n\treturn symbol\n}\n\n")
 	b.WriteString("func terminalName(tok Token) string {\n\tswitch tok {\n\tcase TokenEOF:\n\t\treturn \"$\"\n")
 	for _, tok := range tokens {

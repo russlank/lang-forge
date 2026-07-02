@@ -269,9 +269,12 @@ Current Go generation writes:
 - `langforge.manifest.json`.
 
 The generated parser is a table-driven recognizer with an optional semantic
-reducer. Calling `Parse` validates the token stream. Calling `ParseValue` or
-`ParseWithReducer` also carries a semantic value stack and dispatches
-target-tagged rule actions to user code.
+reducer. Source APIs pull visible tokens from a scanner or token source.
+Calling `ParseFromSource` validates syntax, while `ParseValueFromSource` or
+`ParseWithReducerFromSource` also carries a semantic value stack and dispatches
+target-tagged rule actions to user code. Token collection APIs such as
+`Tokenize` and `Parse(tokens, ...)` remain available for debugging and
+compatibility.
 
 When the grammar contains a production such as `Statement : error Semi`, the
 same table contains a shift action for the reserved `error` terminal.

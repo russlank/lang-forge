@@ -36,17 +36,17 @@ func main() {
 }
 
 func runCalcDemo(name, source string) (string, error) {
-	tokens, err := calc.Tokenize(source)
-	if err != nil {
-		return "", fmt.Errorf("tokenize %s: %w", name, err)
-	}
-	value, err := calc.ParseWithReducer(tokens, calc.ReducerFunc(calcsem.Reduce))
+	value, err := calc.ParseWithReducerFromSource(calc.NewScanner(source), calc.ReducerFunc(calcsem.Reduce))
 	if err != nil {
 		return "", fmt.Errorf("parse %s: %w", name, err)
 	}
 	result, ok := value.(float64)
 	if !ok {
 		return "", fmt.Errorf("parse %s: semantic result has type %T", name, value)
+	}
+	tokens, err := calc.Tokenize(source)
+	if err != nil {
+		return "", fmt.Errorf("tokenize %s for report: %w", name, err)
 	}
 
 	var report bytes.Buffer

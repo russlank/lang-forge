@@ -4,7 +4,7 @@ Document id: `lang-forge-tool-improvement-roadmap-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-02`
 
 Owner: `Project maintainers`
 
@@ -719,6 +719,78 @@ largest parser state
 
 ---
 
+## 14.5. Prefer Streaming Token-Source Parser APIs
+
+### Problem
+
+Generated parsers historically used token collections as the most visible API
+shape:
+
+```text
+input/source
+  -> Tokenize all tokens
+  -> Parse token collection
+```
+
+That is useful for tests, debugging, examples, and token inspection, but it
+forces production callers to materialize every token before parsing. Larger
+inputs and long-running tools are better served by a lazy scanner-to-parser
+pipeline.
+
+### Recommendation
+
+Status: implemented for Go, C#, C, and C++ generated backends, with collection
+APIs retained as compatibility/debugging wrappers.
+
+Make the preferred generated parser path pull tokens directly from a scanner or
+token source:
+
+```text
+input/source
+  -> scanner.Next()
+  -> parser consumes token source
+  -> reducer/semantic actions run during parsing
+  -> final value / AST / result
+```
+
+Keep existing collection APIs such as `Tokenize`, `All`, and
+`Parse(tokens, ...)` as compatibility and debugging helpers. Where practical,
+those helpers should adapt their collection into the source-based parser core
+so parser behavior has one implementation path.
+
+Target direction:
+
+```text
+Go:      TokenSource interface with Next()
+C#:      ILexemeSource with synchronous Next/TryRead
+C:       lexeme-source struct with next callback and user context
+C++:     lightweight source abstraction or scanner/source parse overload
+```
+
+This is synchronous pull-based streaming, not async parsing. Do not introduce
+parser-core goroutines, channels, queues, tasks, threads, or producer/consumer
+machinery.
+
+### Acceptance Criteria
+
+- Generated Go, C#, C, and C++ parsers can parse directly from generated
+  scanners or token sources.
+- Collection APIs remain source-compatible and keep working for tests,
+  examples, and token inspection.
+- Existing parse behavior remains equivalent for valid input, lexical errors,
+  syntax errors, recovery diagnostics, reducer errors, hidden/skipped tokens,
+  explicit EOF handling, and normal EOF synthesis.
+- Examples show source parsing as the production path and collection parsing as
+  a debugging, teaching, or compatibility path.
+- Tests prove source and collection parity across EOF, scanner errors, syntax
+  errors, recovery, reducer failures, hidden/skipped tokens, source spans, and
+  reducer coverage validation.
+- Generated parser cores remain synchronous and pull-based, with static checks
+  against async, channel, queue, worker-thread, or producer/consumer parsing
+  machinery.
+
+---
+
 ## 15. Improve Runtime Packaging and Versioning
 
 ### Problem
@@ -1031,11 +1103,12 @@ Prioritizes:
 
 1. typed reducer helpers;
 2. named RHS labels;
-3. structured diagnostics;
-4. generated action manifest;
-5. `lang-forge fmt`;
-6. `lang-forge lint`;
-7. clean reusable examples.
+3. streaming token-source parser APIs;
+4. structured diagnostics;
+5. generated action manifest;
+6. `lang-forge fmt`;
+7. `lang-forge lint`;
+8. clean reusable examples.
 
 ### Phase 2: Improve Developer Workflow
 
@@ -1080,14 +1153,14 @@ If only ten improvements are chosen, prioritize:
 
 1. **Typed semantic values or typed reducer accessors.**
 2. **Named RHS symbols** instead of positional `ctx.Values[n]`.
-3. **Structured diagnostics** with source ranges and expected tokens.
-4. **`lang-forge lint`** for grammar quality.
-5. **`lang-forge fmt`** for grammar consistency.
-6. **Conflict explainer** with state, lookahead, and minimal repro.
-7. **Project templates via `lang-forge init`.**
-8. **CST plus visitor/listener generation.**
-9. **Source-only reusable examples with golden tests.**
-10. **IDE/editor roadmap: recovery, partial trees, metadata, and incremental parsing.**
+3. **Streaming token-source parser APIs** with collection wrappers preserved.
+4. **Structured diagnostics** with source ranges and expected tokens.
+5. **`lang-forge lint`** for grammar quality.
+6. **`lang-forge fmt`** for grammar consistency.
+7. **Conflict explainer** with state, lookahead, and minimal repro.
+8. **Project templates via `lang-forge init`.**
+9. **CST plus visitor/listener generation.**
+10. **Source-only reusable examples with golden tests.**
 
 ---
 
@@ -1118,15 +1191,24 @@ NodeArg
 
 Introduce a target-neutral diagnostic shape.
 
-### Task 4: Grammar Linter
+### Task 4: Token-Source Parser Runtime
+
+Introduce generated scanner/token-source parser APIs for Go, C#, C, and C++.
+Keep collection parsing as wrappers for compatibility and debugging.
+
+Status: implemented. Follow-up work should focus on additional examples,
+performance measurements for very large inputs, and any target-specific naming
+polish discovered by downstream projects.
+
+### Task 5: Grammar Linter
 
 Add warnings for unused tokens, unreachable rules, shadowed lexer rules, duplicate actions, and nullable cycles.
 
-### Task 5: Conflict Explainer
+### Task 6: Conflict Explainer
 
 Produce human-readable conflict reports and minimal examples.
 
-### Task 6: Template Scaffolding
+### Task 7: Template Scaffolding
 
 Add:
 

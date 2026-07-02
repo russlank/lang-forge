@@ -147,7 +147,7 @@ Choose the smallest wrapper that matches your use case.
 
 | Style | Good for | Handwritten shape |
 |---|---|---|
-| Demo or command | Examples, scripts, learning | `main` calls generated `Tokenize`, generated parse, reducer map, then prints output |
+| Demo or command | Examples, scripts, learning | `main` calls a generated scanner/source parser API with a reducer map, then prints output |
 | Reusable library | DSL embedded in a larger app | Public facade hides generated package and returns domain types |
 | Compiler pipeline | Real compiler/interpreter | Facade returns AST, then semantic validation, IR lowering, and execution happen in separate modules |
 | Service with DI | C# applications, hosted services, tests | Interfaces for parser and semantics; generated code remains an implementation detail |
@@ -307,11 +307,10 @@ func New() *Parser {
 }
 
 func (p *Parser) Eval(source string) (float64, error) {
-	tokens, err := calc.Tokenize(source)
-	if err != nil {
-		return 0, err
-	}
-	value, err := calc.ParseWithReducer(tokens, calc.ReducerFunc(semantics.Reduce))
+	value, err := calc.ParseWithReducerFromSource(
+		calc.NewScanner(source),
+		calc.ReducerFunc(semantics.Reduce),
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -327,8 +326,10 @@ when the generated package does not exist yet.
 
 Generated C# code exposes:
 
-- `Scanner.Tokenize(source)`;
-- `Parser.ParseWithReducer(tokens, reducerMap)`;
+- `new Scanner(source)` as an `ILexemeSource`;
+- `Parser.ParseWithReducerFromSource(source, reducerMap)`;
+- `Scanner.Tokenize(source)` and `Parser.ParseWithReducer(tokens, reducerMap)`
+  as compatibility/debugging helpers;
 - `SemanticAction` enum values;
 - `ReducerMap`;
 - `SemanticReducerContexts.Typed<ActionName>` adapter methods;
@@ -396,8 +397,9 @@ public sealed class CalcParser : ICalcParser
 
     public double Evaluate(string source)
     {
-        var tokens = Scanner.Tokenize(source);
-        return (double)Parser.ParseWithReducer(tokens, semantics.CreateReducers())!;
+        return (double)Parser.ParseWithReducerFromSource(
+            new Scanner(source),
+            semantics.CreateReducers())!;
     }
 }
 ```
@@ -440,7 +442,11 @@ the generated API includes names such as:
 
 - `calc_tokenize`;
 - `calc_parse_value`;
+- `calc_parse_value_source`;
 - `calc_parse_value_typed`;
+- `calc_parse_value_source_typed`;
+- `calc_lexeme_source`;
+- `calc_scanner_source_next`;
 - `calc_reduction`;
 - `calc_typed_reducer`;
 - `calc_typed_reducer_from_boxed`;
@@ -508,8 +514,8 @@ Then write a small adapter function:
 int calc_eval_text(const char *source, double *out, char *message, size_t message_size) {
     calc_context ctx = {app_arena_create()};
     calc_error error = {0};
-    calc_lexeme *tokens = NULL;
-    size_t count = 0;
+    calc_scanner scanner;
+    calc_lexeme_source source_reader;
     calc_value value = NULL;
 
     if (ctx.arena == NULL) {
@@ -517,23 +523,19 @@ int calc_eval_text(const char *source, double *out, char *message, size_t messag
         return 0;
     }
 
-    if (!calc_tokenize(source, &tokens, &count, &error)) {
-        snprintf(message, message_size, "scan failed: %s", error.message);
-        app_arena_destroy(ctx.arena);
-        return 0;
-    }
+    calc_scanner_init(&scanner, source);
+    source_reader.user = &scanner;
+    source_reader.next = calc_scanner_source_next;
 
     calc_boxed_typed_reducer boxed = {0};
     calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, &ctx);
-    if (!calc_parse_value_typed(tokens, count, &typed, &value, &error)) {
-        calc_free_lexemes(tokens);
+    if (!calc_parse_value_source_typed(&source_reader, &typed, &value, &error)) {
         snprintf(message, message_size, "parse failed: %s", error.message);
         app_arena_destroy(ctx.arena);
         return 0;
     }
 
     *out = as_number(value);
-    calc_free_lexemes(tokens);
     app_arena_destroy(ctx.arena);
     return 1;
 }
@@ -547,9 +549,10 @@ through the generated `void *user` argument.
 
 Generated C++ output exposes:
 
-- `tokenize(source)`;
-- `parse(tokens)`;
-- `parse_value(tokens, reducerMap)`;
+- `Scanner` as a `LexemeSource`;
+- `parse(source)` and `parse_value(source, reducerMap)`;
+- `tokenize(source)`, `parse(tokens)`, and `parse_value(tokens, reducerMap)`
+  as compatibility/debugging helpers;
 - `SemanticAction` enum class values;
 - `ReducerMap`;
 - `typed_reducer_map_from_boxed`;
@@ -607,8 +610,8 @@ public:
         : reducers_(std::move(reducers)) {}
 
     double evaluate(std::string_view source) const {
-        auto tokens = gen::tokenize(source);
-        auto value = gen::parse_value(tokens, reducers_);
+        gen::Scanner scanner(source);
+        auto value = gen::parse_value(scanner, reducers_);
         return std::any_cast<double>(value);
     }
 
@@ -649,7 +652,7 @@ For a command-line tool, it is acceptable for `main` to call generated APIs
 directly:
 
 ```text
-read file -> Scanner.Tokenize -> Parser.ParseWithReducer -> print report
+read file -> Scanner.Next -> Parser.ParseWithReducerFromSource -> print report
 ```
 
 For a library, keep generated types behind a stable boundary:
@@ -687,11 +690,10 @@ type QueryParser struct{}
 type PolicyParser struct{}
 
 func (QueryParser) Parse(source string) (*query.Model, error) {
-	tokens, err := querygen.Tokenize(source)
-	if err != nil {
-		return nil, err
-	}
-	value, err := querygen.ParseWithReducer(tokens, querygen.ReducerFunc(querysem.Reduce))
+	value, err := querygen.ParseWithReducerFromSource(
+		querygen.NewScanner(source),
+		querygen.ReducerFunc(querysem.Reduce),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -699,11 +701,10 @@ func (QueryParser) Parse(source string) (*query.Model, error) {
 }
 
 func (PolicyParser) Parse(source string) (*policy.Model, error) {
-	tokens, err := policygen.Tokenize(source)
-	if err != nil {
-		return nil, err
-	}
-	value, err := policygen.ParseWithReducer(tokens, policygen.ReducerFunc(policysem.Reduce))
+	value, err := policygen.ParseWithReducerFromSource(
+		policygen.NewScanner(source),
+		policygen.ReducerFunc(policysem.Reduce),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -740,11 +741,11 @@ Use distinct prefixes:
 Then generated names stay separate:
 
 ```c
-query_tokenize(...);
-query_parse_value(...);
+query_scanner_source_next(...);
+query_parse_value_source(...);
 
-policy_tokenize(...);
-policy_parse_value(...);
+policy_scanner_source_next(...);
+policy_parse_value_source(...);
 ```
 
 ### C++

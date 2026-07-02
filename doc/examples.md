@@ -84,9 +84,11 @@ make -C examples/go/calc run
 ```
 
 The runnable demo reads [examples/go/calc/input.calc](../examples/go/calc/input.calc),
-regenerates the scanner/parser, builds `dist/calc-demo`, tokenizes, parses,
-evaluates the expression through generated reduction hooks, and writes the same
-report to `examples/go/calc/dist/calc-demo.log`.
+regenerates the scanner/parser, builds `dist/calc-demo`, parses through the
+generated scanner token source, evaluates the expression through generated
+reduction hooks, and writes the same report to
+`examples/go/calc/dist/calc-demo.log`. It also tokenizes afterward to print a
+teaching token stream in the report.
 
 The calc example also demonstrates reducer-mode handwritten package references:
 `calc.lf` declares a `%semantic go import` and the demo wires that package as

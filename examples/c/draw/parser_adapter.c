@@ -439,32 +439,30 @@ static draw_value draw_reduce(const draw_reduction *ctx, void *user, draw_error 
     }
 }
 
-int draw_parse_source_with_mode(draw_context *ctx, const char *source, draw_reducer_mode mode, draw_program **out, char *message, size_t message_size) {
+int draw_compile_source_with_mode(draw_context *ctx, const char *source, draw_reducer_mode mode, draw_program **out, char *message, size_t message_size) {
     draw_error error;
-    draw_lexeme *tokens = NULL;
+    draw_scanner scanner;
+    draw_lexeme_source token_source;
     draw_value value = NULL;
-    size_t count = 0;
     int parsed = 0;
     error.message[0] = '\0';
-    if (!draw_tokenize(source, &tokens, &count, &error)) {
-        return demo_set_error(message, message_size, "scan failed: %s", error.message);
-    }
+    draw_scanner_init(&scanner, source);
+    token_source.user = &scanner;
+    token_source.next = draw_scanner_source_next;
     if (mode == DRAW_REDUCER_TYPED) {
         draw_boxed_typed_reducer boxed = {0};
         draw_typed_reducer typed = draw_typed_reducer_from_boxed(&boxed, draw_reduce, ctx);
-        parsed = draw_parse_value_typed(tokens, count, &typed, &value, &error);
+        parsed = draw_parse_value_source_typed(&token_source, &typed, &value, &error);
     } else {
-        parsed = draw_parse_value(tokens, count, draw_reduce, ctx, &value, &error);
+        parsed = draw_parse_value_source(&token_source, draw_reduce, ctx, &value, &error);
     }
     if (!parsed) {
-        draw_free_lexemes(tokens);
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }
-    draw_free_lexemes(tokens);
     *out = (draw_program *)value;
     return 1;
 }
 
-int draw_parse_source(draw_context *ctx, const char *source, draw_program **out, char *message, size_t message_size) {
-    return draw_parse_source_with_mode(ctx, source, DRAW_REDUCER_TYPED, out, message, message_size);
+int draw_compile_source(draw_context *ctx, const char *source, draw_program **out, char *message, size_t message_size) {
+    return draw_compile_source_with_mode(ctx, source, DRAW_REDUCER_TYPED, out, message, message_size);
 }

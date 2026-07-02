@@ -239,9 +239,24 @@ derives a safe package name from the output directory.
 
 Generated Go scanners return visible tokens by default. Hidden-channel tokens
 can be included with `Scanner.IncludeHidden(true)`, but the generated parser
-expects visible grammar tokens. The parser accepts token slices from
-`Tokenize`, and also accepts one explicit trailing `TokenEOF` for callers that
-prefer EOF-marked streams.
+expects visible grammar tokens. The preferred production path is streaming:
+construct a scanner and pass it directly to `ParseFromSource`,
+`ParseValueFromSource`, `ParseWithReducerFromSource`, or
+`ParseRecoveringFromSource`.
+
+```go
+value, err := calc.ParseWithReducerFromSource(
+	calc.NewScanner(source),
+	calc.ReducerFunc(calcsem.Reduce),
+)
+```
+
+`Tokenize`, `Scanner.All`, and token-slice parse APIs remain supported for
+tests, debugging, and reports that need to display the token stream. Those
+collection APIs are convenience wrappers around the same parser behavior where
+practical, and they still accept one explicit trailing `TokenEOF` for callers
+that prefer EOF-marked streams. Streaming here means synchronous pull-based
+parsing; it does not introduce goroutines, channels, async tasks, or queues.
 
 Generated parsers can be used in two semantic styles:
 
@@ -260,6 +275,14 @@ flag. The established `Parse` and `ParseValue` entry points still fail when
 any syntax diagnostic is produced. Recovery is enabled by grammar alternatives
 such as `Statement : error Semi`; see
 [Parser Error Recovery](parser-error-recovery.md).
+
+Other generated targets expose the same idea with their language conventions:
+
+| Target | Preferred source API | Compatibility API |
+| --- | --- | --- |
+| C# | `Parser.ParseWithReducerFromSource(new Scanner(source), reducers)` | `Scanner.Tokenize(source)` plus `Parser.ParseWithReducer(tokens, reducers)` |
+| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_source` or `*_parse_value_source_typed` | `*_tokenize` plus `*_parse_value` or `*_parse_value_typed` |
+| C++ | construct `Generated::Scanner scanner(sourceText)` and call `parse_value(scanner, reducers)` | `tokenize(sourceText)` plus `parse_value(tokens, reducers)` |
 
 ## Generate C# Output
 

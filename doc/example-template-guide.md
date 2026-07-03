@@ -15,16 +15,26 @@ LangForge has two kinds of examples:
   and generated-on-demand output.
 
 The template folders live under [examples/templates](../examples/templates).
-Each target currently has a `mini-compiler` template:
+Each target currently has two template families:
 
 ```text
 examples/templates/go/mini-compiler
+examples/templates/go/library-dsl
 examples/templates/csharp/mini-compiler
+examples/templates/csharp/library-dsl
 examples/templates/c/mini-compiler
+examples/templates/c/library-dsl
 examples/templates/cpp/mini-compiler
+examples/templates/cpp/library-dsl
 ```
 
-Each template accepts the same tiny source language:
+Choose `mini-compiler` when you want a compact end-to-end command-line demo
+that parses, builds an AST, lowers to a tiny stack machine, and prints a
+report. Choose `library-dsl` when you want the recommended starting shape for a
+real application: generated parser details hidden behind a domain parser
+facade, explicit diagnostics, reusable model types, and a thin demo entrypoint.
+
+The `mini-compiler` templates accept the same tiny source language:
 
 ```text
 print 1 + 2;
@@ -40,25 +50,55 @@ LangForge style rather than a legacy boxed-only style. Each grammar declares
 target-specific semantic types, labels meaningful RHS symbols, and lets
 generated typed reducer contexts validate the reducer boundary.
 
+The `library-dsl` templates accept configuration-like source:
+
+```text
+set retries = 3;
+set title = "nightly";
+set owner = admin;
+enable audit;
+```
+
+They split handwritten code by responsibility:
+
+| Target | Domain model | Semantics | Parser facade | Diagnostics | Entrypoint |
+|---|---|---|---|---|---|
+| Go | `model` package | reducer map in `parser` package | `parser.Parser` | `parser.FormatError` | `cmd/library-dsl` |
+| C# | `Ast/` | `Semantics/ReducerFactory.cs` | `Parsing/ILibraryDslParser` and `LibraryDslParser` | `Parsing/DiagnosticFormatter.cs` | `Program.cs` |
+| C | `ast.h`/`.c` | `semantics.h`/`.c` | `parser_facade.h`/`.c` | `diagnostics.h`/`.c` | `main.c` |
+| C++ | `include/library_dsl/ast.hpp` | `src/semantics.*` | `ParserFacade` | `src/diagnostics.*` | `src/main.cpp` |
+
+The library templates are intentionally small, but they teach the boundary a
+larger application usually wants: call your own parser facade, receive your own
+AST/domain model, and keep generated packages/namespaces/prefixes out of most
+application code.
+
 ## Start From A Template
 
 Run a template before editing:
 
 ```sh
 make -C examples/templates/go/mini-compiler test
+make -C examples/templates/go/library-dsl test
 make -C examples/templates/csharp/mini-compiler test
+make -C examples/templates/csharp/library-dsl test
 make -C examples/templates/c/mini-compiler test
+make -C examples/templates/c/library-dsl test
 make -C examples/templates/cpp/mini-compiler test
+make -C examples/templates/cpp/library-dsl test
 ```
 
 Copy the folder for the target language you want, then rename the folder, the
 package or namespace directive in the `.lf` file, the Makefile binary/project
-name, and the handwritten AST/reducer/compiler names.
+name, and the handwritten AST/reducer/facade names. For an application library,
+start from `library-dsl`; for a compact compiler pipeline, start from
+`mini-compiler`.
 
 Use a standalone LangForge binary by overriding `LANG_FORGE`:
 
 ```sh
 make -C examples/templates/go/mini-compiler LANG_FORGE=../../../../dist/lang-forge test
+make -C examples/templates/go/library-dsl LANG_FORGE=../../../../dist/lang-forge test
 ```
 
 ## Generated Boundary
@@ -66,6 +106,9 @@ make -C examples/templates/go/mini-compiler LANG_FORGE=../../../../dist/lang-for
 Generated files are ignored by Git:
 
 - Go, C, and C++ templates write `generated/`;
+- the C++ `library-dsl` template writes `src/generated/` so public headers and
+  generated headers are both reachable from a conventional `include`/`src`
+  layout;
 - C# templates write `Generated/`;
 - all templates write local runtime output under `dist/`.
 
@@ -146,6 +189,47 @@ integer literal is lexically valid, but the `number` reducer rejects it as a
 semantic error. That is the pattern to copy for domain-level failures such as
 unknown symbols, invalid ranges, duplicate declarations, or unsupported target
 operations.
+
+## Library Facade Mapping
+
+The `library-dsl` grammar has rules like:
+
+```lf
+Entry : Set name=Ident Assign value=Value Semi
+          {go: entry.set}
+      | Enable name=Ident Semi
+          {go: entry.enable}
+      ;
+Value : token=Number
+          {go: value.number}
+      | token=String
+          {go: value.string}
+      | token=Ident
+          {go: value.ident}
+      ;
+```
+
+Each target implements the same semantic contract with target-native names:
+
+| Grammar piece | Go | C# | C | C++ |
+|---|---|---|---|---|
+| `name=Ident` | `ctx.Name` | `ctx.Name` | `ctx->name` | `ctx.name` |
+| `value=Value` | `ctx.Value` | `ctx.Value` | `ctx->value` | `ctx.value` |
+| `{target: entry.set}` | `SemanticActionEntrySet` | `SemanticAction.EntrySet` | `LIBRARY_DSL_ACTION_ENTRY_SET` | `SemanticAction::EntrySet` |
+| `{target: value.number}` | `TypedValueNumber` | `TypedValueNumber` | `value_number` handler slot | `typed_value_number` |
+
+The parser facades then convert the generated final value into the domain root:
+
+```text
+generated scanner/source
+  -> generated parser with typed reducer map
+  -> model.Document / Ast.Document / dsl_document / library_dsl::Document
+  -> application API result
+```
+
+Use this pattern when the parser is part of a larger application. Keep
+compatibility token-list parsing only for tests, debugging token streams, or
+adapters that already own a token collection.
 
 ## Spec-To-Code Checklist
 
@@ -236,8 +320,8 @@ make examples-test
 `examples-cleanliness` prevents generated or build artifacts from becoming
 tracked. `examples-parity` checks cross-target calc, DataKeeper, DRAW, and
 vehicle-report grammar parity, then checks `langforge.actions.json` contract
-parity for those examples plus parser-recovery and the mini-compiler templates.
-`examples-testdata` checks shared fixtures and goldens. `examples-templates`
-builds and tests every mini-compiler template.
+parity for those examples plus parser-recovery, mini-compiler templates, and
+library-dsl templates. `examples-testdata` checks shared fixtures and goldens.
+`examples-templates` builds and tests every maintained template family.
 `examples-test` includes all of those checks before running the richer example
 projects.

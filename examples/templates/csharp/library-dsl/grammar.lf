@@ -1,0 +1,51 @@
+%target csharp
+%package LangForge.Examples.Templates.LibraryDsl.Generated
+%semantic csharp mode reducer
+%semantic csharp type Document global::LangForge.Examples.Templates.LibraryDsl.Ast.Document
+%semantic csharp type Entries global::System.Collections.Generic.List<global::LangForge.Examples.Templates.LibraryDsl.Ast.Entry>
+%semantic csharp type EntriesTail global::System.Collections.Generic.List<global::LangForge.Examples.Templates.LibraryDsl.Ast.Entry>
+%semantic csharp type Entry global::LangForge.Examples.Templates.LibraryDsl.Ast.Entry
+%semantic csharp type Value global::LangForge.Examples.Templates.LibraryDsl.Ast.Value
+%start Document
+%token Set Enable Ident Number String Assign Semi
+
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+STRING = \" ( [1-33] | [35-91] | [93-127] | \\ [1-127] )* \";
+
+"set"    => token(Set);
+"enable" => token(Enable);
+"="      => token(Assign);
+";"      => token(Semi);
+STRING   => token(String);
+NUMBER   => token(Number);
+IDENT    => token(Ident);
+[1-32]+  => skip;
+
+%% parser
+Document : entries=Entries
+             {csharp: document}
+         ;
+Entries : head=Entry tail=EntriesTail
+            {csharp: entries}
+        | %empty
+            {csharp: entries.empty}
+        ;
+EntriesTail : head=Entry tail=EntriesTail
+                {csharp: entries.tail.more}
+            | %empty
+                {csharp: entries.tail.empty}
+            ;
+Entry : Set name=Ident Assign value=Value Semi
+          {csharp: entry.set}
+      | Enable name=Ident Semi
+          {csharp: entry.enable}
+      ;
+Value : token=Number
+          {csharp: value.number}
+      | token=String
+          {csharp: value.string}
+      | token=Ident
+          {csharp: value.ident}
+      ;

@@ -9,8 +9,13 @@ copyable shape of a LangForge project:
    ordinary source files;
 4. test with source inputs rather than checked-in generated artifacts.
 
-The `mini-compiler` template exists for Go, C#, C, and C++. Each target accepts
-the same tiny language:
+Two template families exist for Go, C#, C, and C++:
+
+- `mini-compiler` is a compact command-line compiler pipeline;
+- `library-dsl` is the recommended real-application starting point, with
+  generated parser details hidden behind a stable domain API.
+
+The `mini-compiler` template accepts the same tiny language:
 
 ```text
 print 1 + 2;
@@ -20,6 +25,18 @@ print 40 + 2;
 The generated parser recognizes the syntax, the reducer builds an AST, the
 compiler lowers it to stack instructions, and the mock runtime prints the
 results.
+
+The `library-dsl` template accepts configuration-like source:
+
+```text
+set retries = 3;
+set title = "nightly";
+enable audit;
+```
+
+It splits the code into domain model, semantic reducer, parser facade,
+diagnostics, thin demo entrypoint, and tests or smoke assertions. Use it when
+you want a copyable shape for a parser embedded in a larger application.
 
 Each template uses the current recommended LangForge reducer style:
 

@@ -1,0 +1,51 @@
+%target cpp
+%package LangForge::Examples::Templates::LibraryDsl::Generated
+%semantic cpp mode reducer
+%semantic cpp type Document ::library_dsl::Document
+%semantic cpp type Entries std::vector<::library_dsl::Entry>
+%semantic cpp type EntriesTail std::vector<::library_dsl::Entry>
+%semantic cpp type Entry ::library_dsl::Entry
+%semantic cpp type Value ::library_dsl::Value
+%start Document
+%token Set Enable Ident Number String Assign Semi
+
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+STRING = \" ( [1-33] | [35-91] | [93-127] | \\ [1-127] )* \";
+
+"set"    => token(Set);
+"enable" => token(Enable);
+"="      => token(Assign);
+";"      => token(Semi);
+STRING   => token(String);
+NUMBER   => token(Number);
+IDENT    => token(Ident);
+[1-32]+  => skip;
+
+%% parser
+Document : entries=Entries
+             {cpp: document}
+         ;
+Entries : head=Entry tail=EntriesTail
+            {cpp: entries}
+        | %empty
+            {cpp: entries.empty}
+        ;
+EntriesTail : head=Entry tail=EntriesTail
+                {cpp: entries.tail.more}
+            | %empty
+                {cpp: entries.tail.empty}
+            ;
+Entry : Set name=Ident Assign value=Value Semi
+          {cpp: entry.set}
+      | Enable name=Ident Semi
+          {cpp: entry.enable}
+      ;
+Value : token=Number
+          {cpp: value.number}
+      | token=String
+          {cpp: value.string}
+      | token=Ident
+          {cpp: value.ident}
+      ;

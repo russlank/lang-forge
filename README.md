@@ -47,8 +47,8 @@ Current implementation status:
   recovery APIs;
 - language-grouped examples under `examples/go`, `examples/csharp`,
   `examples/c`, and `examples/cpp`;
-- copyable mini-compiler templates under `examples/templates` for Go, C#, C,
-  and C++;
+- copyable mini-compiler and library-style DSL templates under
+  `examples/templates` for Go, C#, C, and C++;
 - runnable calc, DataKeeper, DRAW, and vehicle-report examples for Go, C#,
   C, and C++;
 - Go examples with generated parser reduction hooks, AST construction,

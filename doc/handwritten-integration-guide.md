@@ -850,5 +850,6 @@ usability step is to scaffold them from maintained templates:
 - generated or template-backed tests for reducer coverage and regeneration
   hygiene.
 
-Until those features exist, use the mini-compiler templates and the examples as
-copyable starting points.
+Until those features exist, use the `library-dsl` templates for reusable
+parser-facade architecture, the `mini-compiler` templates for compact compiler
+pipelines, and the larger examples as copyable starting points.

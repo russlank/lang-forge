@@ -268,21 +268,23 @@ The examples are meant to be read in increasing complexity:
 | Step | Example | What it teaches |
 |---|---|---|
 | 0 | `examples/templates/*/mini-compiler` | Copyable scanner/parser/compiler starter shape with AST, reducer, stack-code lowering, runtime, diagnostics, and tests |
-| 1 | `examples/go/calc` | Small combined `.lf`, generated scanner/parser, reducer-backed expression value, simple CLI report |
-| 2 | `examples/{go,csharp,c,cpp}/parser-recovery` | Reserved `error` productions, synchronization, expected-token aliases, multiple diagnostics, result cleanup/inspection, and progress guarantees |
-| 3 | `examples/parser-algorithms` | LR parser algorithm differences and expected SLR conflict |
-| 4 | `examples/go/datakeeper` | DSL syntax, generated reduction hooks, AST adapter, stack-machine lowering, mock execution |
-| 5 | `examples/go/draw` | DSL syntax, generated reduction hooks, interpreter, reusable blocks, rendered output |
-| 6 | `examples/go/vehicle-report` | Exercise-style Flex/Bison migration shape, generated reductions, AST, XML-like report |
-| 7 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
-| 8 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
-| 9 | `examples/cpp/*` | The same example set generated for C++17 with `enum class` actions, `ReducerMap`, and static table lookup |
-| 10 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
+| 1 | `examples/templates/*/library-dsl` | Reusable library architecture with domain model, typed reducer, parser facade, diagnostics formatter, thin demo, and smoke tests |
+| 2 | `examples/go/calc` | Small combined `.lf`, generated scanner/parser, reducer-backed expression value, simple CLI report |
+| 3 | `examples/{go,csharp,c,cpp}/parser-recovery` | Reserved `error` productions, synchronization, expected-token aliases, multiple diagnostics, result cleanup/inspection, and progress guarantees |
+| 4 | `examples/parser-algorithms` | LR parser algorithm differences and expected SLR conflict |
+| 5 | `examples/go/datakeeper` | DSL syntax, generated reduction hooks, AST adapter, stack-machine lowering, mock execution |
+| 6 | `examples/go/draw` | DSL syntax, generated reduction hooks, interpreter, reusable blocks, rendered output |
+| 7 | `examples/go/vehicle-report` | Exercise-style Flex/Bison migration shape, generated reductions, AST, XML-like report |
+| 8 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
+| 9 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
+| 10 | `examples/cpp/*` | The same example set generated for C++17 with `enum class` actions, `ReducerMap`, and static table lookup |
+| 11 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
 
 For starter-project guidance rather than a demo tour, read
 [Example Template Guide](example-template-guide.md). It explains the
 `examples/templates` folders, shared fixtures under `examples/testdata`, typed
-reducer helpers, and reusable fragments under `examples/mk`.
+reducer helpers, parser facade templates, and reusable fragments under
+`examples/mk`.
 
 See [Learning Path](learning-path.md) for the guided route through these
 examples.

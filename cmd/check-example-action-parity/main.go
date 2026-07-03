@@ -104,7 +104,7 @@ type contractDiff struct {
 }
 
 func main() {
-	familyFlag := flag.String("family", "all", "example family to check: all, calc, datakeeper, draw, vehicle-report, parser-recovery, or mini-compiler")
+	familyFlag := flag.String("family", "all", "example family to check: all, calc, datakeeper, draw, vehicle-report, parser-recovery, mini-compiler, or library-dsl")
 	allowlistPath := flag.String("allowlist", "examples/manifest-parity.allowlist.json", "JSON allowlist for intentional target-specific manifest differences")
 	flag.Parse()
 
@@ -186,6 +186,15 @@ func exampleFamilies() []exampleFamily {
 				{Target: "csharp", Path: "examples/templates/csharp/mini-compiler/mini.lf"},
 				{Target: "c", Path: "examples/templates/c/mini-compiler/mini.lf"},
 				{Target: "cpp", Path: "examples/templates/cpp/mini-compiler/mini.lf"},
+			},
+		},
+		{
+			Name: "library-dsl",
+			Specs: []targetSpec{
+				{Target: "go", Path: "examples/templates/go/library-dsl/grammar.lf"},
+				{Target: "csharp", Path: "examples/templates/csharp/library-dsl/grammar.lf"},
+				{Target: "c", Path: "examples/templates/c/library-dsl/grammar.lf"},
+				{Target: "cpp", Path: "examples/templates/cpp/library-dsl/grammar.lf"},
 			},
 		},
 	}

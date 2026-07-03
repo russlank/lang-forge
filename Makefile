@@ -125,9 +125,13 @@ examples-generate:
 	$(MAKE) -C examples/cpp/parser-recovery GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) generate
+	$(MAKE) -C examples/templates/go/library-dsl GO=$(GO) generate
 	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/templates/csharp/library-dsl GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) generate
+	$(MAKE) -C examples/templates/c/library-dsl GO=$(GO) generate
 	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/templates/cpp/library-dsl GO=$(GO) CXX=$(CXX) generate
 
 examples-run:
 	$(MAKE) -C examples/go/calc GO=$(GO) run
@@ -151,9 +155,13 @@ examples-run:
 	$(MAKE) -C examples/cpp/parser-recovery GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) run
+	$(MAKE) -C examples/templates/go/library-dsl GO=$(GO) run
 	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) run
+	$(MAKE) -C examples/templates/csharp/library-dsl GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) run
+	$(MAKE) -C examples/templates/c/library-dsl GO=$(GO) run
 	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) run
+	$(MAKE) -C examples/templates/cpp/library-dsl GO=$(GO) CXX=$(CXX) run
 
 examples-test:
 	$(MAKE) examples-cleanliness
@@ -201,9 +209,13 @@ examples-testdata:
 
 examples-templates:
 	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) test
+	$(MAKE) -C examples/templates/go/library-dsl GO=$(GO) test
 	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) test
+	$(MAKE) -C examples/templates/csharp/library-dsl GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/templates/c/mini-compiler GO=$(GO) test
+	$(MAKE) -C examples/templates/c/library-dsl GO=$(GO) test
 	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) test
+	$(MAKE) -C examples/templates/cpp/library-dsl GO=$(GO) CXX=$(CXX) test
 
 examples-clean:
 	$(MAKE) -C examples/go/calc clean
@@ -227,9 +239,13 @@ examples-clean:
 	$(MAKE) -C examples/cpp/parser-recovery clean
 	$(MAKE) -C examples/cpp/vehicle-report clean
 	$(MAKE) -C examples/templates/go/mini-compiler clean
+	$(MAKE) -C examples/templates/go/library-dsl clean
 	$(MAKE) -C examples/templates/csharp/mini-compiler clean
+	$(MAKE) -C examples/templates/csharp/library-dsl clean
 	$(MAKE) -C examples/templates/c/mini-compiler clean
+	$(MAKE) -C examples/templates/c/library-dsl clean
 	$(MAKE) -C examples/templates/cpp/mini-compiler clean
+	$(MAKE) -C examples/templates/cpp/library-dsl clean
 
 docker-build:
 	docker build \

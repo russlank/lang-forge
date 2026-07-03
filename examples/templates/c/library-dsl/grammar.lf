@@ -1,0 +1,51 @@
+%target c
+%package library_dsl
+%semantic c mode reducer
+%semantic c type Document dsl_document *
+%semantic c type Entries dsl_entry_list *
+%semantic c type EntriesTail dsl_entry_list *
+%semantic c type Entry dsl_entry *
+%semantic c type Value dsl_value *
+%start Document
+%token Set Enable Ident Number String Assign Semi
+
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+STRING = \" ( [1-33] | [35-91] | [93-127] | \\ [1-127] )* \";
+
+"set"    => token(Set);
+"enable" => token(Enable);
+"="      => token(Assign);
+";"      => token(Semi);
+STRING   => token(String);
+NUMBER   => token(Number);
+IDENT    => token(Ident);
+[1-32]+  => skip;
+
+%% parser
+Document : entries=Entries
+             {c: document}
+         ;
+Entries : head=Entry tail=EntriesTail
+            {c: entries}
+        | %empty
+            {c: entries.empty}
+        ;
+EntriesTail : head=Entry tail=EntriesTail
+                {c: entries.tail.more}
+            | %empty
+                {c: entries.tail.empty}
+            ;
+Entry : Set name=Ident Assign value=Value Semi
+          {c: entry.set}
+      | Enable name=Ident Semi
+          {c: entry.enable}
+      ;
+Value : token=Number
+          {c: value.number}
+      | token=String
+          {c: value.string}
+      | token=Ident
+          {c: value.ident}
+      ;

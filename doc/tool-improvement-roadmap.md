@@ -156,10 +156,10 @@ APIs for gradual migration.
 - Portable action labels are preserved in manifests and runtime action names;
   C and C++ derive deterministic target-safe identifiers such as
   `PREFIX_ACTION_RUN_OBJECTS_JOB` and `SemanticAction::RunObjectsJob`.
-- C and C++ calc plus mini-compiler templates demonstrate direct typed
-  reducers; boxed-to-typed adapters remain available for migration, and
-  `--boxed` stays as an explicit compatibility/debug path where examples expose
-  it.
+- C and C++ calc plus the maintained mini-compiler and library-dsl templates
+  demonstrate direct typed reducers; boxed-to-typed adapters remain available
+  for migration, and `--boxed` stays as an explicit compatibility/debug path
+  where examples expose it.
 - Backward compatibility with boxed reducer mode is preserved.
 - The CLI now has optional stderr-only verbosity for `validate`, `inspect`, and
   `generate`: level 1 reports major build stages, level 2 reports lexer,
@@ -558,8 +558,9 @@ Potential lint warnings:
 ## 11. Add Project Scaffolding
 
 Current status: examples already provide source-clean starter material under
-`examples/templates/{go,csharp,c,cpp}/mini-compiler`. The next usability step
-is a CLI bootstrap command that copies and rewrites those templates into a new
+`examples/templates/{go,csharp,c,cpp}/mini-compiler` and
+`examples/templates/{go,csharp,c,cpp}/library-dsl`. The next usability step is
+a CLI bootstrap command that copies and rewrites those templates into a new
 project so developers do not have to assemble the generated/handwritten
 boundary by hand. This is tracked internally as `W-071` and `LF-128`.
 
@@ -593,6 +594,7 @@ calc
 expression
 config-file
 mini-compiler
+library-dsl
 tree-walker
 repl
 language-server

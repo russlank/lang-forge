@@ -57,6 +57,11 @@ The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/cpp/mini-compiler`.
 
+For a modern C++ starter with public headers under `include/`, generated output
+isolated under `generated/`, a domain-level parser facade, direct typed reducer
+handlers, intentional `std::unique_ptr`/`std::variant` ownership, and CMake
+integration, use `examples/templates/cpp/layered-compiler`.
+
 For the recommended handwritten C++ reducer map, parser facade, semantic
 policy/interface, reusable library, and multi-parser shapes, read
 [Handwritten Integration Guide](../../doc/handwritten-integration-guide.md).

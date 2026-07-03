@@ -9,11 +9,20 @@ copyable shape of a LangForge project:
    ordinary source files;
 4. test with source inputs rather than checked-in generated artifacts.
 
-Two template families exist for Go, C#, C, and C++:
+Two cross-target template families exist for Go, C#, C, and C++:
 
 - `mini-compiler` is a compact command-line compiler pipeline;
 - `library-dsl` is the recommended real-application starting point, with
   generated parser details hidden behind a stable domain API.
+
+C# and C++ also have `layered-compiler` starters. The C# version demonstrates
+`Ast/`, `Semantics/`, `Parsing/`, `Generated/`, a public
+`IMiniCompilerParser`, domain `ParseResult<T>`, and dependency-injection
+friendly semantic policy injection. The C++ version is a larger modern C++17
+starter that separates public headers from implementation, keeps generated
+output isolated, returns a domain-level parser result, demonstrates direct
+typed reducer handlers without handwritten `std::any_cast`, and includes both
+Makefile and CMake build paths.
 
 The `mini-compiler` template accepts the same tiny language:
 
@@ -37,6 +46,20 @@ enable audit;
 It splits the code into domain model, semantic reducer, parser facade,
 diagnostics, thin demo entrypoint, and tests or smoke assertions. Use it when
 you want a copyable shape for a parser embedded in a larger application.
+The C version also demonstrates explicit ownership rules for AST nodes,
+generated diagnostics, parse results, reducer errors, and partial semantic
+cleanup on failure.
+
+The C++ layered compiler template demonstrates the corresponding C++ ownership
+shape: `std::unique_ptr` owns AST expression nodes, `std::variant` models
+closed node families, parser reductions exchange lightweight handles, and the
+facade returns a move-only domain `Program` wrapped in a C++17 expected-like
+`Result`.
+
+The C# layered compiler template demonstrates the corresponding C# application
+shape: domain records live under `Ast/`, generated types stay out of public
+interfaces, `MiniCompilerParser` accepts injectable semantic policy services,
+and `Program.cs` is only a thin demo over the reusable parser facade.
 
 Each template uses the current recommended LangForge reducer style:
 

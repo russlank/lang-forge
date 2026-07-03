@@ -49,7 +49,9 @@ LangForge is useful for:
 
 The repository includes calculator expressions, a DataKeeper-style scripting
 DSL, the DRAW rendering language, vehicle-report parsing, parser recovery
-demos, mini-compiler templates, and reusable library-style DSL templates.
+demos, mini-compiler templates, reusable library-style DSL templates, a modern
+C# layered compiler template, and a layered modern C++ compiler template with a
+parser facade and CMake build.
 
 ## Typed Reducers Instead Of Stack Indexing
 
@@ -107,7 +109,7 @@ inspection.
 - Pull-based token-source parsing for lazy scanner-to-parser pipelines.
 - Parser error recovery with expected-token diagnostics.
 - Deterministic `langforge.actions.json` action manifests.
-- Copyable mini-compiler and library-style DSL templates.
+- Copyable mini-compiler, library-style DSL, and modern C#/C++ layered templates.
 - Example parity gates for cross-target grammar and semantic-contract drift.
 
 ## Quick Start
@@ -146,6 +148,8 @@ current development workspace uses `/usr/local/go/bin/go`.
 | Learn the basics | [examples/go/calc](examples/go/calc) |
 | Build a small compiler pipeline | [examples/templates/go/mini-compiler](examples/templates/go/mini-compiler) |
 | Build a reusable DSL library | [examples/templates/go/library-dsl](examples/templates/go/library-dsl) |
+| Build a layered C# compiler facade | [examples/templates/csharp/layered-compiler](examples/templates/csharp/layered-compiler) |
+| Build a layered C++ compiler facade | [examples/templates/cpp/layered-compiler](examples/templates/cpp/layered-compiler) |
 | See parser recovery | [examples/go/parser-recovery](examples/go/parser-recovery) |
 | See a renderer-style language | [examples/go/draw](examples/go/draw) |
 | Compare target languages | [examples](examples) |
@@ -180,7 +184,13 @@ language families:
 [examples/templates](examples/templates) are copyable starting points. The
 mini-compiler templates show a small front end, stack-machine lowering, and
 mock execution. The library-style DSL templates hide generated parser details
-behind a stable domain API, which is the recommended shape for real tools.
+behind a stable domain API, which is the recommended shape for real tools. The
+C# layered compiler template shows `Ast/`, `Semantics/`, `Parsing/`, a public
+`IMiniCompilerParser`, domain `ParseResult<T>`, and DI-friendly semantic
+policy injection. The C++ layered compiler template goes one step further with
+public headers under `include/`, generated output isolated under `generated/`,
+direct typed reducers, intentional `std::unique_ptr`/`std::variant` ownership,
+a domain parser facade, and CMake integration.
 
 ## Parser Algorithms
 

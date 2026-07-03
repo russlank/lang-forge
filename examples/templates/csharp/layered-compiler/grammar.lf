@@ -1,0 +1,45 @@
+%target csharp
+%package LangForge.Examples.Templates.LayeredCompiler.Generated
+%semantic csharp mode reducer
+%semantic csharp type Program global::LangForge.Examples.Templates.LayeredCompiler.Ast.ProgramNode
+%semantic csharp type Statements global::System.Collections.Generic.List<global::LangForge.Examples.Templates.LayeredCompiler.Ast.StatementNode>
+%semantic csharp type StatementsTail global::System.Collections.Generic.List<global::LangForge.Examples.Templates.LayeredCompiler.Ast.StatementNode>
+%semantic csharp type Statement global::LangForge.Examples.Templates.LayeredCompiler.Ast.StatementNode
+%semantic csharp type Expr global::LangForge.Examples.Templates.LayeredCompiler.Ast.ExprNode
+%semantic csharp type Term global::LangForge.Examples.Templates.LayeredCompiler.Ast.ExprNode
+%start Program
+%token Print Number Plus Semi
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+"print" => token(Print);
+NUMBER  => token(Number);
+"+"     => token(Plus);
+";"     => token(Semi);
+[1-32]+ => skip;
+
+%% parser
+Program : statements=Statements
+            {csharp: program}
+        ;
+Statements : head=Statement tail=StatementsTail
+               {csharp: statements}
+           ;
+StatementsTail : head=Statement tail=StatementsTail
+                   {csharp: statements.tail.more}
+               | %empty
+                   {csharp: statements.tail.empty}
+               ;
+Statement : Print expr=Expr Semi
+              {csharp: print}
+          ;
+Expr : left=Expr Plus right=Term
+         {csharp: add}
+     | value=Term
+         {csharp: pass}
+     ;
+Term : token=Number
+         {csharp: number}
+     ;

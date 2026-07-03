@@ -30,6 +30,13 @@ The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/csharp/mini-compiler`.
 
+For a reusable compiler-style starter, use
+`examples/templates/csharp/layered-compiler`. It keeps `Generated/` isolated,
+puts domain records under `Ast/`, maps typed reducer contexts in `Semantics/`,
+exposes `IMiniCompilerParser` plus `ParseResult<T>` from `Parsing/`, and keeps
+`Program.cs` as a thin demo entrypoint. It also shows how to inject semantic
+policies without making generated code depend on a DI container.
+
 For the recommended handwritten C# reducer, parser facade, reusable library,
 dependency-injection, and multi-parser shapes, read
 [Handwritten Integration Guide](../../doc/handwritten-integration-guide.md).

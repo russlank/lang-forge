@@ -7,10 +7,13 @@ generated files into each example's `generated/` directory:
 - `scanner.h` and `scanner.c`
 - `parser.h`, `parser_typed.h`, and `parser.c`
 
-Each example keeps handwritten reducer and demo code in `main.c`. The generated
-scanner/parser API is reentrant and does not use global mutable parse state; the
-examples keep semantic memory in per-parse arena structs so application code can
-run multiple parsers independently.
+The compact examples keep most handwritten reducer and demo code in `main.c`
+so the generated C API is easy to inspect in one place. For reusable
+application code, prefer `examples/templates/c/library-dsl`, which splits the
+same responsibilities into `ast`, `semantics`, `parser_facade`, `diagnostics`,
+a thin demo, and tests. The generated scanner/parser API is reentrant and does
+not use global mutable parse state; examples and templates keep semantic memory
+in per-parse state so application code can run multiple parsers independently.
 
 The handwritten C files include generated headers through explicit relative
 paths such as `generated/parser.h`, and shared demo helpers through
@@ -50,8 +53,10 @@ Makefiles print a skip message after validation/generation. Set `CC=clang` or
 another compiler name when needed.
 
 The Makefiles include shared fragments from `examples/mk` and default to
-shared valid fixtures under `examples/testdata`. For a smaller copyable starter
-project, use `examples/templates/c/mini-compiler`.
+shared valid fixtures under `examples/testdata`. For a compact compiler
+starter, use `examples/templates/c/mini-compiler`. For the recommended
+reusable parser-library shape with explicit ownership and cleanup rules, use
+`examples/templates/c/library-dsl`.
 
 For the recommended handwritten C reducer, parser adapter, reusable library,
 memory-ownership, and multi-parser shapes, read

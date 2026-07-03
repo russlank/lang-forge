@@ -59,7 +59,8 @@ parsers. `make golden-stability` regenerates representative inspect JSON and
 Go/C#/C/C++ generated outputs twice, then byte-compares the results.
 `make examples-testdata` checks shared example fixtures and golden fragments.
 `make examples-templates` regenerates and tests the maintained mini-compiler
-and library-dsl templates for every supported target.
+and library-dsl templates for every supported target, plus the C# and C++
+layered compiler templates.
 
 `make build` writes the local CLI binary to:
 

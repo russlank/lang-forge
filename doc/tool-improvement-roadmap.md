@@ -559,10 +559,16 @@ Potential lint warnings:
 
 Current status: examples already provide source-clean starter material under
 `examples/templates/{go,csharp,c,cpp}/mini-compiler` and
-`examples/templates/{go,csharp,c,cpp}/library-dsl`. The next usability step is
-a CLI bootstrap command that copies and rewrites those templates into a new
-project so developers do not have to assemble the generated/handwritten
-boundary by hand. This is tracked internally as `W-071` and `LF-128`.
+`examples/templates/{go,csharp,c,cpp}/library-dsl`. C# and C++ also have
+`examples/templates/{csharp,cpp}/layered-compiler` starters. The C# version
+shows `Ast/`, `Semantics/`, `Parsing/`, isolated `Generated/*.g.cs`, a public
+`IMiniCompilerParser`, domain `ParseResult<T>`, and DI-friendly semantic
+policy injection. The C++ version provides public headers, isolated generated
+output, direct typed reducers, intentional ownership, source-based parsing, and
+CMake. The next usability step is a CLI bootstrap command that copies and
+rewrites those templates into a new project so developers do not have to
+assemble the generated/handwritten boundary by hand. This is tracked internally
+as `W-071` and `LF-128`.
 
 The public
 [Handwritten Integration Guide](handwritten-integration-guide.md) now defines
@@ -595,6 +601,7 @@ expression
 config-file
 mini-compiler
 library-dsl
+layered-compiler
 tree-walker
 repl
 language-server

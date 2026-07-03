@@ -238,6 +238,13 @@ examples use aliases such as:
 namespace lfcalc = LangForge::Examples::Calc::Generated;
 ```
 
+For a larger C++ starter, see
+`examples/templates/cpp/layered-compiler`. It uses public headers under
+`include/mini`, handwritten implementation under `src`, generated output under
+`generated`, a domain parser facade, direct typed reducers, `std::unique_ptr`
+owned AST nodes, `std::variant` node families, and both Makefile and CMake
+validation.
+
 ## Go: Handwritten Reducer And Facade
 
 Generated Go code exposes semantic action constants, typed reduction contexts,
@@ -404,6 +411,43 @@ public sealed class CalcParser : ICalcParser
 }
 ```
 
+For a compiler-style C# starter that already applies this shape, see
+`examples/templates/csharp/layered-compiler`. Its public boundary is:
+
+```csharp
+public interface IMiniCompilerParser
+{
+    ParseResult<ProgramNode> Parse(string source);
+}
+```
+
+The concrete facade keeps generated scanner/parser details inside
+`Parsing/MiniCompilerParser.cs`:
+
+```csharp
+public ParseResult<ProgramNode> Parse(string source)
+{
+    var reducers = ReducerFactory.Create(numberPolicy);
+    var parser = new Parser(reducers);
+    var result = parser.ParseRecoveringSource(new Scanner(source));
+    // Convert generated diagnostics/final values into domain ParseResult<T>.
+}
+```
+
+The reducer map lives in `Semantics/ReducerFactory.cs`, with comments mapping
+handlers back to grammar rules:
+
+```csharp
+// Expr : left=Expr Plus right=Term {csharp: add}
+[SemanticAction.Add] = TypedAdd(ctx => new AddExprNode(ctx.Left, ctx.Right)),
+```
+
+`Program.cs` then uses only the facade and domain compiler/runtime:
+
+```text
+read source -> IMiniCompilerParser.Parse -> ProgramNode -> compile -> execute
+```
+
 If the host application uses `Microsoft.Extensions.DependencyInjection`, keep
 DI in handwritten code. Generated code does not require a container.
 
@@ -434,6 +478,20 @@ Assert.Equal(3.0, parser.Evaluate("1+2"));
 
 For current LangForge, this DI layer is handwritten. A future scaffold/template
 feature should be able to generate the starting point.
+
+The C# layered compiler template avoids a package dependency on
+`Microsoft.Extensions.DependencyInjection` so it can run with only the .NET SDK,
+but it is designed for this registration shape:
+
+```csharp
+services.AddSingleton<INumberLiteralPolicy, DefaultNumberLiteralPolicy>();
+services.AddSingleton<IMiniCompilerParser, MiniCompilerParser>();
+```
+
+Use that pattern when semantic actions need application services, symbol-table
+policies, feature flags, or test doubles. Keep those dependencies on the
+handwritten facade/semantics side; generated recognizers should stay ordinary
+container-agnostic C#.
 
 ## C: Handwritten Reducer And Adapter
 
@@ -545,6 +603,59 @@ Keep the typed reducer bridge and its boxed storage alive for the duration of
 the parse call. Avoid global mutable semantic state; pass per-parse state
 through the generated `void *user` argument.
 
+### C Ownership Checklist
+
+C generated parsers are reentrant, but ownership belongs to the application
+layer. A reusable C integration should make these rules visible in headers and
+tests:
+
+- initialize application parse results before calling the facade;
+- free application parse results on every success or failure path;
+- keep source text alive until the parse call returns;
+- keep generated scanner, parser, and reducer state local to one parse call;
+- free generated token arrays with `<prefix>_free_lexemes` when using
+  collection APIs;
+- free generated recovery diagnostics with `<prefix>_parse_result_free`;
+- allocate semantic values from a per-parse arena or equivalent owner;
+- destroy that owner on syntax, scanner, or reducer failure;
+- transfer that owner to the returned AST/document only after an accepted
+  parse;
+- report reducer failures by filling `<prefix>_error` and returning `NULL`.
+
+The C `library-dsl` template demonstrates this layout:
+
+```text
+examples/templates/c/library-dsl
+  ast.h / ast.c                 domain model and per-parse allocator
+  semantics.h / semantics.c     generated typed reducer handlers
+  parser_facade.h / .c          stable application parse API
+  diagnostics.h / .c            generated diagnostic formatting
+  main.c                        thin demo
+  tests.c                       success, syntax error, reducer error, cleanup
+```
+
+The important transfer is in the facade:
+
+```c
+dsl_parse_result result;
+dsl_parse_result_init(&result);
+
+if (dsl_parse_source(source, &result)) {
+    /*
+     * result.document owns every AST node and copied token string created by
+     * reducer actions. Application code may inspect it until free.
+     */
+}
+
+dsl_parse_result_free(&result);
+```
+
+On failure, `dsl_parse_source` formats generated diagnostics or reducer errors
+into `result.message` and frees partial semantic values before returning. On
+success, `dsl_parse_result_free` releases the final document and all semantic
+memory. That pattern is usually clearer than asking each reducer branch to know
+which partial values are still on the parser stack when an error happens.
+
 ## C++: Handwritten Reducer, Facade, And Abstractions
 
 Generated C++ output exposes:
@@ -558,7 +669,38 @@ Generated C++ output exposes:
 - `typed_reducer_map_from_boxed`;
 - typed contexts in `parser_typed.hpp`.
 
-A compact reducer map can be:
+The recommended modern path is to use generated typed adapters and keep any
+runtime boxing behind that generated boundary. A direct typed reducer map looks
+like the C++ layered compiler template:
+
+```cpp
+#include "generated/parser.hpp"
+#include "generated/parser_typed.hpp"
+
+namespace gen = Example::Mini::Generated;
+
+gen::ReducerMap make_reducers(ParseSession& session) {
+    return gen::ReducerMap{
+        // Grammar: Expr : left=Expr Plus right=Term {cpp: add}
+        {gen::SemanticAction::Add, gen::typed_add(
+            [&session](const gen::AddReduction& ctx) -> mini::ast::ExprId {
+                return session.builder.add(ctx.left, ctx.right);
+            })},
+
+        // Grammar: Term : token=Number {cpp: number}
+        {gen::SemanticAction::Number, gen::typed_number(
+            [&session](const gen::NumberReduction& ctx) -> mini::ast::ExprId {
+                return session.builder.number(parse_int_token(ctx));
+            })},
+    };
+}
+```
+
+The handwritten code above never calls `std::any_cast`. Generated parser code
+can still use `std::any` internally for its boxed compatibility layer, but the
+application-facing reducer contract stays named and typed.
+
+A boxed-to-typed migration reducer map can be:
 
 ```cpp
 #include "generated/parser.hpp"
@@ -593,7 +735,9 @@ gen::ReducerMap make_reducers() {
 }
 ```
 
-For a reusable C++ library, prefer a facade class:
+For a reusable C++ library, prefer a facade class. The facade is the only place
+that needs generated headers; public application headers should return domain
+types:
 
 ```cpp
 #include "generated/parser.hpp"
@@ -645,6 +789,18 @@ private:
 The C++ examples favor reducer maps and typed adapters instead of long
 reduction switches. That keeps action lookup explicit and lets the generated
 map validate reducer coverage.
+
+The layered C++ template also shows source-based parsing from a generated
+scanner:
+
+```cpp
+gen::Scanner scanner(source);
+auto value = gen::parse_value(scanner, make_reducers(session));
+```
+
+Token-vector parsing remains useful for tests and token inspection, but the
+scanner/source overload is the production path because it lets the parser pull
+tokens lazily.
 
 ## Main Program Or Reusable Library?
 
@@ -845,11 +1001,14 @@ usability step is to scaffold them from maintained templates:
 - `lang-forge init` starter projects per target;
 - optional parser facade files;
 - C# service-registration and DI starter code;
-- C++ facade and semantic policy templates;
+- C++ facade and semantic policy templates in the future `lang-forge init`
+  command;
 - a multi-parser starter project showing two grammars in one application;
 - generated or template-backed tests for reducer coverage and regeneration
   hygiene.
 
-Until those features exist, use the `library-dsl` templates for reusable
-parser-facade architecture, the `mini-compiler` templates for compact compiler
-pipelines, and the larger examples as copyable starting points.
+Until those features exist in the CLI, use the `library-dsl` templates for
+reusable parser-facade architecture, `examples/templates/cpp/layered-compiler`
+for modern C++ ownership and CMake layout, the `mini-compiler` templates for
+compact compiler pipelines, and the larger examples as copyable starting
+points.

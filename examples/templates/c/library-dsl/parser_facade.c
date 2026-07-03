@@ -30,9 +30,15 @@ int dsl_parse_source(const char *source, dsl_parse_result *result) {
     library_dsl_parse_result generated_result;
     dsl_semantic_context semantics;
     library_dsl_typed_reducer reducer;
+    if (result == NULL) {
+        return 0;
+    }
     dsl_parse_result_init(result);
     error.message[0] = '\0';
-    semantics.message[0] = '\0';
+    if (!dsl_semantic_context_init(&semantics)) {
+        snprintf(result->message, sizeof(result->message), "out of memory creating semantic context");
+        return 0;
+    }
     library_dsl_parse_result_init(&generated_result);
     library_dsl_scanner_init(&scanner, source == NULL ? "" : source);
     token_source.user = &scanner;
@@ -42,16 +48,19 @@ int dsl_parse_source(const char *source, dsl_parse_result *result) {
     if (!library_dsl_parse_value_recovering_source_typed(&token_source, &reducer, &generated_result, &error)) {
         snprintf(result->message, sizeof(result->message), "%s", error.message[0] == '\0' ? "parse failed" : error.message);
         library_dsl_parse_result_free(&generated_result);
+        dsl_semantic_context_dispose(&semantics);
         return 0;
     }
     if (!generated_result.accepted || generated_result.diagnostic_count != 0) {
         dsl_format_parse_diagnostics(&generated_result, result->message, sizeof(result->message));
         library_dsl_parse_result_free(&generated_result);
+        dsl_semantic_context_dispose(&semantics);
         return 0;
     }
     result->document = (dsl_document *)generated_result.value;
     result->accepted = 1;
     generated_result.value = NULL;
+    dsl_semantic_context_release_document(&semantics);
     library_dsl_parse_result_free(&generated_result);
     return 1;
 }

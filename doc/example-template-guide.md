@@ -15,17 +15,21 @@ LangForge has two kinds of examples:
   and generated-on-demand output.
 
 The template folders live under [examples/templates](../examples/templates).
-Each target currently has two template families:
+Each target currently has two cross-target template families. C# and C++ also
+have larger layered compiler templates for projects that want stronger
+application architecture around generated parser code:
 
 ```text
 examples/templates/go/mini-compiler
 examples/templates/go/library-dsl
 examples/templates/csharp/mini-compiler
 examples/templates/csharp/library-dsl
+examples/templates/csharp/layered-compiler
 examples/templates/c/mini-compiler
 examples/templates/c/library-dsl
 examples/templates/cpp/mini-compiler
 examples/templates/cpp/library-dsl
+examples/templates/cpp/layered-compiler
 ```
 
 Choose `mini-compiler` when you want a compact end-to-end command-line demo
@@ -33,6 +37,12 @@ that parses, builds an AST, lowers to a tiny stack machine, and prints a
 report. Choose `library-dsl` when you want the recommended starting shape for a
 real application: generated parser details hidden behind a domain parser
 facade, explicit diagnostics, reusable model types, and a thin demo entrypoint.
+Choose `csharp/layered-compiler` when you want a compiler-style C# starter
+with `Ast/`, `Semantics/`, `Parsing/`, domain `ParseResult<T>`,
+`IMiniCompilerParser`, and DI-friendly semantic policy injection.
+Choose `cpp/layered-compiler` when you specifically want the modern C++ version
+of that idea with public headers, direct typed reducer handlers, move-only AST
+ownership, source-based parsing, and CMake.
 
 The `mini-compiler` templates accept the same tiny source language:
 
@@ -73,10 +83,46 @@ larger application usually wants: call your own parser facade, receive your own
 AST/domain model, and keep generated packages/namespaces/prefixes out of most
 application code.
 
+The C `library-dsl` template is also the recommended place to copy ownership
+patterns from. It uses one per-parse allocator for reducer-created AST values,
+destroys that allocator on scanner/syntax/reducer failure, transfers it to the
+returned `dsl_document` on success, and exposes `dsl_parse_result_free` as the
+single cleanup function an application calls.
+
 The C# template exposes an interface and concrete parser but does not add a
 dependency-injection package reference. That keeps the starter runnable with
 only the .NET SDK. Applications can register `LibraryDslParser` as
 `ILibraryDslParser` in their own host/container layer.
+
+The C# `layered-compiler` template applies the same facade idea to a
+compiler-style pipeline:
+
+- `Ast/` contains public records such as `ProgramNode`, `PrintStatementNode`,
+  `NumberExprNode`, and `AddExprNode`;
+- `Semantics/ReducerFactory.cs` is the only handwritten layer that maps
+  generated typed reducer contexts to AST construction;
+- `Semantics/INumberLiteralPolicy.cs` shows where domain services can be
+  injected without teaching generated code about a DI container;
+- `Parsing/IMiniCompilerParser.cs` and `MiniCompilerParser.cs` expose the
+  stable parser facade and return `ParseResult<ProgramNode>`;
+- `Compilation/` lowers the AST to a tiny stack-machine program and executes
+  the mock runtime;
+- `Program.cs` only wires the demo command, assertions, parser, compiler, and
+  report writer.
+
+The C++ `layered-compiler` template is the recommended C++ architecture
+reference when a project is larger than a tiny demo. It uses:
+
+- `include/mini` for public domain headers;
+- `src/parser.cpp` as the only handwritten file that includes generated parser
+  headers;
+- `src/compiler.cpp` for AST-to-stack-code lowering and execution;
+- `std::unique_ptr` for owned AST nodes;
+- `std::variant` for closed AST node families;
+- lightweight semantic handles on the parser stack, so generated typed
+  reducers remain copyable;
+- `mini::Result<T>` as a C++17 stand-in for `std::expected`;
+- a `CMakeLists.txt` that generates LangForge output before compiling the demo.
 
 ## Start From A Template
 
@@ -87,17 +133,23 @@ make -C examples/templates/go/mini-compiler test
 make -C examples/templates/go/library-dsl test
 make -C examples/templates/csharp/mini-compiler test
 make -C examples/templates/csharp/library-dsl test
+make -C examples/templates/csharp/layered-compiler test
 make -C examples/templates/c/mini-compiler test
 make -C examples/templates/c/library-dsl test
 make -C examples/templates/cpp/mini-compiler test
 make -C examples/templates/cpp/library-dsl test
+make -C examples/templates/cpp/layered-compiler test
+make -C examples/templates/cpp/layered-compiler cmake-test
 ```
 
 Copy the folder for the target language you want, then rename the folder, the
 package or namespace directive in the `.lf` file, the Makefile binary/project
 name, and the handwritten AST/reducer/facade names. For an application library,
 start from `library-dsl`; for a compact compiler pipeline, start from
-`mini-compiler`.
+`mini-compiler`. For a C# compiler-style library facade, start from
+`csharp/layered-compiler`. For a C++ project where ownership,
+generated-code isolation, and CMake matter from day one, start from
+`cpp/layered-compiler`.
 
 Use a standalone LangForge binary by overriding `LANG_FORGE`:
 
@@ -110,11 +162,13 @@ make -C examples/templates/go/library-dsl LANG_FORGE=../../../../dist/lang-forge
 
 Generated files are ignored by Git:
 
-- Go, C, and C++ templates write `generated/`;
+- Go, C, and most C++ templates write `generated/`;
 - the C++ `library-dsl` template writes `src/generated/` so public headers and
   generated headers are both reachable from a conventional `include`/`src`
   layout;
-- C# templates write `Generated/`;
+- the C++ `layered-compiler` template writes root-level `generated/` and keeps
+  generated includes private to `src/parser.cpp`;
+- C# templates write `Generated/` with `.g.cs` source files;
 - all templates write local runtime output under `dist/`.
 
 The `.lf` grammar and handwritten source are the source of truth. The Makefile
@@ -177,13 +231,28 @@ static mini_compiler_value reduce_add(
 }
 ```
 
-The C++ template uses `parser_typed.hpp` adapters:
+The compact C++ templates use `parser_typed.hpp` adapters:
 
 ```cpp
 {mini::SemanticAction::Add, mini::typed_add([](const mini::AddReduction& ctx) -> ExprPtr {
     return add_expr(ctx.left, ctx.right);
 })},
 ```
+
+The layered C++ template uses the same generated typed adapters, but keeps the
+reducer map inside `src/parser.cpp` and returns domain values from direct typed
+handlers:
+
+```cpp
+// Grammar: Expr : left=Expr Plus right=Term {cpp: add}
+{lfgen::SemanticAction::Add, lfgen::typed_add(
+    [&session](const lfgen::AddReduction& ctx) -> mini::ast::ExprId {
+        return session.builder.add(ctx.left, ctx.right);
+    })},
+```
+
+The handwritten path does not call `std::any_cast`; any boxing needed by the
+generated runtime stays behind the generated typed adapter boundary.
 
 Every template also writes `langforge.actions.json`. Review that file when
 changing a grammar: intended actions should have `"typed": true`, and field
@@ -327,6 +396,7 @@ tracked. `examples-parity` checks cross-target calc, DataKeeper, DRAW, and
 vehicle-report grammar parity, then checks `langforge.actions.json` contract
 parity for those examples plus parser-recovery, mini-compiler templates, and
 library-dsl templates. `examples-testdata` checks shared fixtures and goldens.
-`examples-templates` builds and tests every maintained template family.
+`examples-templates` builds and tests every maintained template family,
+including the C++ layered compiler template.
 `examples-test` includes all of those checks before running the richer example
 projects.

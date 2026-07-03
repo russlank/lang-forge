@@ -75,6 +75,14 @@ it.
   starters with domain model/AST, typed reducer, parser facade, diagnostics,
   thin demo entrypoint, tests or smoke assertions, and generated-on-demand
   output.
+- `examples/templates/csharp/layered-compiler`: modern C# compiler-style
+  starter with `Ast/`, `Semantics/`, `Parsing/`, isolated `Generated/*.g.cs`,
+  `IMiniCompilerParser`, domain `ParseResult<T>`, DI-friendly semantic policy
+  injection, and a thin demo entrypoint.
+- `examples/templates/cpp/layered-compiler`: modern C++17 layered compiler
+  starter with public headers, isolated generated output, direct typed reducer
+  handlers, move-only AST ownership, a domain parser facade, and Makefile plus
+  CMake validation.
 
 The root `Makefile` should list runnable example families in `examples-run`,
 `examples-test`, and `examples-clean`. When adding an example, update both the
@@ -110,7 +118,10 @@ lang-forge init calc --target csharp --out ./calc-demo
 
 Until that command exists, copy one `examples/templates/<target>/mini-compiler`
 or `examples/templates/<target>/library-dsl` folder and rename the
-package/namespace, Makefile variables, project file, and README by hand.
+package/namespace, Makefile variables, project file, and README by hand. For a
+larger C# or C++ compiler-style project, copy the corresponding
+`examples/templates/<target>/layered-compiler` folder and rename the domain
+namespace plus the generated namespace in `grammar.lf`.
 
 ## Artifact Policy
 

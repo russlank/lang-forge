@@ -50,9 +50,9 @@ BLOCK_COMMENT   => skip;
 
 %% parser
 Program : parameters=ParametersList block=CommandBlock
-            {cpp: program.with_parameters}
+            {cpp: program.withParameters}
         | block=CommandBlock
-            {cpp: program.no_parameters}
+            {cpp: program.noParameters}
         ;
 
 ParametersList : Parameters params=ParametersDecl Semi
@@ -105,13 +105,13 @@ RunSQLStatement : SQLRun LParen instance=Value Comma script=Value RParen
                     {cpp: sqlrun}
                 ;
 AddObjectStatement : AddObject LParen parent=Value Comma xml=Value RParen
-                       {cpp: add_object}
+                       {cpp: addObject}
                    ;
 RemoveObjectStatement : RemoveObject LParen parent=Value Comma name=Value RParen
-                          {cpp: remove_object}
+                          {cpp: removeObject}
                       ;
 RunObjectsJobStatement : RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
-                           {cpp: run_objects_job}
+                           {cpp: runObjectsJob}
                        ;
 Value : token=String
           {cpp: value.string}

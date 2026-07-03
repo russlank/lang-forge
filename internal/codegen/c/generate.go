@@ -1330,7 +1330,7 @@ func tokenIdentifiers(prefix string, tokens []string) map[string]string {
 	used := map[string]int{"EOF": 1, "ERROR": 1}
 	out := map[string]string{}
 	for _, token := range tokens {
-		out[token] = uniqueConstant(cIdentifierSuffix(token), used, strings.ToUpper(prefix)+"_TOKEN_")
+		out[token] = uniqueConstant(cFlatIdentifierSuffix(token), used, strings.ToUpper(prefix)+"_TOKEN_")
 	}
 	return out
 }
@@ -1387,6 +1387,15 @@ func utf8FirstRune(value string) (rune, bool) {
 }
 
 func cIdentifierSuffix(name string) string {
+	words := cIdentifierWords(name)
+	out := make([]string, 0, len(words))
+	for _, word := range words {
+		out = append(out, strings.ToUpper(word))
+	}
+	return strings.Join(out, "_")
+}
+
+func cFlatIdentifierSuffix(name string) string {
 	var b strings.Builder
 	lastUnderscore := false
 	for _, r := range name {
@@ -1404,30 +1413,71 @@ func cIdentifierSuffix(name string) string {
 }
 
 func cMemberName(name string) string {
-	var b strings.Builder
-	lastUnderscore := false
-	for _, r := range name {
-		if r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if b.Len() == 0 && unicode.IsDigit(r) {
-				b.WriteString("value_")
-			}
-			b.WriteRune(unicode.ToLower(r))
-			lastUnderscore = false
-			continue
-		}
-		if !lastUnderscore && b.Len() > 0 {
-			b.WriteByte('_')
-			lastUnderscore = true
-		}
+	words := cIdentifierWords(name)
+	for i := range words {
+		words[i] = strings.ToLower(words[i])
 	}
-	out := strings.Trim(b.String(), "_")
+	out := strings.Join(words, "_")
 	if out == "" {
 		out = "value"
+	}
+	if first, _ := utf8FirstRune(out); unicode.IsDigit(first) {
+		out = "value_" + out
 	}
 	if cKeywords[out] {
 		out = "value_" + out
 	}
 	return out
+}
+
+func cIdentifierWords(name string) []string {
+	var words []string
+	var current []rune
+	prevClass := 0
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		words = append(words, string(current))
+		current = nil
+	}
+	for _, r := range name {
+		class := cIdentifierRuneClass(r)
+		if class == 0 {
+			flush()
+			prevClass = 0
+			continue
+		}
+		if len(current) > 0 {
+			if class == 2 && (prevClass == 1 || prevClass == 3) {
+				flush()
+			} else if class == 1 && prevClass == 2 && len(current) > 1 {
+				last := current[len(current)-1]
+				current = current[:len(current)-1]
+				flush()
+				current = append(current, last)
+			}
+		}
+		current = append(current, r)
+		prevClass = class
+	}
+	flush()
+	return words
+}
+
+func cIdentifierRuneClass(r rune) int {
+	switch {
+	case unicode.IsLower(r):
+		return 1
+	case unicode.IsUpper(r):
+		return 2
+	case unicode.IsDigit(r):
+		return 3
+	case unicode.IsLetter(r):
+		return 1
+	default:
+		return 0
+	}
 }
 
 var cKeywords = map[string]bool{

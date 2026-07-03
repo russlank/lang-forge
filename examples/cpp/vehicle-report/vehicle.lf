@@ -60,44 +60,44 @@ VehicleInfo : model=ModelField Comma license=LicenseField Comma distance=Distanc
             ;
 
 ModelField : Model Assign literal=String
-               {cpp: field_model}
+               {cpp: field.model}
            ;
 LicenseField : License Assign literal=LicenseString
-                 {cpp: field_license}
+                 {cpp: field.license}
              ;
 DistanceField : Distance Assign literal=Number
-                  {cpp: field_distance}
+                  {cpp: field.distance}
               ;
 
 FeaturesField : Features Assign LBrace items=FeatureItems RBrace
-                  {cpp: field_features}
+                  {cpp: field.features}
               ;
 FeatureItems : head=Feature tail=FeatureTail
-                 {cpp: feature_items}
+                 {cpp: feature.items}
              | %empty
-                 {cpp: feature_empty}
+                 {cpp: feature.empty}
              ;
 FeatureTail : Comma head=Feature tail=FeatureTail
-                {cpp: feature_tail_more}
+                {cpp: feature.tail.more}
             | %empty
-                {cpp: feature_tail_empty}
+                {cpp: feature.tail.empty}
             ;
 Feature : name=Ident Assign value=String
             {cpp: feature}
         ;
 
 RepairsField : Repairs Assign LBrace items=RepairItems RBrace
-                 {cpp: field_repairs}
+                 {cpp: field.repairs}
              ;
 RepairItems : head=Repair tail=RepairTail
-                {cpp: repair_items}
+                {cpp: repair.items}
             | %empty
-                {cpp: repair_empty}
+                {cpp: repair.empty}
             ;
 RepairTail : Comma head=Repair tail=RepairTail
-               {cpp: repair_tail_more}
+               {cpp: repair.tail.more}
            | %empty
-               {cpp: repair_tail_empty}
+               {cpp: repair.tail.empty}
            ;
 Repair : LParen Date Assign date=DateString Comma Description Assign description=String RParen
            {cpp: repair}

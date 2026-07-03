@@ -23,7 +23,7 @@ type allowedDifference struct {
 	Reason   string
 }
 
-var actionBlockPattern = regexp.MustCompile(`\{(?:go|csharp|c|cpp):[^}]*\}`)
+var actionBlockPattern = regexp.MustCompile(`\{(?:go|csharp|c|cpp):([^}]*)\}`)
 
 func main() {
 	familyFlag := flag.String("family", "all", "example family to check: all, calc, datakeeper, draw, or vehicle-report")
@@ -153,7 +153,13 @@ func normalizeSpec(source string) (string, error) {
 		if shouldSkipDirective(line) {
 			continue
 		}
-		line = actionBlockPattern.ReplaceAllString(line, "{ACTION}")
+		line = actionBlockPattern.ReplaceAllStringFunc(line, func(action string) string {
+			matches := actionBlockPattern.FindStringSubmatch(action)
+			if len(matches) != 2 {
+				return action
+			}
+			return "{ACTION:" + strings.TrimSpace(matches[1]) + "}"
+		})
 		if strings.HasPrefix(line, "%%") {
 			flushSection()
 			header, err := stripInsignificantWhitespace(line)

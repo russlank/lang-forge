@@ -60,44 +60,44 @@ VehicleInfo : model=ModelField Comma license=LicenseField Comma distance=Distanc
             ;
 
 ModelField : Model Assign literal=String
-               {c: field_model}
+               {c: field.model}
            ;
 LicenseField : License Assign literal=LicenseString
-                 {c: field_license}
+                 {c: field.license}
              ;
 DistanceField : Distance Assign literal=Number
-                  {c: field_distance}
+                  {c: field.distance}
               ;
 
 FeaturesField : Features Assign LBrace items=FeatureItems RBrace
-                  {c: field_features}
+                  {c: field.features}
               ;
 FeatureItems : head=Feature tail=FeatureTail
-                 {c: feature_items}
+                 {c: feature.items}
              | %empty
-                 {c: feature_empty}
+                 {c: feature.empty}
              ;
 FeatureTail : Comma head=Feature tail=FeatureTail
-                {c: feature_tail_more}
+                {c: feature.tail.more}
             | %empty
-                {c: feature_tail_empty}
+                {c: feature.tail.empty}
             ;
 Feature : name=Ident Assign value=String
             {c: feature}
         ;
 
 RepairsField : Repairs Assign LBrace items=RepairItems RBrace
-                 {c: field_repairs}
+                 {c: field.repairs}
              ;
 RepairItems : head=Repair tail=RepairTail
-                {c: repair_items}
+                {c: repair.items}
             | %empty
-                {c: repair_empty}
+                {c: repair.empty}
             ;
 RepairTail : Comma head=Repair tail=RepairTail
-               {c: repair_tail_more}
+               {c: repair.tail.more}
            | %empty
-               {c: repair_tail_empty}
+               {c: repair.tail.empty}
            ;
 Repair : LParen Date Assign date=DateString Comma Description Assign description=String RParen
            {c: repair}

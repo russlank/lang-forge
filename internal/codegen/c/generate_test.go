@@ -23,7 +23,9 @@ func TestGenerateWritesConventionalCFilesAndMetadata(t *testing.T) {
 "b" => token(B);
 [1-32]+ => skip;
 %% parser
-S : left=A right=B {c: pair.value} ;
+S : left=A right=B {c: program.withParameters}
+  | left=B right=A {c: addObject}
+  ;
 `), "calc.lf")
 	if diagnostics.HasErrors() {
 		t.Fatalf("parse diagnostics: %v", diagnostics)
@@ -63,13 +65,13 @@ S : left=A right=B {c: pair.value} ;
 	}
 
 	manifest := readGeneratedFile(t, out, "langforge.manifest.json")
-	for _, fragment := range []string{`"target": "c"`, `"prefix": "calc_demo"`, `"CALC_DEMO_ACTION_PAIR_VALUE"`} {
+	for _, fragment := range []string{`"target": "c"`, `"prefix": "calc_demo"`, `"CALC_DEMO_ACTION_PROGRAM_WITH_PARAMETERS"`, `"CALC_DEMO_ACTION_ADD_OBJECT"`} {
 		if !strings.Contains(manifest, fragment) {
 			t.Fatalf("manifest missing %q:\n%s", fragment, manifest)
 		}
 	}
 	actionManifest := readGeneratedFile(t, out, "langforge.actions.json")
-	for _, fragment := range []string{`"name": "pair.value"`, `"lhs": "S"`, `"symbol": "A"`, `"label": "left"`, `"typed": true`} {
+	for _, fragment := range []string{`"name": "program.withParameters"`, `"name": "addObject"`, `"lhs": "S"`, `"symbol": "A"`, `"label": "left"`, `"typed": true`} {
 		if !strings.Contains(actionManifest, fragment) {
 			t.Fatalf("action manifest missing %q:\n%s", fragment, actionManifest)
 		}
@@ -83,14 +85,14 @@ S : left=A right=B {c: pair.value} ;
 	}
 
 	parserHeader := readGeneratedFile(t, out, "parser.h")
-	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PAIR_VALUE", "const char **labels", "calc_demo_reduction_value_for", "calc_demo_parse_result", "calc_demo_parse_recovering", "calc_demo_parse_result_free"} {
+	for _, fragment := range []string{"typedef enum calc_demo_semantic_action", "CALC_DEMO_ACTION_PROGRAM_WITH_PARAMETERS", "CALC_DEMO_ACTION_ADD_OBJECT", "const char **labels", "calc_demo_reduction_value_for", "calc_demo_parse_result", "calc_demo_parse_recovering", "calc_demo_parse_result_free"} {
 		if !strings.Contains(parserHeader, fragment) {
 			t.Fatalf("parser.h missing %q:\n%s", fragment, parserHeader)
 		}
 	}
 
 	typedHeader := readGeneratedFile(t, out, "parser_typed.h")
-	for _, fragment := range []string{"calc_demo_pair_value_reduction", "const calc_demo_lexeme * left", "const calc_demo_lexeme * right", "calc_demo_typed_reducer", "calc_demo_typed_reducer_from_boxed", "calc_demo_parse_value_typed"} {
+	for _, fragment := range []string{"calc_demo_program_with_parameters_reduction", "calc_demo_add_object_reduction", "const calc_demo_lexeme * left", "const calc_demo_lexeme * right", "calc_demo_typed_reducer", "calc_demo_typed_reducer_from_boxed", "calc_demo_parse_value_typed"} {
 		if !strings.Contains(typedHeader, fragment) {
 			t.Fatalf("parser_typed.h missing %q:\n%s", fragment, typedHeader)
 		}
@@ -98,6 +100,11 @@ S : left=A right=B {c: pair.value} ;
 
 	scannerSource := readGeneratedFile(t, out, "scanner.c")
 	parserSource := readGeneratedFile(t, out, "parser.c")
+	for _, fragment := range []string{`return "program.withParameters"`, `return "addObject"`} {
+		if !strings.Contains(parserSource, fragment) {
+			t.Fatalf("parser.c missing preserved action label %q:\n%s", fragment, parserSource)
+		}
+	}
 	for _, source := range []string{scannerSource, parserSource} {
 		if !strings.Contains(source, "lf_clear_error") {
 			t.Fatalf("generated C source does not clear stale errors:\n%s", source)

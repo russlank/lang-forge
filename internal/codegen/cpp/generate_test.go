@@ -23,7 +23,9 @@ func TestGenerateWritesConventionalCppFilesAndMetadata(t *testing.T) {
 "b" => token(B);
 [1-32]+ => skip;
 %% parser
-S : left=A right=B {cpp: pair.value} ;
+S : left=A right=B {cpp: program.withParameters}
+  | left=B right=A {cpp: addObject}
+  ;
 `), "calc.lf")
 	if diagnostics.HasErrors() {
 		t.Fatalf("parse diagnostics: %v", diagnostics)
@@ -63,13 +65,13 @@ S : left=A right=B {cpp: pair.value} ;
 	}
 
 	manifest := readGeneratedFile(t, out, "langforge.manifest.json")
-	for _, fragment := range []string{`"target": "cpp"`, `"namespace": "langforge::examples::calc"`, `"cppConstant": "PairValue"`} {
+	for _, fragment := range []string{`"target": "cpp"`, `"namespace": "langforge::examples::calc"`, `"cppConstant": "ProgramWithParameters"`, `"cppConstant": "AddObject"`} {
 		if !strings.Contains(manifest, fragment) {
 			t.Fatalf("manifest missing %q:\n%s", fragment, manifest)
 		}
 	}
 	actionManifest := readGeneratedFile(t, out, "langforge.actions.json")
-	for _, fragment := range []string{`"name": "pair.value"`, `"lhs": "S"`, `"symbol": "A"`, `"label": "left"`, `"typed": true`} {
+	for _, fragment := range []string{`"name": "program.withParameters"`, `"name": "addObject"`, `"lhs": "S"`, `"symbol": "A"`, `"label": "left"`, `"typed": true`} {
 		if !strings.Contains(actionManifest, fragment) {
 			t.Fatalf("action manifest missing %q:\n%s", fragment, actionManifest)
 		}
@@ -83,21 +85,21 @@ S : left=A right=B {cpp: pair.value} ;
 	}
 
 	parserHeader := readGeneratedFile(t, out, "parser.hpp")
-	for _, fragment := range []string{"enum class SemanticAction", "PairValue", "std::vector<std::string_view> labels", "value_for", "class ReducerMap", "validate_coverage", "struct ParseResult", "class ParseError", "parse_recovering"} {
+	for _, fragment := range []string{"enum class SemanticAction", "ProgramWithParameters", "AddObject", "std::vector<std::string_view> labels", "value_for", "class ReducerMap", "validate_coverage", "struct ParseResult", "class ParseError", "parse_recovering"} {
 		if !strings.Contains(parserHeader, fragment) {
 			t.Fatalf("parser.hpp missing %q:\n%s", fragment, parserHeader)
 		}
 	}
 
 	typedHeader := readGeneratedFile(t, out, "parser_typed.hpp")
-	for _, fragment := range []string{"struct PairValueReduction", "Lexeme left", "Lexeme right", "using PairValueHandler", "typed_pair_value", "typed_reducer_map_from_boxed", "empty std::any"} {
+	for _, fragment := range []string{"struct ProgramWithParametersReduction", "struct AddObjectReduction", "Lexeme left", "Lexeme right", "using ProgramWithParametersHandler", "typed_program_with_parameters", "typed_add_object", "typed_reducer_map_from_boxed", "empty std::any"} {
 		if !strings.Contains(typedHeader, fragment) {
 			t.Fatalf("parser_typed.hpp missing %q:\n%s", fragment, typedHeader)
 		}
 	}
 
 	parserSource := readGeneratedFile(t, out, "parser.cpp")
-	for _, fragment := range []string{"std::lower_bound", "semantic_action_lookup", "ParserActionKind", "label_symbols", "validate_coverage", "unknown reducer registered"} {
+	for _, fragment := range []string{"std::lower_bound", "semantic_action_lookup", `"program.withParameters"`, `"addObject"`, "ParserActionKind", "label_symbols", "validate_coverage", "unknown reducer registered"} {
 		if !strings.Contains(parserSource, fragment) {
 			t.Fatalf("parser.cpp missing %q:\n%s", fragment, parserSource)
 		}

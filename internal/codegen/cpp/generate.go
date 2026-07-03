@@ -1568,29 +1568,16 @@ func cppMemberName(name string) string {
 }
 
 func cppFunctionSuffix(name string) string {
-	var b strings.Builder
-	lastUnderscore := false
-	for _, r := range name {
-		switch {
-		case isASCIIAlpha(r):
-			b.WriteRune(toASCIILower(r))
-			lastUnderscore = false
-		case isASCIIDigit(r):
-			if b.Len() == 0 {
-				b.WriteString("n_")
-			}
-			b.WriteRune(r)
-			lastUnderscore = false
-		default:
-			if !lastUnderscore && b.Len() > 0 {
-				b.WriteByte('_')
-				lastUnderscore = true
-			}
-		}
+	words := cppIdentifierWords(name)
+	for i := range words {
+		words[i] = strings.ToLower(words[i])
 	}
-	out := strings.Trim(b.String(), "_")
+	out := strings.Join(words, "_")
 	if out == "" {
 		out = "action"
+	}
+	if isASCIIDigit(rune(out[0])) {
+		out = "n_" + out
 	}
 	if !isValidCppIdentifier(out) {
 		out = "action_" + out
@@ -1612,20 +1599,65 @@ func tokenIdentifiers(tokens []string) map[string]string {
 }
 
 func exportedIdentifierSuffix(name string) string {
+	words := cppIdentifierWords(name)
 	var b strings.Builder
-	upperNext := true
-	for _, r := range name {
-		if isASCIIAlpha(r) || isASCIIDigit(r) {
-			if upperNext && isASCIIAlpha(r) {
+	for _, word := range words {
+		for i, r := range word {
+			if i == 0 && isASCIIAlpha(r) {
 				r = toASCIIUpper(r)
 			}
 			b.WriteRune(r)
-			upperNext = false
-			continue
 		}
-		upperNext = true
 	}
 	return b.String()
+}
+
+func cppIdentifierWords(name string) []string {
+	var words []string
+	var current []rune
+	prevClass := 0
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		words = append(words, string(current))
+		current = nil
+	}
+	for _, r := range name {
+		class := cppIdentifierRuneClass(r)
+		if class == 0 {
+			flush()
+			prevClass = 0
+			continue
+		}
+		if len(current) > 0 {
+			if class == 2 && (prevClass == 1 || prevClass == 3) {
+				flush()
+			} else if class == 1 && prevClass == 2 && len(current) > 1 {
+				last := current[len(current)-1]
+				current = current[:len(current)-1]
+				flush()
+				current = append(current, last)
+			}
+		}
+		current = append(current, r)
+		prevClass = class
+	}
+	flush()
+	return words
+}
+
+func cppIdentifierRuneClass(r rune) int {
+	switch {
+	case r >= 'a' && r <= 'z':
+		return 1
+	case r >= 'A' && r <= 'Z':
+		return 2
+	case isASCIIDigit(r):
+		return 3
+	default:
+		return 0
+	}
 }
 
 func uniqueIdentifier(base string, used map[string]int) string {

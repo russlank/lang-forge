@@ -153,6 +153,9 @@ APIs for gradual migration.
 - Go, C#, and C++ `ReducerMap` coverage validation detects missing and unknown
   handlers before input-dependent parser execution; C typed reducers validate
   required handler pointers before parsing.
+- Portable action labels are preserved in manifests and runtime action names;
+  C and C++ derive deterministic target-safe identifiers such as
+  `PREFIX_ACTION_RUN_OBJECTS_JOB` and `SemanticAction::RunObjectsJob`.
 - C and C++ calc plus mini-compiler templates demonstrate direct typed
   reducers; boxed-to-typed adapters remain available for migration, and
   `--boxed` stays as an explicit compatibility/debug path where examples expose

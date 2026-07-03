@@ -218,6 +218,23 @@ are not built-in commands. They are labels that the generated parser copies
 into `Reduction.Action` for diagnostics and into generated action IDs such as
 `Reduction.ActionID` / `SemanticActionAdd` for dispatch.
 
+Action labels should be portable grammar names, not target-language
+identifiers. Prefer the same label text across Go, C#, C, and C++ specs, for
+example `runObjectsJob` or `feature.tail.more`. Backends preserve that original
+text in `Reduction.Action`, lookup APIs, diagnostics, and
+`langforge.actions.json`, then derive target-safe identifiers from it:
+
+| Label | C identifier | C++ identifier |
+|---|---|---|
+| `runObjectsJob` | `PREFIX_ACTION_RUN_OBJECTS_JOB` | `SemanticAction::RunObjectsJob` |
+| `feature.tail.more` | `PREFIX_ACTION_FEATURE_TAIL_MORE` | `SemanticAction::FeatureTailMore` |
+
+C generated typed handler names use snake case such as
+`prefix_run_objects_job_handler`. C++ typed adapter functions use snake case
+such as `typed_run_objects_job`, while enum values remain PascalCase. This
+keeps the grammar target-neutral and the generated code idiomatic for each
+language.
+
 When a Go project needs generated reductions to call handwritten libraries
 directly, opt into inline mode:
 

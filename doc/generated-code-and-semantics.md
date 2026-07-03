@@ -130,6 +130,34 @@ The same idea is target-neutral. The `.lf` file contains portable action
 labels, while each backend exposes the labels in the idiom of its target
 language.
 
+### Portable Labels And Target-Safe Names
+
+Reducer-mode action labels are part of the grammar contract. Use the same
+source label across targets when the rule means the same thing:
+
+```lf
+RunObjectsJobStatement :
+    RunObjectsJob LParen parent=Value Comma name=Value Comma jobsTag=Value RParen
+      {go: runObjectsJob}
+;
+```
+
+Use `runObjectsJob` as the label in the matching C#, C, and C++ specs too.
+
+LangForge preserves the source label exactly in `Reduction.Action`,
+`langforge.actions.json`, lookup APIs, diagnostics, and generated table
+metadata. It then creates target-safe identifiers for code:
+
+| Source label | Generated C | Generated C++ |
+|---|---|---|
+| `runObjectsJob` | `DATAKEEPER_ACTION_RUN_OBJECTS_JOB` | `SemanticAction::RunObjectsJob` |
+| `feature.tail.more` | `VEHICLE_REPORT_ACTION_FEATURE_TAIL_MORE` | `SemanticAction::FeatureTailMore` |
+
+The label text is the stable cross-target name. Generated identifiers are the
+target-specific spelling used by handwritten reducers. That means manifest
+comparisons should look at `name`, while C/C++ source code should dispatch on
+the generated enum constants.
+
 ## Typed Contexts And Coverage
 
 For Go, C#, C, and C++, an action receives a generated typed context when its

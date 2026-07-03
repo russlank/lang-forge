@@ -131,7 +131,28 @@ Expr : left=Expr Plus right=Term {go: add} ;
 	}
 }
 
-func TestNormalizeSpecIgnoresTargetSpecificActionLabelText(t *testing.T) {
+func TestNormalizeSpecPreservesPortableActionLabelText(t *testing.T) {
+	goSpec, err := normalizeSpec(`%% parser
+S : value=Expr {go: program.withParameters} ;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cSpec, err := normalizeSpec(`%% parser
+S : value=Expr {c: program.withParameters} ;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if goSpec != cSpec {
+		t.Fatalf("normalized action labels differ\nleft:\n%s\nright:\n%s", goSpec, cSpec)
+	}
+	if !strings.Contains(goSpec, "{ACTION:program.withParameters}") || strings.Contains(goSpec, "{go:") {
+		t.Fatalf("action target was not normalized while preserving label: %s", goSpec)
+	}
+}
+
+func TestNormalizeSpecDetectsActionLabelDrift(t *testing.T) {
 	goSpec, err := normalizeSpec(`%% parser
 S : value=Expr {go: program.withParameters} ;
 `)
@@ -144,10 +165,7 @@ S : value=Expr {c: program.with_parameters} ;
 	if err != nil {
 		t.Fatal(err)
 	}
-	if goSpec != cSpec {
-		t.Fatalf("normalized action labels differ\nleft:\n%s\nright:\n%s", goSpec, cSpec)
-	}
-	if !strings.Contains(goSpec, "{ACTION}") || strings.Contains(goSpec, "program.withParameters") {
-		t.Fatalf("action block was not normalized: %s", goSpec)
+	if goSpec == cSpec {
+		t.Fatalf("normalized spec should preserve action label drift:\n%s", goSpec)
 	}
 }

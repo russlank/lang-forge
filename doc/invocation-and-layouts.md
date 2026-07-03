@@ -104,7 +104,7 @@ LANG_FORGE_VERBOSITY ?= 1
 LANG_FORGE_FLAGS ?= --verbosity $(LANG_FORGE_VERBOSITY)
 
 SPEC := grammar.lf
-TARGET := go
+LF_TARGET := go
 GENERATED_DIR := generated
 GENERATED_TAG := langforge_generated
 
@@ -114,7 +114,7 @@ validate:
 	$(LANG_FORGE) validate --spec $(SPEC) $(LANG_FORGE_FLAGS)
 
 generate: validate
-	$(LANG_FORGE) generate --spec $(SPEC) --target $(TARGET) --out $(GENERATED_DIR) $(LANG_FORGE_FLAGS)
+	$(LANG_FORGE) generate --spec $(SPEC) --target $(LF_TARGET) --out $(GENERATED_DIR) $(LANG_FORGE_FLAGS)
 
 test: generate
 	$(GO) test -tags $(GENERATED_TAG) -count=1 ./...
@@ -122,6 +122,10 @@ test: generate
 clean:
 	rm -rf $(GENERATED_DIR)
 ```
+
+Use `LF_TARGET` or `LANGFORGE_TARGET` for LangForge generation. Avoid the
+generic name `TARGET`; it is common in user shells and CI systems and should
+not affect which language backend `lang-forge generate` uses.
 
 The same Makefile can use different LangForge providers:
 

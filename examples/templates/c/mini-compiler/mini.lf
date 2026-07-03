@@ -1,6 +1,12 @@
 %target c
 %package mini_compiler
 %semantic c mode reducer
+%semantic c type Program program *
+%semantic c type Statements statement *
+%semantic c type StatementsTail statement *
+%semantic c type Statement statement *
+%semantic c type Expr expr *
+%semantic c type Term expr *
 %start Program
 %token Print Number Plus Semi
 
@@ -15,13 +21,25 @@ NUMBER  => token(Number);
 [1-32]+ => skip;
 
 %% parser
-Program : statements=Statements {c: program} ;
-Statements : head=Statement tail=StatementsTail {c: statements} ;
-StatementsTail : head=Statement tail=StatementsTail {c: statements_tail_more}
-               | /* empty */ {c: statements_tail_empty}
+Program : statements=Statements
+            {c: program}
+        ;
+Statements : head=Statement tail=StatementsTail
+               {c: statements}
+           ;
+StatementsTail : head=Statement tail=StatementsTail
+                   {c: statements_tail_more}
+               | %empty
+                   {c: statements_tail_empty}
                ;
-Statement : Print expr=Expr Semi {c: print} ;
-Expr : left=Expr Plus right=Term {c: add}
-     | value=Term {c: pass}
+Statement : Print expr=Expr Semi
+              {c: print}
+          ;
+Expr : left=Expr Plus right=Term
+         {c: add}
+     | value=Term
+         {c: pass}
      ;
-Term : token=Number {c: number} ;
+Term : token=Number
+         {c: number}
+     ;

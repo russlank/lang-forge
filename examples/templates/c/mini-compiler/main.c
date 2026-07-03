@@ -4,26 +4,32 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct expr expr;
+typedef struct statement statement;
+typedef struct program program;
+
+#include "generated/parser_typed.h"
+
 typedef enum expr_kind {
     EXPR_NUMBER,
     EXPR_ADD
 } expr_kind;
 
-typedef struct expr {
+struct expr {
     expr_kind kind;
     int value;
     struct expr *left;
     struct expr *right;
-} expr;
+};
 
-typedef struct statement {
+struct statement {
     expr *value;
     struct statement *next;
-} statement;
+};
 
-typedef struct program {
+struct program {
     statement *statements;
-} program;
+};
 
 typedef struct instruction {
     const char *op;
@@ -102,26 +108,6 @@ static int write_file(const char *path, const char *text) {
     return 1;
 }
 
-static mini_compiler_value value_arg(const mini_compiler_reduction *ctx, size_t index, const char *name, mini_compiler_error *error) {
-    if (index >= ctx->rhs_count || ctx->values[index] == NULL) {
-        snprintf(error->message, sizeof(error->message), "rule %d missing %s at argument %zu", ctx->rule, name, index + 1);
-        return NULL;
-    }
-    return ctx->values[index];
-}
-
-static const mini_compiler_lexeme *lexeme_arg(const mini_compiler_reduction *ctx, size_t index, const char *name, mini_compiler_error *error) {
-    return (const mini_compiler_lexeme *)value_arg(ctx, index, name, error);
-}
-
-static expr *expr_arg(const mini_compiler_reduction *ctx, size_t index, const char *name, mini_compiler_error *error) {
-    return (expr *)value_arg(ctx, index, name, error);
-}
-
-static statement *statement_arg(const mini_compiler_reduction *ctx, size_t index, const char *name, mini_compiler_error *error) {
-    return (statement *)value_arg(ctx, index, name, error);
-}
-
 static expr *new_number(context *ctx, int value) {
     expr *node = (expr *)arena_alloc(&ctx->memory, sizeof(expr));
     if (node != NULL) {
@@ -157,55 +143,99 @@ static program *new_program(context *ctx, statement *statements) {
     return node;
 }
 
-static mini_compiler_value reduce(const mini_compiler_reduction *ctx, void *user, mini_compiler_error *error) {
+static mini_compiler_value reduce_program(const mini_compiler_program_reduction *ctx, void *user, mini_compiler_error *error) {
     context *state = (context *)user;
-    switch (ctx->action_id) {
-    case MINI_COMPILER_ACTION_PROGRAM:
-        return new_program(state, statement_arg(ctx, 0, "statements", error));
-    case MINI_COMPILER_ACTION_STATEMENTS: {
-        statement *head = statement_arg(ctx, 0, "statement", error);
-        head->next = (statement *)ctx->values[1];
-        return head;
-    }
-    case MINI_COMPILER_ACTION_STATEMENTS_TAIL_MORE: {
-        statement *head = statement_arg(ctx, 0, "statement", error);
-        head->next = (statement *)ctx->values[1];
-        return head;
-    }
-    case MINI_COMPILER_ACTION_STATEMENTS_TAIL_EMPTY:
+    (void)error;
+    return new_program(state, ctx->statements);
+}
+
+static mini_compiler_value reduce_statements(const mini_compiler_statements_reduction *ctx, void *user, mini_compiler_error *error) {
+    (void)user;
+    if (ctx->head == NULL) {
+        snprintf(error->message, sizeof(error->message), "statements reduction missing head statement");
         return NULL;
-    case MINI_COMPILER_ACTION_PRINT:
-        return new_statement(state, expr_arg(ctx, 1, "print expression", error));
-    case MINI_COMPILER_ACTION_ADD:
-        return new_add(state, expr_arg(ctx, 0, "left operand", error), expr_arg(ctx, 2, "right operand", error));
-    case MINI_COMPILER_ACTION_PASS:
-        return ctx->values[0];
-    case MINI_COMPILER_ACTION_NUMBER: {
-        const mini_compiler_lexeme *lexeme = lexeme_arg(ctx, 0, "number literal", error);
-        char text[32] = {0};
-        if (lexeme == NULL || lexeme->length >= sizeof(text)) {
-            snprintf(error->message, sizeof(error->message), "invalid number literal");
-            return NULL;
-        }
-        memcpy(text, lexeme->text, lexeme->length);
-        return new_number(state, atoi(text));
     }
-    case MINI_COMPILER_ACTION_NONE:
-    default:
-        return ctx->rhs_count == 1 ? ctx->values[0] : NULL;
+    ctx->head->next = ctx->tail;
+    return ctx->head;
+}
+
+static mini_compiler_value reduce_statements_tail_more(const mini_compiler_statements_tail_more_reduction *ctx, void *user, mini_compiler_error *error) {
+    (void)user;
+    if (ctx->head == NULL) {
+        snprintf(error->message, sizeof(error->message), "statements tail reduction missing head statement");
+        return NULL;
     }
+    ctx->head->next = ctx->tail;
+    return ctx->head;
+}
+
+static mini_compiler_value reduce_statements_tail_empty(const mini_compiler_statements_tail_empty_reduction *ctx, void *user, mini_compiler_error *error) {
+    (void)ctx;
+    (void)user;
+    (void)error;
+    return NULL;
+}
+
+static mini_compiler_value reduce_print(const mini_compiler_print_reduction *ctx, void *user, mini_compiler_error *error) {
+    context *state = (context *)user;
+    (void)error;
+    return new_statement(state, ctx->expr);
+}
+
+static mini_compiler_value reduce_add(const mini_compiler_add_reduction *ctx, void *user, mini_compiler_error *error) {
+    context *state = (context *)user;
+    (void)error;
+    return new_add(state, ctx->left, ctx->right);
+}
+
+static mini_compiler_value reduce_pass(const mini_compiler_pass_reduction *ctx, void *user, mini_compiler_error *error) {
+    (void)user;
+    (void)error;
+    return ctx->value;
+}
+
+static mini_compiler_value reduce_number(const mini_compiler_number_reduction *ctx, void *user, mini_compiler_error *error) {
+    context *state = (context *)user;
+    char text[32] = {0};
+    if (ctx->token == NULL || ctx->token->length >= sizeof(text)) {
+        snprintf(error->message, sizeof(error->message), "invalid number literal");
+        return NULL;
+    }
+    memcpy(text, ctx->token->text, ctx->token->length);
+    return new_number(state, atoi(text));
+}
+
+static mini_compiler_typed_reducer make_typed_reducer(context *state) {
+    /*
+     * Each handler receives a generated typed context. For example, the
+     * `Expr : left=Expr Plus right=Term {c: add}` rule becomes fields named
+     * `left` and `right`, avoiding positional `ctx->values[index]` access.
+     */
+    mini_compiler_typed_reducer reducer;
+    reducer.user = state;
+    reducer.program = reduce_program;
+    reducer.statements = reduce_statements;
+    reducer.statements_tail_more = reduce_statements_tail_more;
+    reducer.statements_tail_empty = reduce_statements_tail_empty;
+    reducer.print = reduce_print;
+    reducer.add = reduce_add;
+    reducer.pass = reduce_pass;
+    reducer.number = reduce_number;
+    return reducer;
 }
 
 static program *parse_source(context *state, const char *source, char *message, size_t message_size) {
     mini_compiler_error error;
     mini_compiler_scanner scanner;
     mini_compiler_lexeme_source token_source;
+    mini_compiler_typed_reducer reducer;
     mini_compiler_value value = NULL;
     error.message[0] = '\0';
     mini_compiler_scanner_init(&scanner, source);
     token_source.user = &scanner;
     token_source.next = mini_compiler_scanner_source_next;
-    if (!mini_compiler_parse_value_source(&token_source, reduce, state, &value, &error)) {
+    reducer = make_typed_reducer(state);
+    if (!mini_compiler_parse_value_source_typed(&token_source, &reducer, &value, &error)) {
         snprintf(message, message_size, "parse failed: %s", error.message);
         return NULL;
     }

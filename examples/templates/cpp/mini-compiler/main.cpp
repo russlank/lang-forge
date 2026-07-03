@@ -10,8 +10,6 @@
 #include <string_view>
 #include <vector>
 
-namespace mini = LangForge::Examples::Templates::MiniCompiler::Generated;
-
 struct Expr;
 using ExprPtr = std::shared_ptr<Expr>;
 
@@ -30,6 +28,10 @@ struct Statement {
 struct Program {
     std::vector<Statement> statements;
 };
+
+#include "generated/parser_typed.hpp"
+
+namespace mini = LangForge::Examples::Templates::MiniCompiler::Generated;
 
 struct Instruction {
     std::string op;
@@ -52,18 +54,6 @@ static void write_text_file(const std::string& path, std::string_view text) {
         throw std::runtime_error("cannot open log file: " + path);
     }
     output << text;
-}
-
-template <typename T>
-static T arg(const mini::Reduction& ctx, std::size_t index, std::string_view name) {
-    if (index >= ctx.values.size()) {
-        throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing " + std::string(name));
-    }
-    return std::any_cast<T>(ctx.values.at(index));
-}
-
-static std::string text(const mini::Reduction& ctx, std::size_t index, std::string_view name) {
-    return std::string(arg<mini::Lexeme>(ctx, index, name).text);
 }
 
 static ExprPtr number_expr(int value) {
@@ -90,31 +80,34 @@ static std::vector<Statement> prepend(Statement head, std::vector<Statement> tai
 }
 
 static mini::ReducerMap reducers() {
+    // Each entry adapts a typed handler to the generated boxed parser ABI.
+    // The typed adapter reads named grammar labels such as `left=Expr`,
+    // `right=Term`, and `token=Number` before this handwritten code runs.
     return mini::ReducerMap{
-        {mini::SemanticAction::Program, [](const mini::Reduction& ctx) -> mini::Value {
-            return Program{arg<std::vector<Statement>>(ctx, 0, "statements")};
-        }},
-        {mini::SemanticAction::Statements, [](const mini::Reduction& ctx) -> mini::Value {
-            return prepend(arg<Statement>(ctx, 0, "statement"), arg<std::vector<Statement>>(ctx, 1, "statement tail"));
-        }},
-        {mini::SemanticAction::StatementsTailMore, [](const mini::Reduction& ctx) -> mini::Value {
-            return prepend(arg<Statement>(ctx, 0, "statement"), arg<std::vector<Statement>>(ctx, 1, "statement tail"));
-        }},
-        {mini::SemanticAction::StatementsTailEmpty, [](const mini::Reduction&) -> mini::Value {
+        {mini::SemanticAction::Program, mini::typed_program([](const mini::ProgramReduction& ctx) -> Program {
+            return Program{ctx.statements};
+        })},
+        {mini::SemanticAction::Statements, mini::typed_statements([](const mini::StatementsReduction& ctx) -> std::vector<Statement> {
+            return prepend(ctx.head, ctx.tail);
+        })},
+        {mini::SemanticAction::StatementsTailMore, mini::typed_statements_tail_more([](const mini::StatementsTailMoreReduction& ctx) -> std::vector<Statement> {
+            return prepend(ctx.head, ctx.tail);
+        })},
+        {mini::SemanticAction::StatementsTailEmpty, mini::typed_statements_tail_empty([](const mini::StatementsTailEmptyReduction&) -> std::vector<Statement> {
             return std::vector<Statement>{};
-        }},
-        {mini::SemanticAction::Print, [](const mini::Reduction& ctx) -> mini::Value {
-            return Statement{arg<ExprPtr>(ctx, 1, "print expression")};
-        }},
-        {mini::SemanticAction::Add, [](const mini::Reduction& ctx) -> mini::Value {
-            return add_expr(arg<ExprPtr>(ctx, 0, "left operand"), arg<ExprPtr>(ctx, 2, "right operand"));
-        }},
-        {mini::SemanticAction::Pass, [](const mini::Reduction& ctx) -> mini::Value {
-            return ctx.values.at(0);
-        }},
-        {mini::SemanticAction::Number, [](const mini::Reduction& ctx) -> mini::Value {
-            return number_expr(std::stoi(text(ctx, 0, "number literal")));
-        }},
+        })},
+        {mini::SemanticAction::Print, mini::typed_print([](const mini::PrintReduction& ctx) -> Statement {
+            return Statement{ctx.expr};
+        })},
+        {mini::SemanticAction::Add, mini::typed_add([](const mini::AddReduction& ctx) -> ExprPtr {
+            return add_expr(ctx.left, ctx.right);
+        })},
+        {mini::SemanticAction::Pass, mini::typed_pass([](const mini::PassReduction& ctx) -> ExprPtr {
+            return ctx.value;
+        })},
+        {mini::SemanticAction::Number, mini::typed_number([](const mini::NumberReduction& ctx) -> ExprPtr {
+            return number_expr(std::stoi(std::string(ctx.token.text)));
+        })},
     };
 }
 

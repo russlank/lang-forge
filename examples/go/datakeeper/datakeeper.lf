@@ -28,26 +28,26 @@ QUOTED_STRING = \" ( [1-33] | [35-91] | [93-127] | \\ [1-127] )* \";
 LINE_COMMENT = "//" ( [1-9] | [11-12] | [14-127] )*;
 BLOCK_COMMENT = "/" \* ( [1-41] | [43-127] )* \* "/";
 
-"parameters"   => token(Parameters);
-"begin"        => token(Begin);
-"end"          => token(End);
-"replace"      => token(Replace);
-"sqlrun"       => token(SQLRun);
-"addobject"    => token(AddObject);
-"removeobject" => token(RemoveObject);
+"parameters"    => token(Parameters);
+"begin"         => token(Begin);
+"end"           => token(End);
+"replace"       => token(Replace);
+"sqlrun"        => token(SQLRun);
+"addobject"     => token(AddObject);
+"removeobject"  => token(RemoveObject);
 "runobjectsjob" => token(RunObjectsJob);
-"="            => token(Assign);
-","            => token(Comma);
-";"            => token(Semi);
-"("            => token(LParen);
-")"            => token(RParen);
-HASH_STRING    => token(String);
-QUOTED_STRING  => token(String);
-NUMBER         => token(Number);
-IDENT          => token(Ident);
-LINE_COMMENT   => skip;
-BLOCK_COMMENT  => skip;
-[1-32]+        => skip;
+"="             => token(Assign);
+","             => token(Comma);
+";"             => token(Semi);
+"("             => token(LParen);
+")"             => token(RParen);
+HASH_STRING     => token(String);
+QUOTED_STRING   => token(String);
+NUMBER          => token(Number);
+IDENT           => token(Ident);
+LINE_COMMENT    => skip;
+BLOCK_COMMENT   => skip;
+[1-32]+         => skip;
 
 %% parser
 Program : parameters=ParametersList block=CommandBlock

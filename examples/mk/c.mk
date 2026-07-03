@@ -1,6 +1,6 @@
 # Shared targets for C LangForge examples.
 
-TARGET ?= c
+LF_TARGET := c
 GENERATED_DIR ?= generated
 DIST_DIR ?= dist
 CC ?= cc

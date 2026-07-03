@@ -4,10 +4,16 @@ This template is a compact end-to-end compiler pipeline for a tiny `print`
 language. `mini.lf` owns lexical and grammar syntax. The Go code owns AST
 construction, stack-code lowering, runtime execution, diagnostics, and tests.
 
-The grammar labels important RHS values, such as `left=Expr`, `right=Term`,
-and `token=Number`. The handwritten reducer uses `Reduction.ValueFor` to read
-those labels, which is the lightest-weight path before introducing generated
-typed contexts.
+The grammar declares semantic types for `Program`, `Statement`, `Expr`, and the
+statement-list nonterminals. It also labels important RHS values, such as
+`left=Expr`, `right=Term`, and `token=Number`. LangForge turns those labels into
+generated typed contexts such as `AddReduction` and `NumberReduction`, so the
+handwritten reducer can read `ctx.Left`, `ctx.Right`, and `ctx.Token` instead of
+counting parser stack positions.
+
+Go target types live in the small `model` package because generated code should
+not import the command's `main` package. The command wires the generated parser,
+typed reducer map, compiler, runtime, and report output together.
 
 Run it from this directory:
 

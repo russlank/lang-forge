@@ -1,28 +1,39 @@
 using System.Globalization;
 using System.Text;
 using LangForge.Examples.Templates.MiniCompiler.Generated;
+using static LangForge.Examples.Templates.MiniCompiler.Generated.SemanticReducerContexts;
 
 static ProgramNode ParseProgram(string source)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), new ReducerFunc(Reduce));
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
     return CastArg<ProgramNode>(value, "program");
 }
 
-static object? Reduce(Reduction ctx)
+static ReducerMap CreateReducers()
 {
-    return ctx.ActionID switch
+    // Each entry connects a `{csharp: ...}` grammar action to a typed handler.
+    // The generated adapter validates labels such as `left=Expr` before the
+    // handwritten semantic code runs.
+    return new ReducerMap
     {
-        SemanticAction.Program => new ProgramNode(StatementList(ctx, 0, "statements")),
-        SemanticAction.Statements => Prepend(StatementArg(ctx, 0, "statement"), StatementList(ctx, 1, "statement tail")),
-        SemanticAction.StatementsTailMore => Prepend(StatementArg(ctx, 0, "statement"), StatementList(ctx, 1, "statement tail")),
-        SemanticAction.StatementsTailEmpty => new List<StatementNode>(),
-        SemanticAction.Print => new StatementNode(ExprArg(ctx, 1, "print expression")),
-        SemanticAction.Add => new AddExpr(ExprArg(ctx, 0, "left operand"), ExprArg(ctx, 2, "right operand")),
-        SemanticAction.Pass => ctx.Values[0],
-        SemanticAction.Number => new NumberExpr(int.Parse(Text(ctx, 0, "number literal"), CultureInfo.InvariantCulture)),
-        _ => ctx.Values.Count == 1 ? ctx.Values[0] : null,
+        [SemanticAction.Program] = TypedProgram(ReduceProgram),
+        [SemanticAction.Statements] = TypedStatements(ReduceStatements),
+        [SemanticAction.StatementsTailMore] = TypedStatementsTailMore(ReduceStatementsTailMore),
+        [SemanticAction.StatementsTailEmpty] = TypedStatementsTailEmpty(_ => new List<StatementNode>()),
+        [SemanticAction.Print] = TypedPrint(ctx => new StatementNode(ctx.Expr)),
+        [SemanticAction.Add] = TypedAdd(ctx => new AddExpr(ctx.Left, ctx.Right)),
+        [SemanticAction.Pass] = TypedPass(ctx => ctx.Value),
+        [SemanticAction.Number] = TypedNumber(ctx => new NumberExpr(ParseNumber(ctx.Token))),
     };
 }
+
+static ProgramNode ReduceProgram(ProgramReduction ctx) => new(ctx.Statements);
+
+static List<StatementNode> ReduceStatements(StatementsReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static List<StatementNode> ReduceStatementsTailMore(StatementsTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
+
+static int ParseNumber(Lexeme token) => int.Parse(token.Text, CultureInfo.InvariantCulture);
 
 static List<Instruction> Compile(ProgramNode program)
 {
@@ -112,23 +123,6 @@ static T CastArg<T>(object? value, string name)
     }
     return typed;
 }
-
-static T ReductionArg<T>(Reduction ctx, int index, string name)
-{
-    if (index < 0 || index >= ctx.Values.Count)
-    {
-        throw new InvalidOperationException($"rule {ctx.Rule} action {ctx.ActionID} is missing {name}");
-    }
-    return CastArg<T>(ctx.Values[index], $"{name} at argument {index + 1}");
-}
-
-static string Text(Reduction ctx, int index, string name) => ReductionArg<Lexeme>(ctx, index, name).Text;
-
-static Expr ExprArg(Reduction ctx, int index, string name) => ReductionArg<Expr>(ctx, index, name);
-
-static StatementNode StatementArg(Reduction ctx, int index, string name) => ReductionArg<StatementNode>(ctx, index, name);
-
-static List<StatementNode> StatementList(Reduction ctx, int index, string name) => ReductionArg<List<StatementNode>>(ctx, index, name);
 
 static List<T> Prepend<T>(T head, List<T> tail)
 {

@@ -5,34 +5,42 @@
 %semantic csharp type Expr double
 %semantic csharp type Term double
 %semantic csharp type Factor double
-%token Number Plus Minus Mul Div LParen RParen
 %start S
+%token Number Plus Minus Mul Div LParen RParen
 
 %% lexer
 DIGIT = [0-9];
 NUMBER = DIGIT+ ("." DIGIT+)?;
 
-NUMBER => token(Number);
-"+"    => token(Plus);
-"-"    => token(Minus);
-"*"    => token(Mul);
-"/"    => token(Div);
-"("    => token(LParen);
-")"    => token(RParen);
-[1-32]+ => skip;
+NUMBER     => token(Number);
+"+"        => token(Plus);
+"-"        => token(Minus);
+"*"        => token(Mul);
+"/"        => token(Div);
+"("        => token(LParen);
+")"        => token(RParen);
+[1-32]+    => skip;
 
 %% parser
-S : value=Expr {csharp: start}
-  ;
-Expr : left=Expr Plus right=Term {csharp: add}
-  | left=Expr Minus right=Term {csharp: subtract}
-  | value=Term {csharp: pass}
-  ;
-Term : left=Term Mul right=Factor {csharp: multiply}
-  | left=Term Div right=Factor {csharp: divide}
-  | value=Factor {csharp: pass}
-  ;
-Factor : token=Number {csharp: number}
-  | LParen value=Expr RParen {csharp: group}
-  | Minus value=Factor {csharp: negate}
-  ;
+S : value=Expr {csharp: start} ;
+Expr : left=Expr Plus right=Term
+         {csharp: add}
+     | left=Expr Minus right=Term
+         {csharp: subtract}
+     | value=Term
+         {csharp: pass}
+     ;
+Term : left=Term Mul right=Factor
+         {csharp: multiply}
+     | left=Term Div right=Factor
+         {csharp: divide}
+     | value=Factor
+         {csharp: pass}
+     ;
+Factor : token=Number
+           {csharp: number}
+       | LParen value=Expr RParen
+           {csharp: group}
+       | Minus value=Factor
+           {csharp: negate}
+       ;

@@ -1,6 +1,12 @@
 %target csharp
 %package LangForge.Examples.Templates.MiniCompiler.Generated
 %semantic csharp mode reducer
+%semantic csharp type Program global::ProgramNode
+%semantic csharp type Statements global::System.Collections.Generic.List<global::StatementNode>
+%semantic csharp type StatementsTail global::System.Collections.Generic.List<global::StatementNode>
+%semantic csharp type Statement global::StatementNode
+%semantic csharp type Expr global::Expr
+%semantic csharp type Term global::Expr
 %start Program
 %token Print Number Plus Semi
 
@@ -15,13 +21,25 @@ NUMBER  => token(Number);
 [1-32]+ => skip;
 
 %% parser
-Program : statements=Statements {csharp: program} ;
-Statements : head=Statement tail=StatementsTail {csharp: statements} ;
-StatementsTail : head=Statement tail=StatementsTail {csharp: statements_tail_more}
-               | /* empty */ {csharp: statements_tail_empty}
+Program : statements=Statements
+            {csharp: program}
+        ;
+Statements : head=Statement tail=StatementsTail
+               {csharp: statements}
+           ;
+StatementsTail : head=Statement tail=StatementsTail
+                   {csharp: statements_tail_more}
+               | %empty
+                   {csharp: statements_tail_empty}
                ;
-Statement : Print expr=Expr Semi {csharp: print} ;
-Expr : left=Expr Plus right=Term {csharp: add}
-     | value=Term {csharp: pass}
+Statement : Print expr=Expr Semi
+              {csharp: print}
+          ;
+Expr : left=Expr Plus right=Term
+         {csharp: add}
+     | value=Term
+         {csharp: pass}
      ;
-Term : token=Number {csharp: number} ;
+Term : token=Number
+         {csharp: number}
+     ;

@@ -259,14 +259,62 @@ separators, such as `LangForge::Examples::Calc::Generated`. For C generation,
 
 Prefer grammar files that teach their own structure:
 
+- keep equivalent grammars in different target-language examples visually
+  parallel, so parity reviews can focus on real target differences;
+- group directives at the top in this order when practical: `%target`,
+  `%package`, `%semantic ... mode`, `%semantic ... import`, `%semantic ... type`,
+  parser options, `%start`, then `%token`;
 - declare all visible tokens near the top;
 - name tokens after their grammar role, not only their spelling;
 - keep lexer definitions for repeated character classes;
 - place more specific lexer rules before more general ones;
+- align lexer action arrows within a local rule block when the padding stays
+  readable;
 - keep parser nonterminals layered by precedence or language concept;
+- write one parser alternative per line for nontrivial productions;
+- indent reduction action labels under the alternative they belong to;
+- keep named right-hand-side labels in the same positions across target
+  variants;
 - use `%empty` for intentional empty alternatives;
 - keep action hooks small and target-tagged;
 - put substantial semantic behavior in ordinary target-language reducer code.
+
+For example, keep target variants shaped like this and let only the target
+language, package, semantic types, imports, and action label prefixes differ:
+
+```lf
+%target go
+%package calc
+%semantic go mode reducer
+%semantic go type Expr float64
+%start Expr
+%token Number Plus Minus
+
+%% lexer
+DIGIT = [0-9];
+NUMBER = DIGIT+;
+
+NUMBER  => token(Number);
+"+"     => token(Plus);
+"-"     => token(Minus);
+[1-32]+ => skip;
+
+%% parser
+Expr : left=Expr Plus right=Term
+         {go: add}
+     | left=Expr Minus right=Term
+         {go: subtract}
+     | value=Term
+         {go: pass}
+     ;
+```
+
+Tiny wrapper productions can stay on one line when that makes the surrounding
+grammar easier to scan:
+
+```lf
+S : value=Expr {go: start} ;
+```
 
 Readable grammar files are easier to debug, easier to port across backends, and
 better learning material for the next person who opens the project.

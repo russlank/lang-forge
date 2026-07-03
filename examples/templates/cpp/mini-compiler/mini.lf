@@ -1,6 +1,12 @@
 %target cpp
 %package LangForge::Examples::Templates::MiniCompiler::Generated
 %semantic cpp mode reducer
+%semantic cpp type Program ::Program
+%semantic cpp type Statements std::vector<::Statement>
+%semantic cpp type StatementsTail std::vector<::Statement>
+%semantic cpp type Statement ::Statement
+%semantic cpp type Expr ::ExprPtr
+%semantic cpp type Term ::ExprPtr
 %start Program
 %token Print Number Plus Semi
 
@@ -15,13 +21,25 @@ NUMBER  => token(Number);
 [1-32]+ => skip;
 
 %% parser
-Program : statements=Statements {cpp: program} ;
-Statements : head=Statement tail=StatementsTail {cpp: statements} ;
-StatementsTail : head=Statement tail=StatementsTail {cpp: statements_tail_more}
-               | /* empty */ {cpp: statements_tail_empty}
+Program : statements=Statements
+            {cpp: program}
+        ;
+Statements : head=Statement tail=StatementsTail
+               {cpp: statements}
+           ;
+StatementsTail : head=Statement tail=StatementsTail
+                   {cpp: statements_tail_more}
+               | %empty
+                   {cpp: statements_tail_empty}
                ;
-Statement : Print expr=Expr Semi {cpp: print} ;
-Expr : left=Expr Plus right=Term {cpp: add}
-     | value=Term {cpp: pass}
+Statement : Print expr=Expr Semi
+              {cpp: print}
+          ;
+Expr : left=Expr Plus right=Term
+         {cpp: add}
+     | value=Term
+         {cpp: pass}
      ;
-Term : token=Number {cpp: number} ;
+Term : token=Number
+         {cpp: number}
+     ;

@@ -20,3 +20,14 @@ print 40 + 2;
 The generated parser recognizes the syntax, the reducer builds an AST, the
 compiler lowers it to stack instructions, and the mock runtime prints the
 results.
+
+Each template uses the current recommended LangForge reducer style:
+
+- `%semantic <target> type` declarations describe the semantic type produced by
+  each parser nonterminal;
+- grammar alternatives use named RHS labels such as `left=Expr`,
+  `right=Term`, `expr=Expr`, and `token=Number`;
+- handwritten reducer code consumes generated typed reducer contexts instead of
+  indexing parser stack values manually;
+- `langforge.actions.json` records the typed action contract for review and
+  tooling.

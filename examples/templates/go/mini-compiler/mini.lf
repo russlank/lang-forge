@@ -1,6 +1,13 @@
 %target go
 %package mini
 %semantic go mode reducer
+%semantic go import minimodel "github.com/russlank/lang-forge/examples/templates/go/mini-compiler/model"
+%semantic go type Program minimodel.Program
+%semantic go type Statements []minimodel.Statement
+%semantic go type StatementsTail []minimodel.Statement
+%semantic go type Statement minimodel.Statement
+%semantic go type Expr minimodel.Expr
+%semantic go type Term minimodel.Expr
 %start Program
 %token Print Number Plus Semi
 
@@ -15,13 +22,25 @@ NUMBER   => token(Number);
 [1-32]+  => skip;
 
 %% parser
-Program : statements=Statements {go: program} ;
-Statements : head=Statement tail=StatementsTail {go: statements} ;
-StatementsTail : head=Statement tail=StatementsTail {go: statements_tail_more}
-               | /* empty */ {go: statements_tail_empty}
+Program : statements=Statements
+            {go: program}
+        ;
+Statements : head=Statement tail=StatementsTail
+               {go: statements}
+           ;
+StatementsTail : head=Statement tail=StatementsTail
+                   {go: statements_tail_more}
+               | %empty
+                   {go: statements_tail_empty}
                ;
-Statement : Print expr=Expr Semi {go: print} ;
-Expr : left=Expr Plus right=Term {go: add}
-     | value=Term {go: pass}
+Statement : Print expr=Expr Semi
+              {go: print}
+          ;
+Expr : left=Expr Plus right=Term
+         {go: add}
+     | value=Term
+         {go: pass}
      ;
-Term : token=Number {go: number} ;
+Term : token=Number
+         {go: number}
+     ;

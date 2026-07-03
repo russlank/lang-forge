@@ -1,6 +1,6 @@
 # Shared targets for C++ LangForge examples.
 
-TARGET ?= cpp
+LF_TARGET := cpp
 GENERATED_DIR ?= generated
 DIST_DIR ?= dist
 CXX ?= g++

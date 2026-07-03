@@ -2,15 +2,19 @@
 
 package main
 
-import "testing"
+import (
+	"testing"
+
+	minimodel "github.com/russlank/lang-forge/examples/templates/go/mini-compiler/model"
+)
 
 func TestMiniCompilerPipeline(t *testing.T) {
 	p, err := parse("print 1 + 2;\nprint 40 + 2;")
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	code := compileProgram(p)
-	output, err := run(code)
+	code := minimodel.CompileProgram(p)
+	output, err := minimodel.Run(code)
 	if err != nil {
 		t.Fatalf("run: %v", err)
 	}

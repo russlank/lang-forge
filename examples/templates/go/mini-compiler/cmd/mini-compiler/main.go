@@ -11,179 +11,60 @@ import (
 	"strings"
 
 	minigen "github.com/russlank/lang-forge/examples/templates/go/mini-compiler/generated"
+	minimodel "github.com/russlank/lang-forge/examples/templates/go/mini-compiler/model"
 )
 
-type program struct {
-	Statements []statement
+var reducers = minigen.ReducerMap{
+	minigen.SemanticActionProgram: minigen.TypedProgram(func(ctx minigen.ProgramReduction) (minimodel.Program, error) {
+		return minimodel.Program{Statements: ctx.Statements}, nil
+	}),
+	minigen.SemanticActionStatements: minigen.TypedStatements(func(ctx minigen.StatementsReduction) ([]minimodel.Statement, error) {
+		return prependStatement(ctx.Head, ctx.Tail), nil
+	}),
+	minigen.SemanticActionStatementsTailMore: minigen.TypedStatementsTailMore(func(ctx minigen.StatementsTailMoreReduction) ([]minimodel.Statement, error) {
+		return prependStatement(ctx.Head, ctx.Tail), nil
+	}),
+	minigen.SemanticActionStatementsTailEmpty: minigen.TypedStatementsTailEmpty(func(minigen.StatementsTailEmptyReduction) ([]minimodel.Statement, error) {
+		return []minimodel.Statement{}, nil
+	}),
+	minigen.SemanticActionPrint: minigen.TypedPrint(func(ctx minigen.PrintReduction) (minimodel.Statement, error) {
+		return minimodel.Statement{Expr: ctx.Expr}, nil
+	}),
+	minigen.SemanticActionAdd: minigen.TypedAdd(func(ctx minigen.AddReduction) (minimodel.Expr, error) {
+		return minimodel.AddExpr{Left: ctx.Left, Right: ctx.Right}, nil
+	}),
+	minigen.SemanticActionPass: minigen.TypedPass(func(ctx minigen.PassReduction) (minimodel.Expr, error) {
+		return ctx.Value, nil
+	}),
+	minigen.SemanticActionNumber: minigen.TypedNumber(reduceNumber),
 }
 
-type statement struct {
-	Expr expr
-}
-
-type expr interface {
-	compile(*compiler)
-}
-
-type numberExpr struct {
-	Value int
-}
-
-func (e numberExpr) compile(c *compiler) {
-	c.emit("push", e.Value)
-}
-
-type addExpr struct {
-	Left  expr
-	Right expr
-}
-
-func (e addExpr) compile(c *compiler) {
-	e.Left.compile(c)
-	e.Right.compile(c)
-	c.emit("add", 0)
-}
-
-type instruction struct {
-	Op  string
-	Arg int
-}
-
-type compiler struct {
-	Code []instruction
-}
-
-func (c *compiler) emit(op string, arg int) {
-	c.Code = append(c.Code, instruction{Op: op, Arg: arg})
-}
-
-func compileProgram(p program) []instruction {
-	var c compiler
-	for _, stmt := range p.Statements {
-		stmt.Expr.compile(&c)
-		c.emit("print", 0)
-	}
-	return c.Code
-}
-
-func run(code []instruction) ([]int, error) {
-	var stack []int
-	var output []int
-	for pc, inst := range code {
-		switch inst.Op {
-		case "push":
-			stack = append(stack, inst.Arg)
-		case "add":
-			if len(stack) < 2 {
-				return nil, fmt.Errorf("pc %d: add needs two stack values", pc)
-			}
-			right := stack[len(stack)-1]
-			left := stack[len(stack)-2]
-			stack = stack[:len(stack)-2]
-			stack = append(stack, left+right)
-		case "print":
-			if len(stack) < 1 {
-				return nil, fmt.Errorf("pc %d: print needs one stack value", pc)
-			}
-			output = append(output, stack[len(stack)-1])
-			stack = stack[:len(stack)-1]
-		default:
-			return nil, fmt.Errorf("pc %d: unknown instruction %q", pc, inst.Op)
-		}
-	}
-	return output, nil
-}
-
-func parse(source string) (program, error) {
-	value, err := minigen.ParseWithReducerFromSource(minigen.NewScanner(source), minigen.ReducerFunc(reduce))
+func parse(source string) (minimodel.Program, error) {
+	value, err := minigen.ParseWithReducerFromSource(minigen.NewScanner(source), reducers)
 	if err != nil {
-		return program{}, err
+		return minimodel.Program{}, err
 	}
-	out, ok := value.(program)
+	out, ok := value.(minimodel.Program)
 	if !ok {
-		return program{}, fmt.Errorf("parser returned %T, want program", value)
+		return minimodel.Program{}, fmt.Errorf("parser returned %T, want model.Program", value)
 	}
 	return out, nil
 }
 
-func reduce(ctx minigen.Reduction) (minigen.Value, error) {
-	// Action IDs are generated from `{go: ...}` labels in mini.lf. This switch
-	// is the handwritten semantic layer: it builds AST nodes and lists while the
-	// generated parser only recognizes valid syntax.
-	switch ctx.ActionID {
-	case minigen.SemanticActionProgram:
-		return program{Statements: statementsArg(ctx, "statements")}, nil
-	case minigen.SemanticActionStatements:
-		return prependStatement(statementArg(ctx, "head"), statementsArg(ctx, "tail")), nil
-	case minigen.SemanticActionStatementsTailMore:
-		return prependStatement(statementArg(ctx, "head"), statementsArg(ctx, "tail")), nil
-	case minigen.SemanticActionStatementsTailEmpty:
-		return []statement{}, nil
-	case minigen.SemanticActionPrint:
-		return statement{Expr: exprArg(ctx, "expr")}, nil
-	case minigen.SemanticActionAdd:
-		return addExpr{Left: exprArg(ctx, "left"), Right: exprArg(ctx, "right")}, nil
-	case minigen.SemanticActionPass:
-		return valueArg(ctx, "value")
-	case minigen.SemanticActionNumber:
-		text := lexemeArg(ctx, "token").Text
-		value, err := strconv.Atoi(text)
-		if err != nil {
-			return nil, fmt.Errorf("invalid number %q: %w", text, err)
-		}
-		return numberExpr{Value: value}, nil
-	default:
-		if len(ctx.Values) == 1 {
-			return ctx.Values[0], nil
-		}
-		return nil, nil
-	}
-}
-
-func valueArg(ctx minigen.Reduction, label string) (minigen.Value, error) {
-	// Named RHS labels such as `left=Term` and `token=Number` let starter
-	// projects read semantic values by purpose instead of parser-stack index.
-	value, err := ctx.ValueFor(label)
+func reduceNumber(ctx minigen.NumberReduction) (minimodel.Expr, error) {
+	value, err := strconv.Atoi(ctx.Token.Text)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rule %d number %q: %w", ctx.Reduction.Rule, ctx.Token.Text, err)
 	}
-	return value, nil
+	return minimodel.NumberExpr{Value: value}, nil
 }
 
-func arg[T any](ctx minigen.Reduction, label string) T {
-	value, err := valueArg(ctx, label)
-	if err != nil {
-		panic(err)
-	}
-	typed, ok := value.(T)
-	if !ok {
-		panic(fmt.Sprintf("rule %d label %q has type %T", ctx.Rule, label, value))
-	}
-	return typed
-}
-
-func lexemeArg(ctx minigen.Reduction, label string) minigen.Lexeme {
-	return arg[minigen.Lexeme](ctx, label)
-}
-
-func exprArg(ctx minigen.Reduction, label string) expr {
-	return arg[expr](ctx, label)
-}
-
-func statementArg(ctx minigen.Reduction, label string) statement {
-	return arg[statement](ctx, label)
-}
-
-func statementsArg(ctx minigen.Reduction, label string) []statement {
-	return arg[[]statement](ctx, label)
-}
-
-func prependStatement(head statement, tail []statement) []statement {
-	out := []statement{head}
+func prependStatement(head minimodel.Statement, tail []minimodel.Statement) []minimodel.Statement {
+	out := []minimodel.Statement{head}
 	return append(out, tail...)
 }
 
-func report(name string, source string, code []instruction, output []int) string {
+func report(name string, source string, code []minimodel.Instruction, output []int) string {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "Mini compiler Go template: %s\n", name)
 	fmt.Fprintln(&b, "source:")
@@ -214,8 +95,8 @@ func main() {
 	if err != nil {
 		exitf("parse: %v", err)
 	}
-	code := compileProgram(p)
-	output, err := run(code)
+	code := minimodel.CompileProgram(p)
+	output, err := minimodel.Run(code)
 	if err != nil {
 		exitf("run: %v", err)
 	}

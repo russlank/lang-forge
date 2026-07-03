@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-example-template-guide-v1`
 
-Last updated: 2026-06-29
+Last updated: 2026-07-03
 
 Scope: `Reusable example templates, shared testdata, and generated/handwritten boundaries`
 
@@ -34,6 +34,11 @@ print 40 + 2;
 The `.lf` file recognizes the syntax. The handwritten code maps generated
 semantic action IDs to AST construction, lowers that AST to stack-machine
 instructions, runs a mock VM, and writes a report.
+
+The mini-compiler templates intentionally show the current recommended
+LangForge style rather than a legacy boxed-only style. Each grammar declares
+target-specific semantic types, labels meaningful RHS symbols, and lets
+generated typed reducer contexts validate the reducer boundary.
 
 ## Start From A Template
 
@@ -67,27 +72,70 @@ Generated files are ignored by Git:
 The `.lf` grammar and handwritten source are the source of truth. The Makefile
 regenerates scanner/parser code before build and test targets.
 
-## Reducer Helpers
+## Typed Reducers
 
 Generated parsers expose a semantic action ID for each action label such as
 `{go: add}`, `{csharp: add}`, `{c: add}`, or `{cpp: add}`. Those labels are not
 hard-coded behavior. The handwritten reducer maps the generated action ID to
 ordinary application code.
 
-Use small typed helpers for reducer arguments:
+For real projects, prefer generated typed reducer contexts:
 
-- check that an argument exists;
-- name the role, such as `left`, `right`, or `print expression`;
-- cast once at the boundary;
-- return domain types such as AST nodes, statement lists, or lexemes.
+- declare `%semantic <target> type Nonterminal TargetType`;
+- label grammar values by role, such as `left=Expr`, `right=Term`,
+  `expr=Expr`, and `token=Number`;
+- use generated adapters such as Go `TypedAdd`, C# `TypedAdd`, C
+  `mini_compiler_parse_value_source_typed`, or C++ `typed_add`;
+- keep boxed `ctx.Values[index]` access only in migration shims or debugging
+  code.
 
-That pattern keeps generated APIs flexible while making handwritten semantics
-readable and easy to debug.
+For example, this grammar rule:
 
-When the grammar has RHS labels, prefer reading values by label instead of
-position. Generated APIs expose label-aware reductions, and typed contexts or
-adapters go one step further when `%semantic <target> type` declarations are
-present.
+```lf
+Expr : left=Expr Plus right=Term
+         {go: add}
+     ;
+```
+
+becomes a Go reducer handler with named, typed fields:
+
+```go
+minigen.SemanticActionAdd: minigen.TypedAdd(func(ctx minigen.AddReduction) (minimodel.Expr, error) {
+    return minimodel.AddExpr{Left: ctx.Left, Right: ctx.Right}, nil
+}),
+```
+
+The C# template uses the same idea:
+
+```csharp
+[SemanticAction.Add] = TypedAdd(ctx => new AddExpr(ctx.Left, ctx.Right)),
+```
+
+The C template receives a generated C context:
+
+```c
+static mini_compiler_value reduce_add(
+    const mini_compiler_add_reduction *ctx,
+    void *user,
+    mini_compiler_error *error)
+{
+    context *state = (context *)user;
+    (void)error;
+    return new_add(state, ctx->left, ctx->right);
+}
+```
+
+The C++ template uses `parser_typed.hpp` adapters:
+
+```cpp
+{mini::SemanticAction::Add, mini::typed_add([](const mini::AddReduction& ctx) -> ExprPtr {
+    return add_expr(ctx.left, ctx.right);
+})},
+```
+
+Every template also writes `langforge.actions.json`. Review that file when
+changing a grammar: intended actions should have `"typed": true`, and field
+entries should show the labels and target types you expect.
 
 ## Spec-To-Code Checklist
 

@@ -29,7 +29,7 @@ LDFLAGS := -s -w \
 	vulncheck tidy build install \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
 	examples-generate examples-run examples-test examples-cleanliness \
-	examples-parity examples-testdata examples-templates examples-clean \
+	examples-parity examples-target-env-smoke examples-testdata examples-templates examples-clean \
 	docker-build docker-smoke docker-push image-tags clean
 
 all: fmt vet test build
@@ -152,6 +152,7 @@ examples-run:
 examples-test:
 	$(MAKE) examples-cleanliness
 	$(MAKE) examples-parity
+	$(MAKE) examples-target-env-smoke
 	$(MAKE) examples-testdata
 	$(MAKE) examples-templates
 	$(MAKE) -C examples/parser-algorithms GO=$(GO) test
@@ -178,6 +179,9 @@ examples-cleanliness:
 
 examples-parity:
 	$(GO) run ./cmd/check-example-spec-parity
+
+examples-target-env-smoke:
+	sh scripts/check-example-target-variable.sh
 
 examples-testdata:
 	GO=$(GO) sh scripts/check-example-testdata.sh

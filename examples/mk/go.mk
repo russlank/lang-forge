@@ -1,6 +1,6 @@
 # Shared targets for Go LangForge examples.
 
-TARGET ?= go
+LF_TARGET := go
 GENERATED_DIR ?= generated
 DIST_DIR ?= dist
 TAGS ?= langforge_generated

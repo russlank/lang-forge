@@ -1,6 +1,6 @@
 # Shared targets for C# LangForge examples.
 
-TARGET ?= csharp
+LF_TARGET := csharp
 GENERATED_DIR ?= Generated
 DIST_DIR ?= dist
 DOTNET ?= dotnet

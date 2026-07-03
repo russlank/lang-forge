@@ -414,6 +414,18 @@ Tests can read this file to catch grammar/reducer drift. The Go examples use
 that pattern to require complete typed contexts for DRAW and to check reducer
 coverage for DataKeeper and vehicle-report.
 
+The repository-level `make examples-parity` gate also reads the same action
+contract model for equivalent Go, C#, C, and C++ examples. It compares
+portable parts of the semantic contract: action labels, rule shapes, RHS
+labels, typed/untyped status, semantic type presence by grammar symbol, and
+recovery/expected-token reporting metadata. Raw language type names are not
+expected to match across targets; for example, `float64`, `double`, and C
+pointer spellings can all represent the same typed grammar symbol.
+
+If a target-specific difference is intentional, document the exact reported
+path in `examples/manifest-parity.allowlist.json` with a reason. Treat that
+file as an exception log, not a place to hide ordinary drift.
+
 ## Why Reducer Mode Is The Default
 
 Reducer mode keeps generated code separate from application behavior.

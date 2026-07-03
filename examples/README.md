@@ -37,11 +37,19 @@ make examples-templates
 ```
 
 `examples-cleanliness` fails if generated or build artifacts become tracked by
-Git. `examples-parity` compares the calc, DataKeeper, DRAW, and vehicle-report
-grammars across Go, C#, C, and C++ after normalizing target/package/semantic
-directives and target-specific action labels. `examples-testdata` runs shared
-fixtures and golden checks.
+Git. `examples-parity` first compares the calc, DataKeeper, DRAW, and
+vehicle-report grammars across Go, C#, C, and C++ after normalizing
+target/package/semantic directives and target-specific action labels. It then
+generates in-memory `langforge.actions.json` contracts for calc, DataKeeper,
+DRAW, vehicle-report, parser-recovery, and mini-compiler templates to catch
+semantic action, RHS-label, typed-context, and recovery-reporting drift.
+`examples-testdata` runs shared fixtures and golden checks.
 `examples-templates` validates the copyable mini-compiler templates.
+
+Intentional action-contract differences must be documented in
+`manifest-parity.allowlist.json` with `family`, `target`, `path`, and
+`reason`. Prefer changing the examples back into parity unless the difference
+is genuinely target-specific.
 
 Read [../doc/example-template-guide.md](../doc/example-template-guide.md) for
 the template layout, generated/handwritten boundary, named RHS labels, typed

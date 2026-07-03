@@ -23,6 +23,8 @@ Current implementation status:
   specs are validated or generated;
 - named RHS labels, target-specific nonterminal semantic types, and
   deterministic `langforge.actions.json` contracts across all backends;
+- example parity gates that compare both `.lf` grammar shape and generated
+  action-manifest contracts across Go, C#, C, and C++;
 - Go backend output for scanner/parser tables, scanner runtime, parser
   runtime with reducer-based semantic action hooks, generated semantic action
   IDs, typed reducer contexts, reducer coverage validation, reducer maps,

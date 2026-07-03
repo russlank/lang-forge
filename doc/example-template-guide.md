@@ -235,7 +235,9 @@ make examples-test
 
 `examples-cleanliness` prevents generated or build artifacts from becoming
 tracked. `examples-parity` checks cross-target calc, DataKeeper, DRAW, and
-vehicle-report grammar parity. `examples-testdata` checks shared fixtures and
-goldens. `examples-templates` builds and tests every mini-compiler template.
+vehicle-report grammar parity, then checks `langforge.actions.json` contract
+parity for those examples plus parser-recovery and the mini-compiler templates.
+`examples-testdata` checks shared fixtures and goldens. `examples-templates`
+builds and tests every mini-compiler template.
 `examples-test` includes all of those checks before running the richer example
 projects.

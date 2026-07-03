@@ -55,6 +55,15 @@ make -C examples/go/calc generate LANG_FORGE_VERBOSITY=2
 make -C examples/parser-algorithms test LANG_FORGE_VERBOSITY=3
 ```
 
+`make examples-parity` runs two fast source checks. The spec parity checker
+compares equivalent `.lf` files after normalizing target-specific directives.
+The action-manifest parity checker builds the same contracts written to
+`langforge.actions.json` and compares action labels, RHS labels, portable typed
+semantic roles, typed/untyped status, and recovery reporting contracts. When a
+target-specific difference is intentional, document it in
+[examples/manifest-parity.allowlist.json](../examples/manifest-parity.allowlist.json)
+with the reported `family`, `target`, `path`, and a short reason.
+
 ## Example Requirements
 
 The Go examples need Go and `make`. The C# examples need the .NET `10.0` SDK

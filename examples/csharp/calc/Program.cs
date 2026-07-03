@@ -107,6 +107,15 @@ static void RunAssertions()
 
     try
     {
+        Eval("1@");
+        throw new InvalidOperationException("expected source scanner error");
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
+    {
+    }
+
+    try
+    {
         Parser.ParseFromSource(new Scanner("1+"));
         throw new InvalidOperationException("expected parse error");
     }

@@ -37,6 +37,9 @@ Production paths in the examples prefer scanner/token-source parsing, where
 the parser pulls tokens lazily from the generated scanner. Token collection
 APIs are still demonstrated where they are useful for debugging, tests, or
 token inspection.
+The calc examples exercise source-based value parsing, including scanner,
+syntax, and reducer failures. The parser-recovery examples exercise
+source-based recovery diagnostics and accepted/partial-result handling.
 
 For reusable code, keep generated packages, namespaces, and headers behind a
 handwritten facade. The target guides document the practical ownership rules:

@@ -239,10 +239,14 @@ derives a safe package name from the output directory.
 
 Generated Go scanners return visible tokens by default. Hidden-channel tokens
 can be included with `Scanner.IncludeHidden(true)`, but the generated parser
-expects visible grammar tokens. The preferred production path is streaming:
-construct a scanner and pass it directly to `ParseFromSource`,
-`ParseValueFromSource`, `ParseWithReducerFromSource`, or
-`ParseRecoveringFromSource`.
+expects visible grammar tokens.
+
+## Source-Based Parsing
+
+The preferred production path is source-based parsing: construct a scanner and
+pass it directly to the parser. The parser pulls one lexeme at a time from the
+scanner or token source instead of requiring the caller to build a full token
+slice first.
 
 ```go
 value, err := calc.ParseWithReducerFromSource(
@@ -251,12 +255,49 @@ value, err := calc.ParseWithReducerFromSource(
 )
 ```
 
+Use source-based parsing when:
+
+- the caller has source text and wants the final parse or semantic result;
+- the input may be large enough that keeping a second full token collection is
+  unnecessary;
+- scanner errors should flow through the same call as parser/reducer errors;
+- a facade should hide generated token types from application callers.
+
+Use token collections when:
+
+- a debugger, test, formatter, or report needs to inspect the token stream;
+- the application already owns a token list from an earlier stage;
+- you need to snapshot or compare tokens before parsing;
+- you are writing compatibility tests for explicit EOF-marked streams.
+
+Source-based parsing reduces peak token-storage allocation because visible
+tokens do not need to be materialized as a complete slice, list, array, or
+vector before parsing. It is still a normal table-driven parser: parser states,
+semantic values, diagnostics, and any AST objects built by reducers are kept
+for as long as the parse requires. Token collection can be faster to inspect
+repeatedly because the scanner has already run, but it pays the upfront memory
+cost of storing every token.
+
 `Tokenize`, `Scanner.All`, and token-slice parse APIs remain supported for
 tests, debugging, and reports that need to display the token stream. Those
 collection APIs are convenience wrappers around the same parser behavior where
 practical, and they still accept one explicit trailing `TokenEOF` for callers
 that prefer EOF-marked streams. Streaming here means synchronous pull-based
 parsing; it does not introduce goroutines, channels, async tasks, or queues.
+
+Error behavior is the same parser contract with a different input shape.
+Scanner/source failures surface when the parser pulls the failing token.
+Syntax failures are reported by `Parse`/`ParseValue` style APIs as normal parse
+errors. `ParseRecoveringFromSource` and equivalent recovery APIs return
+structured syntax diagnostics and an accepted flag. Reducer failures still
+propagate through the target's normal error mechanism.
+
+| Target | Source value/reducer path | Source recovery path | Token collection path |
+| --- | --- | --- | --- |
+| Go | `ParseWithReducerFromSource(NewScanner(source), reducer)` or `ParseValueFromSource(NewScanner(source))` | `ParseRecoveringFromSource(NewScanner(source))` | `Tokenize(source)` or `Scanner.All()`, then `Parse(tokens)` / `ParseWithReducer(tokens, reducer)` |
+| C# | `Parser.ParseWithReducerFromSource(new Scanner(source), reducers)` or `Parser.ParseValueFromSource(new Scanner(source))` | `Parser.ParseRecoveringFromSource(new Scanner(source))` or instance `ParseRecoveringSource(...)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
+| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_source` or `*_parse_value_source_typed` | `*_parse_recovering_source` | `*_tokenize`, then `*_parse_value` / `*_parse_value_typed` / `*_parse_recovering` |
+| C++ | construct `Generated::Scanner scanner(sourceText)`, then call `parse_value(scanner, reducers)` | `parse_recovering(scanner)` | `tokenize(sourceText)`, then `parse_value(tokens, reducers)` / `parse_recovering(tokens)` |
 
 Generated parsers can be used in two semantic styles:
 
@@ -275,14 +316,6 @@ flag. The established `Parse` and `ParseValue` entry points still fail when
 any syntax diagnostic is produced. Recovery is enabled by grammar alternatives
 such as `Statement : error Semi`; see
 [Parser Error Recovery](parser-error-recovery.md).
-
-Other generated targets expose the same idea with their language conventions:
-
-| Target | Preferred source API | Compatibility API |
-| --- | --- | --- |
-| C# | `Parser.ParseWithReducerFromSource(new Scanner(source), reducers)` | `Scanner.Tokenize(source)` plus `Parser.ParseWithReducer(tokens, reducers)` |
-| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_source` or `*_parse_value_source_typed` | `*_tokenize` plus `*_parse_value` or `*_parse_value_typed` |
-| C++ | construct `Generated::Scanner scanner(sourceText)` and call `parse_value(scanner, reducers)` | `tokenize(sourceText)` plus `parse_value(tokens, reducers)` |
 
 ## Generate C# Output
 

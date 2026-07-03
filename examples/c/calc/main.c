@@ -366,6 +366,16 @@ static int calc_run_assertions(char *message, size_t message_size)
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "expected division-by-zero failure");
     }
+    if (calc_eval(&demo, "1@", CALC_REDUCER_TYPED, &value, message, message_size))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "expected source scanner failure");
+    }
+    if (calc_eval(&demo, "1+", CALC_REDUCER_TYPED, &value, message, message_size))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "expected source parser failure");
+    }
     demo_arena_free(&demo.arena);
     if (calc_tokenize("1@", &tokens, &count, &error))
     {

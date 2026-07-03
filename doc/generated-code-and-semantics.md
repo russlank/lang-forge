@@ -104,8 +104,20 @@ public API.
 ## Choosing A Parser Entry Point
 
 The preferred production path is source-based parsing: construct the generated
-scanner and pass it directly to the parser. Token collections remain supported
-for compatibility, teaching, debugging, and token-stream inspection.
+scanner and pass it directly to the parser. The parser pulls lexemes lazily
+from a token source, so callers do not need to allocate and retain a complete
+token collection before parsing begins.
+
+Token collections remain supported for compatibility, teaching, debugging, and
+token-stream inspection. They are the right choice when a tool needs to print,
+filter, snapshot, or compare tokens before parsing. They also make some tests
+very direct because the test can control the exact token stream, including an
+explicit trailing EOF token.
+
+Source-based parsing reduces peak token-storage allocation, but it is not a
+different parser algorithm and it is not asynchronous. The parser still owns
+its state stack, semantic value stack, diagnostics, and any reducer-built AST
+or domain values for as long as the parse requires.
 
 | Need | Recommended API shape |
 |---|---|
@@ -115,6 +127,13 @@ for compatibility, teaching, debugging, and token-stream inspection.
 | Recovery diagnostics from a scanner/token source | `ParseRecoveringFromSource(source)` |
 | Token inspection before parsing | `Tokenize` / scanner `All`, then `Parse(tokens)` |
 | Compatibility with an existing token list | `Parse(tokens)`, `ParseValue(tokens)`, or `ParseWithReducer(tokens, reducer)` |
+
+Scanner/source failures are reported when the parser pulls the failing lexeme.
+Syntax failures from strict APIs still become parse errors. Recovering APIs
+such as `ParseRecoveringFromSource` or `parse_recovering(scanner)` return
+structured diagnostics and an accepted flag. Reducer failures keep using the
+target's ordinary error mechanism: Go `error`, C error structs and false/NULL
+returns, and C#/C++ exceptions or facade-level result objects.
 
 Target names follow local conventions:
 

@@ -213,6 +213,20 @@ static void run_assertions() {
     }
 
     try {
+        evaluate("1@");
+        throw std::runtime_error("expected source scanner error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("no lexical rule") != std::string::npos, "wrong source scanner error");
+    }
+
+    try {
+        evaluate("1+");
+        throw std::runtime_error("expected source parser error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("parse error") != std::string::npos, "wrong source parse error");
+    }
+
+    try {
         evaluate("1/0");
         throw std::runtime_error("expected division-by-zero error");
     } catch (const std::runtime_error& ex) {

@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-example-template-guide-v1`
 
-Last updated: 2026-07-03
+Last updated: 2026-07-04
 
 Scope: `Reusable example templates, shared testdata, and generated/handwritten boundaries`
 
@@ -123,6 +123,41 @@ reference when a project is larger than a tiny demo. It uses:
   reducers remain copyable;
 - `mini::Result<T>` as a C++17 stand-in for `std::expected`;
 - a `CMakeLists.txt` that generates LangForge output before compiling the demo.
+
+## Production Responsibilities
+
+Templates are meant to be copied, so they show the responsibilities that should
+stay outside generated code:
+
+| Responsibility | Template pattern |
+|---|---|
+| Domain model or AST ownership | Go `model`, C# `Ast/`, C `ast.h/c`, C++ `include/.../ast.hpp` |
+| Reducer behavior | Generated typed contexts mapped to ordinary handwritten functions |
+| Parser public API | A facade such as `Parser`, `ILibraryDslParser`, `dsl_parse_source`, or `ParserFacade` |
+| Diagnostics policy | Generated diagnostics converted to messages meaningful to the domain |
+| Cleanup | C result/free functions, C++ `unique_ptr`/RAII, Go/C# ordinary ownership |
+| Runtime/compiler layer | Separate compiler, renderer, report writer, or mock VM code |
+
+Generated scanner/parser code is an implementation detail. Keep imports of
+generated packages, namespaces, and headers inside the facade or semantic
+adapter where practical. This lets a larger application call stable domain
+methods without depending on generated parser stack values.
+
+The normal production path in all templates is source-based parsing:
+
+```text
+source text -> generated scanner/token source -> parser -> reducer -> AST/domain result
+```
+
+Token-list parsing is still useful for tests, tutorials, and token inspection,
+but new reusable projects should prefer the scanner/source APIs.
+
+Normal reducer failures should be returned or reported through the generated
+parser API, not through process-level failures. Go reducers return `error`, C
+reducers fill the generated error struct and return `NULL`, and C#/C++
+reducers may throw exceptions that the handwritten facade converts into a
+domain result when exception-free callers are desired. Avoid `panic`, `abort`,
+and unchecked cast helpers for user-input failures.
 
 ## Start From A Template
 

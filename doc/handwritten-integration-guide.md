@@ -4,7 +4,7 @@ Document id: `lang-forge-handwritten-integration-guide-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-04`
 
 Owner: `Project maintainers`
 
@@ -155,6 +155,168 @@ Choose the smallest wrapper that matches your use case.
 
 For anything beyond a tiny demo, prefer a parser facade. It keeps generated API
 changes local and makes tests easier to read.
+
+## Production Error Flow
+
+Most parser applications have more than one kind of failure. Keep those layers
+separate in code and diagnostics:
+
+```text
+source text
+  -> scanner/token source
+       lexical errors: invalid byte/rune, unmatched character, unterminated literal
+  -> parser
+       syntax diagnostics: unexpected token, expected-token set, recovery action
+  -> reducer/semantic actions
+       reducer errors: bad literal range, division by zero, missing handler
+  -> semantic validation
+       domain errors: undefined name, duplicate declaration, type mismatch
+  -> compiler/runtime
+       execution errors: unsupported operation, stack underflow, IO/render failure
+```
+
+Generated scanners and parsers own the first two layers. Handwritten reducers,
+facades, validators, compilers, interpreters, and renderers own the later
+layers. Do not flatten every failure into "parse error"; users fix problems
+faster when a message says which layer failed.
+
+Normal user-input failures should be returned through the target's error
+channel:
+
+- Go reducers return `(value, error)`;
+- C# and C++ reducers throw ordinary exceptions that the facade can convert to
+  a domain `ParseResult<T>` or application diagnostic;
+- C reducers fill the generated error struct and return `NULL`;
+- parser recovery APIs return syntax diagnostics as data.
+
+Do not use `panic`, `abort`, unchecked cast helpers, or process-wide error
+state for ordinary scanner/parser/reducer failures. Reserve those for true
+programmer invariants in tests or unreachable code.
+
+## Generated Code Is An Implementation Detail
+
+Generated packages, namespaces, headers, and parser records are useful inside
+the integration layer, but they should not be the public API of a reusable
+library. Prefer this boundary:
+
+```text
+public facade: ParseProgram(source) -> domain Program / ParseResult<Program>
+private/generated boundary: Scanner -> Parser -> typed reducer map
+```
+
+This keeps regeneration, target-specific naming, parser table changes, and
+typed adapter details local to one package or module. The strongest copyable
+examples for this pattern are:
+
+- Go: `examples/templates/go/library-dsl`;
+- C#: `examples/templates/csharp/library-dsl` and
+  `examples/templates/csharp/layered-compiler`;
+- C: `examples/templates/c/library-dsl`;
+- C++: `examples/templates/cpp/library-dsl` and
+  `examples/templates/cpp/layered-compiler`.
+
+## Source-Based Parsing Versus Token Collections
+
+The preferred production path is source-based parsing:
+
+```text
+source text -> generated scanner.Next() -> generated parser -> reducers
+```
+
+The parser pulls one token at a time from the scanner or token source. This
+avoids building a complete token list for normal use, and it keeps scanner
+errors in the same flow as parser and reducer errors.
+
+Token collections are still useful when you want to inspect, snapshot, filter,
+or test the token stream:
+
+```text
+source text -> Tokenize/All -> inspect tokens -> Parse(tokens)
+```
+
+Use this rule of thumb:
+
+| API shape | Use when |
+|---|---|
+| `Tokenize` / scanner `All` | You want to inspect or snapshot tokens before parsing. |
+| `Parse(tokens)` | You already have a token collection and only need syntax validation. |
+| `ParseFromSource(source)` | You only need syntax validation and want the parser to pull tokens lazily. |
+| `ParseValue(tokens)` | You already have tokens and want the final semantic value through the parser's configured reducer/default reducer path. |
+| `ParseValueFromSource(source)` | You want a final semantic value from a pull token source. |
+| `ParseWithReducer(tokens, reducer)` | You already have tokens and need custom semantics; useful for tests and debugging. |
+| `ParseWithReducerFromSource(source, reducer)` | Preferred production reducer path for Go/C# convenience APIs. |
+| `ParseRecovering(tokens)` | You already have tokens and want multiple syntax diagnostics or a partial result. |
+| `ParseRecoveringFromSource(source)` | Preferred recovery path when reading directly from a scanner/source. |
+
+Target naming follows each language:
+
+- Go uses `TokenSource`, `ParseFromSource`, `ParseValueFromSource`,
+  `ParseWithReducerFromSource`, and `ParseRecoveringFromSource`.
+- C# uses `ILexemeSource`, static convenience methods such as
+  `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducers)`, and
+  instance methods such as
+  `new Parser(reducers).ParseRecoveringSource(new Scanner(sourceText))`.
+- C uses a `<prefix>_lexeme_source` callback struct and functions such as
+  `<prefix>_parse_source`, `<prefix>_parse_value_source_typed`, and
+  `<prefix>_parse_recovering_source`.
+- C++ uses `LexemeSource&` overloads such as `parse_value(scanner, reducers)`
+  and `parse_recovering(scanner)`.
+
+## Ownership And Lifetime By Target
+
+Go ownership is mostly ordinary Go value ownership:
+
+- AST/model values are Go values, pointers, slices, or maps owned by your
+  package;
+- generated token slices from `Tokenize` are owned by the caller;
+- errors are returned, not panicked, for normal failures;
+- keep model packages dependency-only when generated typed contexts reference
+  them, so generated code does not import a package that already imports
+  generated code;
+- create one scanner per input unless you intentionally serialize access to a
+  shared scanner.
+
+C# ownership is ordinary managed-object ownership, with nullable boundaries:
+
+- AST records/classes are owned by the application and garbage-collected;
+- generated `Lexeme` lists are caller-owned managed collections;
+- nullable `object?` final values should be converted at the facade boundary
+  into domain `ParseResult<T>` or exceptions meaningful to the application;
+- use `ParseResult<T>` for reusable libraries that should not throw on normal
+  syntax or semantic failures;
+- use exceptions inside reducer code for semantic failures, then catch and
+  translate them in the facade when a result API is preferred;
+- keep DI dependencies in handwritten facade/semantics code, not in generated
+  recognizers.
+
+C ownership must be explicit:
+
+- the caller owns source text and must keep it alive until parsing returns;
+- generated token arrays must be freed with the generated free function when
+  collection APIs are used;
+- generated recovery result diagnostic arrays must be initialized and freed
+  with the generated result init/free functions;
+- semantic values are `void *` (`<prefix>_value`) owned by handwritten code;
+- use one per-parse arena/allocator or clear ownership tree for reducer-built
+  AST nodes;
+- on scanner, syntax, or reducer failure, the facade should free partial
+  semantic state before returning;
+- on success, transfer ownership to one result/document value and document the
+  matching free function.
+
+C++ ownership should be intentional:
+
+- generated parser stacks use `std::any` for compatibility, but direct typed
+  adapters keep `std::any_cast` out of normal handwritten reducers;
+- use `std::unique_ptr` for AST nodes with one owner;
+- use `std::shared_ptr` only for real sharing, such as interned symbols or
+  cross-tree references;
+- use `std::variant` for closed node families when that is clearer than a base
+  class hierarchy;
+- convert `ParseError`, reducer exceptions, and runtime exceptions into a
+  domain result type at the facade boundary;
+- keep generated headers private to implementation files when building a
+  reusable library.
 
 ## Recommended Layouts
 
@@ -334,7 +496,7 @@ when the generated package does not exist yet.
 Generated C# code exposes:
 
 - `new Scanner(source)` as an `ILexemeSource`;
-- `Parser.ParseWithReducerFromSource(source, reducerMap)`;
+- `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducerMap)`;
 - `Scanner.Tokenize(source)` and `Parser.ParseWithReducer(tokens, reducerMap)`
   as compatibility/debugging helpers;
 - `SemanticAction` enum values;

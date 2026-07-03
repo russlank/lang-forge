@@ -28,7 +28,16 @@ code outside `Generated/`.
 
 The Makefiles include shared fragments from `examples/mk` and default to
 shared valid fixtures under `examples/testdata`. For a smaller copyable starter
-project, use `examples/templates/csharp/mini-compiler`.
+project, use `examples/templates/csharp/mini-compiler`. For reusable parser
+library code, use `examples/templates/csharp/library-dsl`.
+
+C# examples prefer source-based parsing with `new Scanner(sourceText)` passed
+to generated parser APIs such as `Parser.ParseWithReducerFromSource(...)` or
+instance `ParseRecoveringSource(...)`. `Scanner.Tokenize(...)` and token-list
+parse APIs remain useful for debugging and tests. Reusable examples convert
+generated values and diagnostics into domain `ParseResult<T>` values at the
+facade boundary; generated code stays container-agnostic, while handwritten
+semantics/facades are the right place for policies, services, and DI.
 
 For a reusable compiler-style starter, use
 `examples/templates/csharp/layered-compiler`. It keeps `Generated/` isolated,

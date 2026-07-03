@@ -50,6 +50,14 @@ handlers. Boxed-only reducers can tolerate an empty `std::any` only when that
 value is never read, but `nullptr` keeps the result consistent with the
 declared no-op type.
 
+C++ examples prefer source-based parsing by passing a generated `Scanner` to
+`parse_value(scanner, reducers)` or `parse_recovering(scanner)`. Token vectors
+remain available for tests and token inspection. Reusable handwritten code
+should hide generated headers behind parser facades, use direct typed reducers
+where practical, keep `std::any_cast` at compatibility boundaries, and express
+ownership with `std::unique_ptr`, `std::variant`, or a domain result type
+instead of exposing generated parser stack values.
+
 The DRAW C++ example writes a PNG image with a tiny local encoder rather than
 using an external image library.
 

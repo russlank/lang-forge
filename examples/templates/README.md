@@ -46,6 +46,8 @@ enable audit;
 It splits the code into domain model, semantic reducer, parser facade,
 diagnostics, thin demo entrypoint, and tests or smoke assertions. Use it when
 you want a copyable shape for a parser embedded in a larger application.
+Its facade uses source-based parsing so callers pass source text and receive a
+domain result without depending on generated parser stack values.
 The C version also demonstrates explicit ownership rules for AST nodes,
 generated diagnostics, parse results, reducer errors, and partial semantic
 cleanup on failure.

@@ -24,12 +24,25 @@ LangForge examples are organized by supported target language.
 - `templates/{go,csharp,c,cpp}/library-dsl` contains reusable library-style
   starters with domain models, typed reducers, parser facades, diagnostics,
   thin demo entrypoints, and smoke tests.
+- `templates/csharp/layered-compiler` and `templates/cpp/layered-compiler`
+  contain larger compiler-style starters for applications that want stronger
+  facade, ownership, diagnostics, and build-system structure from day one.
 - `testdata` contains shared valid, invalid, and golden fixtures consumed by
   the example gates.
 - `mk` contains shared Makefile fragments used by demos and templates.
 
 Generated folders, build outputs, and demo logs are ignored. Run each example's
 Makefile to regenerate the target-specific scanner/parser before building.
+Production paths in the examples prefer scanner/token-source parsing, where
+the parser pulls tokens lazily from the generated scanner. Token collection
+APIs are still demonstrated where they are useful for debugging, tests, or
+token inspection.
+
+For reusable code, keep generated packages, namespaces, and headers behind a
+handwritten facade. The target guides document the practical ownership rules:
+Go and C# use ordinary managed values/results, C uses explicit init/free and
+semantic-value ownership, and C++ uses RAII/domain result types with generated
+boxing hidden behind typed adapters where practical.
 The repository root also provides source-health checks:
 
 ```sh
@@ -48,7 +61,7 @@ DRAW, vehicle-report, parser-recovery, mini-compiler templates, and
 library-dsl templates to catch semantic action, RHS-label, typed-context, and
 recovery-reporting drift.
 `examples-testdata` runs shared fixtures and golden checks.
-`examples-templates` validates both copyable template families.
+`examples-templates` validates the maintained copyable templates.
 
 Intentional action-contract differences must be documented in
 `manifest-parity.allowlist.json` with `family`, `target`, `path`, and

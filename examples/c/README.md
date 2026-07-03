@@ -29,6 +29,17 @@ with `LDLIBS=-lm` by default.
 The examples default to the generated typed reducer wrapper, which validates
 named RHS labels and required handlers before delegating to the boxed C reducer.
 Pass `--boxed` to any C demo to run the compatibility reducer path directly.
+Production paths wrap a generated scanner in a `<prefix>_lexeme_source` and
+call source APIs such as `<prefix>_parse_value_source_typed`. Token arrays are
+kept for compatibility and token-inspection tests.
+
+C callers own cleanup explicitly. Keep source text alive until parsing
+returns, free generated token arrays and recovery results with the generated
+free functions, and make handwritten parser facades document who owns reducer
+semantic values and final AST/document results. The C `library-dsl` template
+is the strongest ownership example: it frees partial reducer allocations on
+scanner, syntax, or reducer failure and transfers the per-parse allocator to
+the final document on success.
 
 Run one example:
 

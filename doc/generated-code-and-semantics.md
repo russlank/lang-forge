@@ -4,7 +4,7 @@ Document id: `lang-forge-generated-code-and-semantics-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-04`
 
 Owner: `Project maintainers`
 
@@ -58,6 +58,81 @@ Expr Plus Term
 
 LangForge generates the scanner and parser. The application owns the semantic
 layer.
+
+## Generated And Handwritten Responsibilities
+
+Treat generated code as the recognizer implementation, not as the public shape
+of your application. The generated scanner knows how to turn source text into
+tokens. The generated parser knows how to recognize grammar rules, call a
+reducer action, report syntax diagnostics, and recover where the grammar says
+recovery is possible.
+
+Handwritten code still owns the application meaning:
+
+- AST, document, command, IR, or report types;
+- reducer handlers for grammar action labels;
+- ownership and cleanup of semantic values;
+- diagnostics formatting and error policy;
+- validation after parsing, such as duplicate names or type mismatches;
+- compiler, interpreter, renderer, or runtime behavior;
+- public parser facades such as `ParseProgram(source)`.
+
+This separation is deliberate. Generated code can be deleted and recreated,
+while handwritten domain code remains ordinary reviewed source code.
+
+## Error Flow
+
+A production parser normally reports several kinds of problems:
+
+```text
+source scanner -> parser diagnostics -> reducer errors -> semantic validation -> runtime/compiler errors
+```
+
+Keep those layers distinct. A malformed byte sequence or unmatched character
+is a scanner failure. An unexpected token is a parser diagnostic. A rejected
+literal range or division by zero inside a reducer is a reducer/semantic
+failure. An undefined symbol found after a successful parse is a validation
+failure.
+
+Do not use `panic`, `abort`, unchecked cast helpers, or process-wide error
+state for normal user-input failures. Use the target's normal error channel:
+Go returns `error`, C fills generated error structs and returns false/`NULL`,
+C# and C++ can throw inside the parser call path and facades can translate
+those exceptions into domain `ParseResult<T>` values where that is the desired
+public API.
+
+## Choosing A Parser Entry Point
+
+The preferred production path is source-based parsing: construct the generated
+scanner and pass it directly to the parser. Token collections remain supported
+for compatibility, teaching, debugging, and token-stream inspection.
+
+| Need | Recommended API shape |
+|---|---|
+| Syntax validation from a scanner/token source | `ParseFromSource(source)` |
+| Final semantic value from a scanner/token source | `ParseValueFromSource(source)` |
+| Custom reducers from a scanner/token source | `ParseWithReducerFromSource(source, reducer)` |
+| Recovery diagnostics from a scanner/token source | `ParseRecoveringFromSource(source)` |
+| Token inspection before parsing | `Tokenize` / scanner `All`, then `Parse(tokens)` |
+| Compatibility with an existing token list | `Parse(tokens)`, `ParseValue(tokens)`, or `ParseWithReducer(tokens, reducer)` |
+
+Target names follow local conventions:
+
+- Go exposes `TokenSource`, `ParseFromSource`, `ParseValueFromSource`,
+  `ParseWithReducerFromSource`, and `ParseRecoveringFromSource`.
+- C# exposes `ILexemeSource`, static calls such as
+  `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducers)`, and
+  instance methods such as `parser.ParseRecoveringSource(new Scanner(sourceText))`.
+- C exposes `<prefix>_lexeme_source`, `<prefix>_parse_value_source`,
+  `<prefix>_parse_value_source_typed`, and
+  `<prefix>_parse_recovering_source`.
+- C++ exposes `LexemeSource&` overloads such as
+  `parse_value(scanner, reducers)` and `parse_recovering(scanner)`.
+
+For reusable libraries, hide these generated entry points behind a handwritten
+facade. The caller should usually see a domain result such as
+`ParseResult<ProgramNode>`, `dsl_parse_result`, or `mini::Result<Program>`,
+not generated parser stack values.
 
 ## What `{go: add}` Means
 
@@ -507,8 +582,12 @@ For C#, LangForge writes `Tokens.g.cs`, `Scanner.g.cs`, `Parser.g.cs`,
 `langforge.tables.json`.
 
 For C, LangForge writes `tokens.h`, `scanner.h`, `scanner.c`, `parser.h`,
-`parser.c`, `langforge.actions.json`, `langforge.manifest.json`, and
-`langforge.tables.json`.
+`parser_typed.h`, `parser.c`, `langforge.actions.json`,
+`langforge.manifest.json`, and `langforge.tables.json`.
+
+For C++, LangForge writes `tokens.hpp`, `scanner.hpp`, `scanner.cpp`,
+`parser.hpp`, `parser_typed.hpp`, `parser.cpp`, `langforge.actions.json`,
+`langforge.manifest.json`, and `langforge.tables.json`.
 
 Generated parser runtimes keep parse state local to each parse call. Go and C#
 scanner instances serialize their mutable cursor so a shared scanner can be

@@ -4,6 +4,11 @@ LangForge generated parsers can continue after selected syntax errors and
 return structured diagnostics. Recovery is controlled by the grammar, so a
 parser never guesses arbitrary insertion or deletion rules.
 
+Recovery handles parser syntax problems. It does not turn every failure into a
+recoverable diagnostic. Scanner failures such as invalid UTF-8, reducer
+failures such as a rejected literal value, and later semantic/runtime failures
+still use the target's normal error channel.
+
 ## A Minimal Recovery Rule
 
 ```lf
@@ -86,6 +91,20 @@ All targets expose:
 - a recovery result containing a possibly partial value, diagnostics, and an
   accepted flag.
 
+Prefer source-based recovery in production. The parser pulls tokens from the
+generated scanner as needed:
+
+```text
+source text -> scanner.Next() -> ParseRecoveringFromSource / parse_recovering(source)
+```
+
+Token-collection recovery remains useful when a test or tool needs to inspect
+the token stream before parsing:
+
+```text
+source text -> Tokenize/All -> inspect tokens -> ParseRecovering(tokens)
+```
+
 Go:
 
 ```go
@@ -137,6 +156,37 @@ diagnostic as failure. Go returns `*ParseError`, C# throws `ParseException`,
 C++ throws `ParseError`, and C returns false with a summary in its error
 buffer. Use the recovery API when partial values or multiple diagnostics are
 part of the caller's workflow.
+
+## Error And Ownership Flow
+
+The recovery result is parser-layer data. A common facade flow is:
+
+```text
+source scanner
+  -> recovery parser result
+  -> domain diagnostics formatting
+  -> optional semantic validation
+  -> application result
+```
+
+If the recovery result has diagnostics, do not continue into compiler/runtime
+execution unless the application explicitly supports partial input. Recovery
+can produce a partial semantic value, but the caller decides whether that value
+is useful.
+
+Target-specific notes:
+
+- Go returns `(ParseResult, error)`. Inspect `result.Diagnostics` for syntax
+  recovery, and treat non-nil `error` as scanner/parser/reducer failure.
+- C# returns a generated `ParseResult` for recovery. Reusable libraries should
+  convert it into their own `ParseResult<T>` or diagnostic list at the facade
+  boundary.
+- C requires explicit init/free of the generated result. The application owns
+  any domain semantic values returned by reducers and should release partial
+  semantic state when a facade reports failure.
+- C++ returns a generated `ParseResult`. Facades should convert generated
+  diagnostics and any exceptions into a domain result type; use `std::unique_ptr`
+  or another explicit owner for partial AST values.
 
 ## Runnable Example
 

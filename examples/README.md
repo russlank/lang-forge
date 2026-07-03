@@ -4,17 +4,18 @@ LangForge examples are organized by supported target language.
 
 - `go/calc`, `go/datakeeper`, `go/draw`, `go/parser-recovery`, and
   `go/vehicle-report` are the full Go generated examples.
-- `csharp/calc`, `csharp/datakeeper`, `csharp/draw`, and
-  `csharp/vehicle-report` mirror the Go examples with generated C# output and
-  handwritten C# reducers.
-- `c/calc`, `c/datakeeper`, `c/draw`, and `c/vehicle-report` mirror the same
-  scenarios with generated C headers/sources and handwritten C reducers. The C
-  Makefiles skip compilation when no C compiler is available, but generation
-  and validation still run.
-- `cpp/calc`, `cpp/datakeeper`, `cpp/draw`, and `cpp/vehicle-report` mirror
-  the same scenarios with generated C++17 scanner/parser output and handwritten
-  reducer-map semantics. Their Makefiles skip compilation when no C++ compiler
-  is available, but generation and validation still run.
+- `csharp/calc`, `csharp/datakeeper`, `csharp/draw`,
+  `csharp/parser-recovery`, and `csharp/vehicle-report` mirror the Go examples
+  with generated C# output and handwritten C# reducers.
+- `c/calc`, `c/datakeeper`, `c/draw`, `c/parser-recovery`, and
+  `c/vehicle-report` mirror the same scenarios with generated C
+  headers/sources and handwritten C reducers. The C Makefiles skip compilation
+  when no C compiler is available, but generation and validation still run.
+- `cpp/calc`, `cpp/datakeeper`, `cpp/draw`, `cpp/parser-recovery`, and
+  `cpp/vehicle-report` mirror the same scenarios with generated C++17
+  scanner/parser output and handwritten reducer-map semantics. Their Makefiles
+  skip compilation when no C++ compiler is available, but generation and
+  validation still run.
 - `parser-algorithms` contains source-only parser-table fixtures shared by all
   targets.
 - `templates/{go,csharp,c,cpp}/mini-compiler` contains small copyable starter

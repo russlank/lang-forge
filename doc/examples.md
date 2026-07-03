@@ -4,7 +4,7 @@ Document id: `lang-forge-examples-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-03`
 
 Owner: `Project maintainers`
 
@@ -122,6 +122,7 @@ C# examples live under:
 - [examples/csharp/calc/calc.lf](../examples/csharp/calc/calc.lf)
 - [examples/csharp/datakeeper/datakeeper.lf](../examples/csharp/datakeeper/datakeeper.lf)
 - [examples/csharp/draw/draw.lf](../examples/csharp/draw/draw.lf)
+- [examples/csharp/parser-recovery/recovery.lf](../examples/csharp/parser-recovery/recovery.lf)
 - [examples/csharp/vehicle-report/vehicle.lf](../examples/csharp/vehicle-report/vehicle.lf)
 
 They mirror the Go grammar shapes but use `%target csharp`, C# namespaces, and
@@ -137,6 +138,7 @@ Run the C# family:
 make -C examples/csharp/calc run
 make -C examples/csharp/datakeeper run
 make -C examples/csharp/draw run
+make -C examples/csharp/parser-recovery run
 make -C examples/csharp/vehicle-report run
 ```
 
@@ -146,6 +148,7 @@ Test:
 make -C examples/csharp/calc test
 make -C examples/csharp/datakeeper test
 make -C examples/csharp/draw test
+make -C examples/csharp/parser-recovery test
 make -C examples/csharp/vehicle-report test
 ```
 
@@ -164,6 +167,7 @@ The C++ examples live under:
 - [examples/cpp/calc/calc.lf](../examples/cpp/calc/calc.lf)
 - [examples/cpp/datakeeper/datakeeper.lf](../examples/cpp/datakeeper/datakeeper.lf)
 - [examples/cpp/draw/draw.lf](../examples/cpp/draw/draw.lf)
+- [examples/cpp/parser-recovery/recovery.lf](../examples/cpp/parser-recovery/recovery.lf)
 - [examples/cpp/vehicle-report/vehicle.lf](../examples/cpp/vehicle-report/vehicle.lf)
 
 They use `%target cpp`, C++ namespace packages, and `{cpp: ...}` action labels:
@@ -178,6 +182,7 @@ Run it:
 make -C examples/cpp/calc run
 make -C examples/cpp/datakeeper run
 make -C examples/cpp/draw run
+make -C examples/cpp/parser-recovery run
 make -C examples/cpp/vehicle-report run
 ```
 
@@ -187,6 +192,7 @@ Test it:
 make -C examples/cpp/calc test
 make -C examples/cpp/datakeeper test
 make -C examples/cpp/draw test
+make -C examples/cpp/parser-recovery test
 make -C examples/cpp/vehicle-report test
 ```
 
@@ -203,6 +209,7 @@ C examples live under:
 - [examples/c/calc/calc.lf](../examples/c/calc/calc.lf)
 - [examples/c/datakeeper/datakeeper.lf](../examples/c/datakeeper/datakeeper.lf)
 - [examples/c/draw/draw.lf](../examples/c/draw/draw.lf)
+- [examples/c/parser-recovery/recovery.lf](../examples/c/parser-recovery/recovery.lf)
 - [examples/c/vehicle-report/vehicle.lf](../examples/c/vehicle-report/vehicle.lf)
 
 They mirror the same language scenarios with `%target c`, C-oriented
@@ -216,6 +223,7 @@ Run the C family:
 make -C examples/c/calc run
 make -C examples/c/datakeeper run
 make -C examples/c/draw run
+make -C examples/c/parser-recovery run
 make -C examples/c/vehicle-report run
 ```
 
@@ -225,6 +233,7 @@ Test:
 make -C examples/c/calc test
 make -C examples/c/datakeeper test
 make -C examples/c/draw test
+make -C examples/c/parser-recovery test
 make -C examples/c/vehicle-report test
 ```
 
@@ -251,7 +260,7 @@ The examples are meant to be read in increasing complexity:
 |---|---|---|
 | 0 | `examples/templates/*/mini-compiler` | Copyable scanner/parser/compiler starter shape with AST, reducer, stack-code lowering, runtime, diagnostics, and tests |
 | 1 | `examples/go/calc` | Small combined `.lf`, generated scanner/parser, reducer-backed expression value, simple CLI report |
-| 2 | `examples/go/parser-recovery` | Reserved `error` productions, synchronization, expected-token aliases, multiple diagnostics, and progress guarantees |
+| 2 | `examples/{go,csharp,c,cpp}/parser-recovery` | Reserved `error` productions, synchronization, expected-token aliases, multiple diagnostics, result cleanup/inspection, and progress guarantees |
 | 3 | `examples/parser-algorithms` | LR parser algorithm differences and expected SLR conflict |
 | 4 | `examples/go/datakeeper` | DSL syntax, generated reduction hooks, AST adapter, stack-machine lowering, mock execution |
 | 5 | `examples/go/draw` | DSL syntax, generated reduction hooks, interpreter, reusable blocks, rendered output |

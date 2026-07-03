@@ -112,14 +112,17 @@ examples-generate:
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/csharp/draw GO=$(GO) DOTNET=$(DOTNET) generate
+	$(MAKE) -C examples/csharp/parser-recovery GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/csharp/vehicle-report GO=$(GO) DOTNET=$(DOTNET) generate
 	$(MAKE) -C examples/c/calc GO=$(GO) generate
 	$(MAKE) -C examples/c/datakeeper GO=$(GO) generate
 	$(MAKE) -C examples/c/draw GO=$(GO) generate
+	$(MAKE) -C examples/c/parser-recovery GO=$(GO) generate
 	$(MAKE) -C examples/c/vehicle-report GO=$(GO) generate
 	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) generate
+	$(MAKE) -C examples/cpp/parser-recovery GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) generate
 	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) generate
 	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) generate
@@ -135,14 +138,17 @@ examples-run:
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/csharp/draw GO=$(GO) DOTNET=$(DOTNET) run
+	$(MAKE) -C examples/csharp/parser-recovery GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/csharp/vehicle-report GO=$(GO) DOTNET=$(DOTNET) run
 	$(MAKE) -C examples/c/calc GO=$(GO) run
 	$(MAKE) -C examples/c/datakeeper GO=$(GO) run
 	$(MAKE) -C examples/c/draw GO=$(GO) run
+	$(MAKE) -C examples/c/parser-recovery GO=$(GO) run
 	$(MAKE) -C examples/c/vehicle-report GO=$(GO) run
 	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) run
+	$(MAKE) -C examples/cpp/parser-recovery GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) run
 	$(MAKE) -C examples/templates/go/mini-compiler GO=$(GO) run
 	$(MAKE) -C examples/templates/csharp/mini-compiler GO=$(GO) DOTNET=$(DOTNET) run
@@ -164,14 +170,17 @@ examples-test:
 	$(MAKE) -C examples/csharp/calc GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/csharp/datakeeper GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/csharp/draw GO=$(GO) DOTNET=$(DOTNET) test
+	$(MAKE) -C examples/csharp/parser-recovery GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/csharp/vehicle-report GO=$(GO) DOTNET=$(DOTNET) test
 	$(MAKE) -C examples/c/calc GO=$(GO) test
 	$(MAKE) -C examples/c/datakeeper GO=$(GO) test
 	$(MAKE) -C examples/c/draw GO=$(GO) test
+	$(MAKE) -C examples/c/parser-recovery GO=$(GO) test
 	$(MAKE) -C examples/c/vehicle-report GO=$(GO) test
 	$(MAKE) -C examples/cpp/calc GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/cpp/datakeeper GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/cpp/draw GO=$(GO) CXX=$(CXX) test
+	$(MAKE) -C examples/cpp/parser-recovery GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/cpp/vehicle-report GO=$(GO) CXX=$(CXX) test
 
 examples-cleanliness:
@@ -201,14 +210,17 @@ examples-clean:
 	$(MAKE) -C examples/csharp/calc clean
 	$(MAKE) -C examples/csharp/datakeeper clean
 	$(MAKE) -C examples/csharp/draw clean
+	$(MAKE) -C examples/csharp/parser-recovery clean
 	$(MAKE) -C examples/csharp/vehicle-report clean
 	$(MAKE) -C examples/c/calc clean
 	$(MAKE) -C examples/c/datakeeper clean
 	$(MAKE) -C examples/c/draw clean
+	$(MAKE) -C examples/c/parser-recovery clean
 	$(MAKE) -C examples/c/vehicle-report clean
 	$(MAKE) -C examples/cpp/calc clean
 	$(MAKE) -C examples/cpp/datakeeper clean
 	$(MAKE) -C examples/cpp/draw clean
+	$(MAKE) -C examples/cpp/parser-recovery clean
 	$(MAKE) -C examples/cpp/vehicle-report clean
 	$(MAKE) -C examples/templates/go/mini-compiler clean
 	$(MAKE) -C examples/templates/csharp/mini-compiler clean

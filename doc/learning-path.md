@@ -110,10 +110,14 @@ SLR.
 
 ### 5. Recover From Syntax Errors
 
-Run the recovery fixture:
+Run the recovery fixture. Start with Go, then compare the same fixture in the
+other generated targets:
 
 ```sh
 make -C examples/go/parser-recovery run
+make -C examples/csharp/parser-recovery run
+make -C examples/c/parser-recovery run
+make -C examples/cpp/parser-recovery run
 ```
 
 Then read [Parser Error Recovery](parser-error-recovery.md).

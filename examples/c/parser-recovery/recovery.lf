@@ -1,0 +1,29 @@
+%target c
+%package recovery
+%token Ident Number Assign Semi
+%alias Ident "identifier"
+%alias Number "number literal"
+%group value Ident Number
+%hide-expected Semi
+%start Program
+
+%% lexer
+IDENT = [A-Za-z_] [A-Za-z0-9_]*;
+NUMBER = [0-9]+;
+
+IDENT     => token(Ident);
+NUMBER    => token(Number);
+"="       => token(Assign);
+";"       => token(Semi);
+[1-32]+   => skip;
+
+%% parser
+Program : Statements ;
+
+Statements : Statement Statements
+           | %empty
+           ;
+
+Statement : Ident Assign Number Semi
+          | error Semi
+          ;

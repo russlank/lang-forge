@@ -89,7 +89,7 @@ All targets expose:
 Go:
 
 ```go
-result, err := generated.ParseRecovering(tokens)
+result, err := generated.ParseRecoveringFromSource(generated.NewScanner(source))
 if err != nil {
     // Internal parser or semantic reducer failure.
 }
@@ -101,21 +101,28 @@ for _, diagnostic := range result.Diagnostics {
 C#:
 
 ```csharp
-ParseResult result = Parser.ParseRecovering(tokens);
+ParseResult result = Parser.ParseRecoveringFromSource(new Scanner(source));
 ```
 
 C++:
 
 ```cpp
-auto result = parse_recovering(tokens);
+Scanner scanner(source);
+auto result = parse_recovering(scanner);
 ```
 
 C:
 
 ```c
+recovery_scanner scanner;
+recovery_lexeme_source source;
 recovery_parse_result result;
+
+recovery_scanner_init(&scanner, input);
+source.user = &scanner;
+source.next = recovery_scanner_source_next;
 recovery_parse_result_init(&result);
-if (recovery_parse_recovering(tokens, count, &result, &error)) {
+if (recovery_parse_recovering_source(&source, &result, &error)) {
     /* Inspect result.diagnostics and result.accepted. */
 }
 recovery_parse_result_free(&result);
@@ -133,12 +140,25 @@ part of the caller's workflow.
 
 ## Runnable Example
 
-[The parser recovery demo](../examples/go/parser-recovery) contains two
-malformed assignments separated by valid statements. Run:
+The parser recovery demos contain the same two malformed assignments separated
+by valid statements:
+
+- [Go parser recovery demo](../examples/go/parser-recovery)
+- [C# parser recovery demo](../examples/csharp/parser-recovery)
+- [C parser recovery demo](../examples/c/parser-recovery)
+- [C++ parser recovery demo](../examples/cpp/parser-recovery)
+
+Run any target:
 
 ```sh
 make -C examples/go/parser-recovery run
+make -C examples/csharp/parser-recovery run
+make -C examples/c/parser-recovery run
+make -C examples/cpp/parser-recovery run
 ```
 
-It reports both errors, shows their expected token and recovery action, and
-still accepts the complete input.
+Each demo reports both errors, shows expected tokens and recovery actions,
+prints whether the full input was accepted, and asserts the fixture when run
+through its `test` target. The C example also shows explicit result
+initialization and cleanup, while the C# and C++ examples show idiomatic
+exception-free result inspection for recoverable syntax errors.

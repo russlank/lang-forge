@@ -52,41 +52,68 @@ static char *unquote_lexeme(const library_dsl_lexeme *lexeme) {
     return out;
 }
 
+static library_dsl_value fail_alloc(library_dsl_error *error, const char *action) {
+    if (error != NULL) {
+        snprintf(error->message, sizeof(error->message), "action %s could not allocate semantic value", action);
+    }
+    return NULL;
+}
+
 static library_dsl_value reduce_document(const library_dsl_document_reduction *ctx, void *user, library_dsl_error *error) {
     /* Document : entries=Entries {c: document} */
+    dsl_document *document = NULL;
     (void)user;
-    (void)error;
-    return dsl_document_create(ctx->entries);
+    document = dsl_document_create(ctx->entries);
+    if (document == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
+    return document;
 }
 
 static library_dsl_value reduce_entries(const library_dsl_entries_reduction *ctx, void *user, library_dsl_error *error) {
     /* Entries : head=Entry tail=EntriesTail {c: entries} */
+    dsl_entry_list *list = NULL;
     (void)user;
-    (void)error;
-    return dsl_entry_list_prepend(ctx->head, ctx->tail);
+    list = dsl_entry_list_prepend(ctx->head, ctx->tail);
+    if (list == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
+    return list;
 }
 
 static library_dsl_value reduce_entries_empty(const library_dsl_entries_empty_reduction *ctx, void *user, library_dsl_error *error) {
     /* Entries : %empty {c: entries.empty} */
+    dsl_entry_list *list = NULL;
     (void)ctx;
     (void)user;
-    (void)error;
-    return dsl_entry_list_empty();
+    list = dsl_entry_list_empty();
+    if (list == NULL) {
+        return fail_alloc(error, "entries.empty");
+    }
+    return list;
 }
 
 static library_dsl_value reduce_entries_tail_more(const library_dsl_entries_tail_more_reduction *ctx, void *user, library_dsl_error *error) {
     /* EntriesTail : head=Entry tail=EntriesTail {c: entries.tail.more} */
+    dsl_entry_list *list = NULL;
     (void)user;
-    (void)error;
-    return dsl_entry_list_prepend(ctx->head, ctx->tail);
+    list = dsl_entry_list_prepend(ctx->head, ctx->tail);
+    if (list == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
+    return list;
 }
 
 static library_dsl_value reduce_entries_tail_empty(const library_dsl_entries_tail_empty_reduction *ctx, void *user, library_dsl_error *error) {
     /* EntriesTail : %empty {c: entries.tail.empty} */
+    dsl_entry_list *list = NULL;
     (void)ctx;
     (void)user;
-    (void)error;
-    return dsl_entry_list_empty();
+    list = dsl_entry_list_empty();
+    if (list == NULL) {
+        return fail_alloc(error, "entries.tail.empty");
+    }
+    return list;
 }
 
 static library_dsl_value reduce_entry_set(const library_dsl_entry_set_reduction *ctx, void *user, library_dsl_error *error) {
@@ -100,6 +127,9 @@ static library_dsl_value reduce_entry_set(const library_dsl_entry_set_reduction 
     }
     entry = dsl_entry_set(name, ctx->value);
     free(name);
+    if (entry == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
     return entry;
 }
 
@@ -114,6 +144,9 @@ static library_dsl_value reduce_entry_enable(const library_dsl_entry_enable_redu
     }
     entry = dsl_entry_enable(name, dsl_value_bool(1));
     free(name);
+    if (entry == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
     return entry;
 }
 
@@ -135,7 +168,13 @@ static library_dsl_value reduce_value_number(const library_dsl_value_number_redu
         return NULL;
     }
     free(text);
-    return dsl_value_number((int)value);
+    {
+        dsl_value *out = dsl_value_number((int)value);
+        if (out == NULL) {
+            return fail_alloc(error, ctx->reduction->action);
+        }
+        return out;
+    }
 }
 
 static library_dsl_value reduce_value_string(const library_dsl_value_string_reduction *ctx, void *user, library_dsl_error *error) {
@@ -149,6 +188,9 @@ static library_dsl_value reduce_value_string(const library_dsl_value_string_redu
     }
     value = dsl_value_string(text);
     free(text);
+    if (value == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
     return value;
 }
 
@@ -163,6 +205,9 @@ static library_dsl_value reduce_value_ident(const library_dsl_value_ident_reduct
     }
     value = dsl_value_ident(text);
     free(text);
+    if (value == NULL) {
+        return fail_alloc(error, ctx->reduction->action);
+    }
     return value;
 }
 

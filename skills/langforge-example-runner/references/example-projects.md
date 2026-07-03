@@ -71,6 +71,10 @@ it.
 - `examples/templates/{go,csharp,c,cpp}/mini-compiler`: copyable starter
   projects with `.lf`, handwritten reducer, AST/model, compiler/runtime,
   diagnostics, tests, and generated-on-demand output.
+- `examples/templates/{go,csharp,c,cpp}/library-dsl`: reusable library-style
+  starters with domain model/AST, typed reducer, parser facade, diagnostics,
+  thin demo entrypoint, tests or smoke assertions, and generated-on-demand
+  output.
 
 The root `Makefile` should list runnable example families in `examples-run`,
 `examples-test`, and `examples-clean`. When adding an example, update both the
@@ -105,8 +109,8 @@ lang-forge init calc --target csharp --out ./calc-demo
 ```
 
 Until that command exists, copy one `examples/templates/<target>/mini-compiler`
-folder and rename the package/namespace, Makefile variables, project file, and
-README by hand.
+or `examples/templates/<target>/library-dsl` folder and rename the
+package/namespace, Makefile variables, project file, and README by hand.
 
 ## Artifact Policy
 

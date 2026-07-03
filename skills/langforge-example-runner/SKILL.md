@@ -11,8 +11,9 @@ Run LangForge examples as reproducible source projects: spec in, generated
 scanner/parser output for the selected target, handwritten semantics wired,
 demo binary executed against sample input, and generated output kept out of
 source control. Current runnable families cover Go, C#, C, and C++; templates
-under `examples/templates/{go,csharp,c,cpp}/mini-compiler` are the seed shape
-for future project-bootstrap generation.
+under `examples/templates/{go,csharp,c,cpp}/mini-compiler` and
+`examples/templates/{go,csharp,c,cpp}/library-dsl` are the seed shapes for
+future project-bootstrap generation.
 
 ## Workflow
 

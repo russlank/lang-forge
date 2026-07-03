@@ -6,6 +6,7 @@
 #include "generated/parser_typed.h"
 
 typedef struct dsl_semantic_context {
+    /* Reserved for domain services or diagnostics shared by reducer handlers. */
     char message[256];
 } dsl_semantic_context;
 

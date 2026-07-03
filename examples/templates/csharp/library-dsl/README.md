@@ -17,5 +17,7 @@ make run
 ```
 
 Applications should depend on `ILibraryDslParser`, not on generated parser
-types. Register `LibraryDslParser` with your usual dependency-injection
-container when moving this template into a service or desktop application.
+types. The template does not reference a dependency-injection package so it can
+build with only the .NET SDK; when moving it into an application, register
+`LibraryDslParser` with your usual container as the `ILibraryDslParser`
+implementation.

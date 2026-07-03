@@ -73,6 +73,11 @@ larger application usually wants: call your own parser facade, receive your own
 AST/domain model, and keep generated packages/namespaces/prefixes out of most
 application code.
 
+The C# template exposes an interface and concrete parser but does not add a
+dependency-injection package reference. That keeps the starter runnable with
+only the .NET SDK. Applications can register `LibraryDslParser` as
+`ILibraryDslParser` in their own host/container layer.
+
 ## Start From A Template
 
 Run a template before editing:

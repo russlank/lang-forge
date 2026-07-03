@@ -10,6 +10,10 @@ Generated typed reducer adapters expose records such as `AddReduction`,
 ordinary C# functions. This keeps the starter close to real projects without
 teaching `ctx.Values[index]` as the main reducer style.
 
+Semantic failures should travel through the parser call like any other
+diagnostic. The assertion path includes an oversized integer literal that the
+scanner accepts but the `number` reducer rejects with rule/action/label context.
+
 ```sh
 make run
 make test

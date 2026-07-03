@@ -3,6 +3,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	minimodel "github.com/russlank/lang-forge/examples/templates/go/mini-compiler/model"
@@ -23,5 +24,10 @@ func TestMiniCompilerPipeline(t *testing.T) {
 	}
 	if _, err := parse("print 1 +;"); err == nil {
 		t.Fatalf("expected parser error")
+	}
+	if _, err := parse("print 999999999999999999999999;"); err == nil {
+		t.Fatalf("expected reducer error")
+	} else if !strings.Contains(err.Error(), "number") {
+		t.Fatalf("reducer error should mention number literal, got %v", err)
 	}
 }

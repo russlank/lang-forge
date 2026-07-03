@@ -106,14 +106,32 @@ static mini::ReducerMap reducers() {
             return ctx.value;
         })},
         {mini::SemanticAction::Number, mini::typed_number([](const mini::NumberReduction& ctx) -> ExprPtr {
-            return number_expr(std::stoi(std::string(ctx.token.text)));
+            const std::string text(ctx.token.text);
+            try {
+                std::size_t consumed = 0;
+                const int value = std::stoi(text, &consumed);
+                if (consumed != text.size()) {
+                    throw std::invalid_argument("trailing characters");
+                }
+                return number_expr(value);
+            } catch (const std::exception& ex) {
+                throw std::runtime_error("rule " + std::to_string(ctx.reduction.rule) +
+                                         " action " + std::string(ctx.reduction.action) +
+                                         " label token value " + text +
+                                         " is not a valid int: " + ex.what());
+            }
         })},
     };
 }
 
 static Program parse_program(std::string_view source) {
     mini::Scanner scanner(source);
-    return std::any_cast<Program>(mini::parse_value(scanner, reducers()));
+    const auto value = mini::parse_value(scanner, reducers());
+    try {
+        return std::any_cast<Program>(value);
+    } catch (const std::bad_any_cast&) {
+        throw std::runtime_error("parser final value has incompatible type; expected Program");
+    }
 }
 
 static void compile_expr(const ExprPtr& expr, std::vector<Instruction>& code) {
@@ -197,6 +215,13 @@ static void run_assertions(const std::string& source) {
         throw std::runtime_error("expected parser failure");
     } catch (const std::runtime_error& ex) {
         require(std::string(ex.what()).find("parse error") != std::string::npos, "wrong parser error");
+    }
+    try {
+        parse_program("print 999999999999999999999999;");
+        throw std::runtime_error("expected reducer failure");
+    } catch (const std::runtime_error& ex) {
+        const std::string message = ex.what();
+        require(message.find("action number") != std::string::npos && message.find("label token") != std::string::npos, "wrong reducer error");
     }
 }
 

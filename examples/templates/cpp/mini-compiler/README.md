@@ -10,6 +10,11 @@ adapters expose typed contexts such as `mini::AddReduction` and
 `mini::NumberReduction`, so handwritten handlers read `ctx.left`, `ctx.right`,
 and `ctx.token` instead of using `std::any` positions directly.
 
+User-facing reducer failures should be thrown as ordinary parser-call errors
+with grammar context. The self-test includes an oversized integer literal that
+the scanner accepts and the typed `number` reducer rejects with rule/action/label
+details.
+
 ```sh
 make run
 make test

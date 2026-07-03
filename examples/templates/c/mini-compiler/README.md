@@ -11,6 +11,10 @@ The grammar declares C semantic result types for the AST pointers. The generated
 `left` and `right`. `main.c` calls `mini_compiler_parse_value_source_typed` so
 new projects start from the typed reducer API.
 
+Reducer failures are reported by filling `mini_compiler_error` and returning
+`NULL`, not by aborting. The self-test exercises an oversized integer literal
+that reaches the typed `number` handler and returns an action/label-rich error.
+
 ```sh
 make run
 make test

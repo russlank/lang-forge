@@ -88,6 +88,10 @@ For real projects, prefer generated typed reducer contexts:
   `mini_compiler_parse_value_source_typed`, or C++ `typed_add`;
 - keep boxed `ctx.Values[index]` access only in migration shims or debugging
   code.
+- return reducer/semantic failures through the parser API. In Go, return
+  `error`; in C, fill the generated error struct and return `NULL`; in C# and
+  C++, throw ordinary exceptions from the parser call path. Avoid `panic`,
+  `abort`, or unchecked cast helpers for normal user input failures.
 
 For example, this grammar rule:
 
@@ -136,6 +140,12 @@ The C++ template uses `parser_typed.hpp` adapters:
 Every template also writes `langforge.actions.json`. Review that file when
 changing a grammar: intended actions should have `"typed": true`, and field
 entries should show the labels and target types you expect.
+
+The mini-compiler templates test one reducer failure explicitly: an oversized
+integer literal is lexically valid, but the `number` reducer rejects it as a
+semantic error. That is the pattern to copy for domain-level failures such as
+unknown symbols, invalid ranges, duplicate declarations, or unsupported target
+operations.
 
 ## Spec-To-Code Checklist
 

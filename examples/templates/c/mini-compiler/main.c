@@ -1,5 +1,7 @@
 #include "generated/parser.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -197,12 +199,20 @@ static mini_compiler_value reduce_pass(const mini_compiler_pass_reduction *ctx, 
 static mini_compiler_value reduce_number(const mini_compiler_number_reduction *ctx, void *user, mini_compiler_error *error) {
     context *state = (context *)user;
     char text[32] = {0};
+    char *end = NULL;
+    long value = 0;
     if (ctx->token == NULL || ctx->token->length >= sizeof(text)) {
-        snprintf(error->message, sizeof(error->message), "invalid number literal");
+        snprintf(error->message, sizeof(error->message), "rule %d action number label token has invalid number literal", ctx->reduction->rule);
         return NULL;
     }
     memcpy(text, ctx->token->text, ctx->token->length);
-    return new_number(state, atoi(text));
+    errno = 0;
+    value = strtol(text, &end, 10);
+    if (errno == ERANGE || end == text || *end != '\0' || value < INT_MIN || value > INT_MAX) {
+        snprintf(error->message, sizeof(error->message), "rule %d action %s label token value %s is not a valid int", ctx->reduction->rule, ctx->reduction->action, text);
+        return NULL;
+    }
+    return new_number(state, (int)value);
 }
 
 static mini_compiler_typed_reducer make_typed_reducer(context *state) {
@@ -337,6 +347,22 @@ static int take_flag(int *argc, char **argv, const char *name) {
     return 0;
 }
 
+static int assert_reducer_error(char *message, size_t message_size) {
+    context bad = {0};
+    char local[256] = {0};
+    program *parsed = parse_source(&bad, "print 999999999999999999999999;", local, sizeof(local));
+    arena_free(&bad.memory);
+    if (parsed != NULL) {
+        snprintf(message, message_size, "expected reducer failure for oversized number");
+        return 0;
+    }
+    if (strstr(local, "action number") == NULL || strstr(local, "label token") == NULL) {
+        snprintf(message, message_size, "wrong reducer error: %s", local);
+        return 0;
+    }
+    return 1;
+}
+
 int main(int argc, char **argv) {
     char message[256] = {0};
     char report[2048] = {0};
@@ -361,6 +387,12 @@ int main(int argc, char **argv) {
     }
     if (assert_mode && (output.count != 2 || output.values[0] != 3 || output.values[1] != 42)) {
         fprintf(stderr, "unexpected template output\n");
+        free(source);
+        arena_free(&state.memory);
+        return 1;
+    }
+    if (assert_mode && !assert_reducer_error(message, sizeof(message))) {
+        fprintf(stderr, "%s\n", message);
         free(source);
         arena_free(&state.memory);
         return 1;

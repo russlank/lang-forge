@@ -29,5 +29,7 @@ Each template uses the current recommended LangForge reducer style:
   `right=Term`, `expr=Expr`, and `token=Number`;
 - handwritten reducer code consumes generated typed reducer contexts instead of
   indexing parser stack values manually;
+- reducer failures are returned through the generated parse API with useful
+  rule/action/field context rather than handled with panic-style helpers;
 - `langforge.actions.json` records the typed action contract for review and
   tooling.

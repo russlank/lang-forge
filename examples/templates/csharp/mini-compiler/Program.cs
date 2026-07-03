@@ -6,7 +6,11 @@ using static LangForge.Examples.Templates.MiniCompiler.Generated.SemanticReducer
 static ProgramNode ParseProgram(string source)
 {
     var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
-    return CastArg<ProgramNode>(value, "program");
+    if (value is ProgramNode program)
+    {
+        return program;
+    }
+    throw new InvalidOperationException($"parser final value has type {value?.GetType().Name ?? "<null>"}, want ProgramNode");
 }
 
 static ReducerMap CreateReducers()
@@ -23,7 +27,7 @@ static ReducerMap CreateReducers()
         [SemanticAction.Print] = TypedPrint(ctx => new StatementNode(ctx.Expr)),
         [SemanticAction.Add] = TypedAdd(ctx => new AddExpr(ctx.Left, ctx.Right)),
         [SemanticAction.Pass] = TypedPass(ctx => ctx.Value),
-        [SemanticAction.Number] = TypedNumber(ctx => new NumberExpr(ParseNumber(ctx.Token))),
+        [SemanticAction.Number] = TypedNumber(ctx => new NumberExpr(ParseNumber(ctx))),
     };
 }
 
@@ -33,7 +37,19 @@ static List<StatementNode> ReduceStatements(StatementsReduction ctx) => Prepend(
 
 static List<StatementNode> ReduceStatementsTailMore(StatementsTailMoreReduction ctx) => Prepend(ctx.Head, ctx.Tail);
 
-static int ParseNumber(Lexeme token) => int.Parse(token.Text, CultureInfo.InvariantCulture);
+static int ParseNumber(NumberReduction ctx)
+{
+    try
+    {
+        return int.Parse(ctx.Token.Text, CultureInfo.InvariantCulture);
+    }
+    catch (Exception ex) when (ex is FormatException or OverflowException)
+    {
+        throw new InvalidOperationException(
+            $"rule {ctx.Reduction.Rule} action {ctx.Reduction.Action} label token value {ctx.Token.Text} is not a valid Int32",
+            ex);
+    }
+}
 
 static List<Instruction> Compile(ProgramNode program)
 {
@@ -115,15 +131,6 @@ static string BuildReport(string inputPath, string source, IReadOnlyList<Instruc
     return report.ToString();
 }
 
-static T CastArg<T>(object? value, string name)
-{
-    if (value is not T typed)
-    {
-        throw new InvalidOperationException($"{name} has type {value?.GetType().Name ?? "<null>"}, want {typeof(T).Name}");
-    }
-    return typed;
-}
-
 static List<T> Prepend<T>(T head, List<T> tail)
 {
     var result = new List<T> { head };
@@ -144,6 +151,14 @@ static void RunAssertions(string source)
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error", StringComparison.Ordinal))
+    {
+    }
+    try
+    {
+        ParseProgram("print 999999999999999999999999;");
+        throw new InvalidOperationException("expected reducer failure");
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("action number", StringComparison.Ordinal) && ex.Message.Contains("label token", StringComparison.Ordinal))
     {
     }
 }

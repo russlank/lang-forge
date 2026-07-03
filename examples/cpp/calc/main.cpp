@@ -16,6 +16,12 @@
 
 namespace lfcalc = LangForge::Examples::Calc::Generated;
 
+enum class ReducerMode {
+    DirectTyped,
+    BoxedToTyped,
+    Boxed,
+};
+
 /// Reads a whole UTF-8 text file into memory.
 static std::string read_text_file(const std::string& path) {
     std::ifstream input(path);
@@ -66,6 +72,10 @@ static lfcalc::Lexeme lexeme_arg(const lfcalc::Reduction& ctx, std::size_t index
 /// labels into `SemanticAction` enum values, and this reducer map connects each
 /// generated action ID to ordinary C++ code. Keeping this as a map avoids a long
 /// reduction switch and makes it obvious which grammar actions are implemented.
+///
+/// This boxed reducer map is intentionally kept as migration material. New C++
+/// code should prefer `make_direct_typed_reducers`, where generated contexts
+/// expose named fields and handwritten handlers return native semantic types.
 static lfcalc::ReducerMap make_boxed_reducers() {
     return lfcalc::ReducerMap{
         {lfcalc::SemanticAction::Start, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
@@ -97,21 +107,73 @@ static lfcalc::ReducerMap make_boxed_reducers() {
     };
 }
 
+/// Builds direct typed reducers, the recommended path for new C++ code.
+///
+/// Each helper from `parser_typed.hpp` constructs a generated context such as
+/// `AddReduction` or `NumberReduction`. Reducer lambdas read named fields
+/// (`ctx.left`, `ctx.right`, `ctx.token`) and return the declared native
+/// semantic type (`double` here). LangForge boxes the result only at the parser
+/// boundary, so the recommended handwritten path does not need std::any_cast.
+static lfcalc::ReducerMap make_direct_typed_reducers() {
+    return lfcalc::ReducerMap{
+        {lfcalc::SemanticAction::Start, lfcalc::typed_start([](const lfcalc::StartReduction& ctx) -> double {
+            return ctx.value;
+        })},
+        {lfcalc::SemanticAction::Pass, lfcalc::typed_pass([](const lfcalc::PassReduction& ctx) -> double {
+            return ctx.value;
+        })},
+        {lfcalc::SemanticAction::Group, lfcalc::typed_group([](const lfcalc::GroupReduction& ctx) -> double {
+            return ctx.value;
+        })},
+        {lfcalc::SemanticAction::Number, lfcalc::typed_number([](const lfcalc::NumberReduction& ctx) -> double {
+            return std::stod(std::string(ctx.token.text));
+        })},
+        {lfcalc::SemanticAction::Negate, lfcalc::typed_negate([](const lfcalc::NegateReduction& ctx) -> double {
+            return -ctx.value;
+        })},
+        {lfcalc::SemanticAction::Add, lfcalc::typed_add([](const lfcalc::AddReduction& ctx) -> double {
+            return ctx.left + ctx.right;
+        })},
+        {lfcalc::SemanticAction::Subtract, lfcalc::typed_subtract([](const lfcalc::SubtractReduction& ctx) -> double {
+            return ctx.left - ctx.right;
+        })},
+        {lfcalc::SemanticAction::Multiply, lfcalc::typed_multiply([](const lfcalc::MultiplyReduction& ctx) -> double {
+            return ctx.left * ctx.right;
+        })},
+        {lfcalc::SemanticAction::Divide, lfcalc::typed_divide([](const lfcalc::DivideReduction& ctx) -> double {
+            if (ctx.right == 0.0) {
+                throw std::runtime_error("division by zero");
+            }
+            return ctx.left / ctx.right;
+        })},
+    };
+}
+
 /// Builds reducers through generated typed contexts while reusing boxed semantics.
-static lfcalc::ReducerMap make_typed_reducers() {
+///
+/// This is the migration bridge for older boxed reducers. It validates named
+/// contexts first, then delegates to `make_boxed_reducers`.
+static lfcalc::ReducerMap make_boxed_to_typed_reducers() {
     return lfcalc::typed_reducer_map_from_boxed(make_boxed_reducers());
 }
 
-/// Selects the reducer ABI used by the demo. Typed mode is the default because
-/// it validates named RHS labels and semantic value types before dispatch.
-static lfcalc::ReducerMap make_reducers(bool typed) {
-    return typed ? make_typed_reducers() : make_boxed_reducers();
+/// Selects the reducer ABI used by the demo.
+static lfcalc::ReducerMap make_reducers(ReducerMode mode) {
+    switch (mode) {
+    case ReducerMode::DirectTyped:
+        return make_direct_typed_reducers();
+    case ReducerMode::BoxedToTyped:
+        return make_boxed_to_typed_reducers();
+    case ReducerMode::Boxed:
+        return make_boxed_reducers();
+    }
+    throw std::runtime_error("unknown reducer mode");
 }
 
 /// Scans, parses, and evaluates one calculator expression.
-static double evaluate(std::string_view source, bool typed = true) {
+static double evaluate(std::string_view source, ReducerMode mode = ReducerMode::DirectTyped) {
     lfcalc::Scanner scanner(source);
-    const auto value = lfcalc::parse_value(scanner, make_reducers(typed));
+    const auto value = lfcalc::parse_value(scanner, make_reducers(mode));
     return std::any_cast<double>(value);
 }
 
@@ -125,7 +187,8 @@ static void require(bool condition, const std::string& message) {
 /// Covers behavior that is easy to regress while changing generated runtimes.
 static void run_assertions() {
     require(std::fabs(evaluate("1 + 2 * (3 - 4.5)") - -2.0) < 0.000001, "wrong expression result");
-    require(std::fabs(evaluate("7.5/2.5", false) - 3.0) < 0.000001, "wrong boxed decimal division result");
+    require(std::fabs(evaluate("7.5/2.5", ReducerMode::Boxed) - 3.0) < 0.000001, "wrong boxed decimal division result");
+    require(std::fabs(evaluate("3+4", ReducerMode::BoxedToTyped) - 7.0) < 0.000001, "wrong boxed-to-typed migration result");
 
     const auto visible = lfcalc::tokenize("1+2");
     lfcalc::parse(visible);
@@ -216,6 +279,8 @@ int main(int argc, char** argv) {
         std::vector<std::string> args(argv + 1, argv + argc);
         const bool assert_mode = take_flag(args, "--assert");
         const bool boxed_mode = take_flag(args, "--boxed");
+        const bool boxed_typed_mode = take_flag(args, "--boxed-typed");
+        const ReducerMode mode = boxed_typed_mode ? ReducerMode::BoxedToTyped : (boxed_mode ? ReducerMode::Boxed : ReducerMode::DirectTyped);
         const std::string log_path = read_option(args, "--log", "dist/calc-cpp-demo.log");
         const std::string input_path = args.empty() ? "input.calc" : args.front();
 
@@ -224,7 +289,7 @@ int main(int argc, char** argv) {
         }
 
         const std::string source = read_text_file(input_path);
-        const double result = evaluate(source, !boxed_mode);
+        const double result = evaluate(source, mode);
         std::ostringstream report;
         report << "LangForge C++ calculator demo\n";
         report << "source: " << source;

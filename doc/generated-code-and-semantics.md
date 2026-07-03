@@ -172,6 +172,72 @@ return `*_value` (`void *`) so ownership stays explicit in handwritten code.
 C++ typed handlers return the declared native type, and LangForge boxes that
 value into the generated `std::any` stack.
 
+### Direct Typed Reducers Vs Migration Adapters
+
+For new C and C++ code, prefer direct typed reducers. They let generated code
+validate action coverage, named RHS labels, and semantic value types before the
+handwritten logic runs, while reducer bodies read fields by role instead of by
+position.
+
+Use boxed-to-typed adapters when migrating older reducers that already use the
+boxed API. The adapter still validates generated typed contexts, then delegates
+to the existing boxed reducer. Keep pure boxed reducers for debugging, token
+inspection, and compatibility tests.
+
+In C, a direct typed handler receives a generated context but still returns the
+target's boxed `*_value` pointer. That pointer is owned by the application. The
+calculator example stores numbers in a demo arena:
+
+```c
+/* Grammar: Expr : left=Expr Plus right=Term {c: add} ; */
+static calc_value calc_typed_add(
+    const calc_add_reduction *ctx,
+    void *user,
+    calc_error *error)
+{
+    calc_demo *demo = (calc_demo *)user;
+    return calc_number(demo, error, ctx->left + ctx->right);
+}
+```
+
+The typed reducer table connects all required action handlers:
+
+```c
+calc_typed_reducer reducer;
+reducer.user = demo;
+reducer.add = calc_typed_add;
+reducer.number = calc_typed_number;
+/* Fill every required handler, then call calc_parse_value_source_typed. */
+```
+
+In C++, a direct typed handler returns the declared semantic type. For the
+calculator that type is `double`, so reducer lambdas do not need
+`std::any_cast`:
+
+```cpp
+// Grammar: Expr : left=Expr Plus right=Term {cpp: add} ;
+{calc::SemanticAction::Add,
+ calc::typed_add([](const calc::AddReduction& ctx) -> double {
+     return ctx.left + ctx.right;
+ })},
+```
+
+The generated typed adapter boxes the returned `double` for the parser stack.
+The final parse result is still a boxed value in the compatibility API, so a
+small boundary cast may remain at the application edge:
+
+```cpp
+auto value = calc::parse_value(scanner, make_direct_typed_reducers());
+double result = std::any_cast<double>(value);
+```
+
+Use `typed_reducer_map_from_boxed` only when intentionally demonstrating or
+migrating a boxed reducer:
+
+```cpp
+auto migrating = calc::typed_reducer_map_from_boxed(make_boxed_reducers());
+```
+
 ### C++ No-Op Values: `nullptr` Is Not `{}`
 
 C++ examples sometimes declare structural reductions as `std::nullptr_t`:

@@ -153,8 +153,10 @@ APIs for gradual migration.
 - Go, C#, and C++ `ReducerMap` coverage validation detects missing and unknown
   handlers before input-dependent parser execution; C typed reducers validate
   required handler pointers before parsing.
-- C and C++ examples default to typed validation and keep `--boxed` as an
-  explicit compatibility path.
+- C and C++ calc plus mini-compiler templates demonstrate direct typed
+  reducers; boxed-to-typed adapters remain available for migration, and
+  `--boxed` stays as an explicit compatibility/debug path where examples expose
+  it.
 - Backward compatibility with boxed reducer mode is preserved.
 - The CLI now has optional stderr-only verbosity for `validate`, `inspect`, and
   `generate`: level 1 reports major build stages, level 2 reports lexer,

@@ -15,7 +15,11 @@ typedef double (*calc_binary_op)(double left, double right);
 
 typedef enum calc_reducer_mode
 {
+    /* Recommended path for new C code: generated contexts plus native handlers. */
     CALC_REDUCER_TYPED,
+    /* Migration path: generated contexts validate before delegating to boxed code. */
+    CALC_REDUCER_BOXED_TO_TYPED,
+    /* Compatibility/debug path: the historical boxed reducer ABI. */
     CALC_REDUCER_BOXED
 } calc_reducer_mode;
 
@@ -39,6 +43,30 @@ static double calc_value_as_number(calc_value value)
 static const calc_lexeme *calc_value_as_lexeme(calc_value value)
 {
     return (const calc_lexeme *)value;
+}
+
+static int calc_parse_number_lexeme(calc_demo *demo, const calc_lexeme *lexeme, double *out, calc_error *error)
+{
+    char *text = NULL;
+    char *end = NULL;
+    if (lexeme == NULL)
+    {
+        snprintf(error->message, sizeof(error->message), "number reduction missing lexeme");
+        return 0;
+    }
+    text = demo_arena_copy(&demo->arena, lexeme->text, lexeme->length);
+    if (text == NULL)
+    {
+        snprintf(error->message, sizeof(error->message), "out of memory parsing number");
+        return 0;
+    }
+    *out = strtod(text, &end);
+    if (end == text || *end != '\0')
+    {
+        snprintf(error->message, sizeof(error->message), "invalid number lexeme '%s'", text);
+        return 0;
+    }
+    return 1;
 }
 
 static int calc_check_arg(const calc_reduction *ctx, size_t index, const char *name, calc_error *error)
@@ -90,6 +118,94 @@ static double calc_multiply_numbers(double left, double right)
     return left * right;
 }
 
+static calc_value calc_typed_value(void *user, calc_error *error, double value)
+{
+    /*
+     * C typed contexts expose native fields such as ctx->left and ctx->value,
+     * but generated C parsers still store semantic results as calc_value
+     * pointers. This example owns every returned number in demo->arena; the
+     * caller releases all semantic values with demo_arena_free.
+     */
+    return calc_number((calc_demo *)user, error, value);
+}
+
+static calc_value calc_typed_start(const calc_start_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_value(user, error, ctx->value);
+}
+
+static calc_value calc_typed_pass(const calc_pass_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_value(user, error, ctx->value);
+}
+
+static calc_value calc_typed_group(const calc_group_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_value(user, error, ctx->value);
+}
+
+static calc_value calc_typed_number(const calc_number_reduction *ctx, void *user, calc_error *error)
+{
+    double value = 0.0;
+    calc_demo *demo = (calc_demo *)user;
+    if (!calc_parse_number_lexeme(demo, ctx->token, &value, error))
+    {
+        return NULL;
+    }
+    return calc_number(demo, error, value);
+}
+
+static calc_value calc_typed_negate(const calc_negate_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_value(user, error, -ctx->value);
+}
+
+static calc_value calc_typed_binary(void *user, calc_error *error, double left, double right, calc_binary_op op)
+{
+    return calc_typed_value(user, error, op(left, right));
+}
+
+static calc_value calc_typed_add(const calc_add_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_binary(user, error, ctx->left, ctx->right, calc_add_numbers);
+}
+
+static calc_value calc_typed_subtract(const calc_subtract_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_binary(user, error, ctx->left, ctx->right, calc_subtract_numbers);
+}
+
+static calc_value calc_typed_multiply(const calc_multiply_reduction *ctx, void *user, calc_error *error)
+{
+    return calc_typed_binary(user, error, ctx->left, ctx->right, calc_multiply_numbers);
+}
+
+static calc_value calc_typed_divide(const calc_divide_reduction *ctx, void *user, calc_error *error)
+{
+    if (ctx->right == 0.0)
+    {
+        snprintf(error->message, sizeof(error->message), "division by zero");
+        return NULL;
+    }
+    return calc_typed_value(user, error, ctx->left / ctx->right);
+}
+
+static calc_typed_reducer calc_make_direct_typed_reducer(calc_demo *demo)
+{
+    calc_typed_reducer typed;
+    typed.user = demo;
+    typed.start = calc_typed_start;
+    typed.add = calc_typed_add;
+    typed.subtract = calc_typed_subtract;
+    typed.pass = calc_typed_pass;
+    typed.multiply = calc_typed_multiply;
+    typed.divide = calc_typed_divide;
+    typed.number = calc_typed_number;
+    typed.group = calc_typed_group;
+    typed.negate = calc_typed_negate;
+    return typed;
+}
+
 static calc_value calc_reduce_binary(const calc_reduction *ctx, calc_demo *demo, calc_error *error, calc_binary_op op)
 {
     double left = 0.0;
@@ -120,17 +236,16 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
     case CALC_ACTION_NUMBER:
     {
         const calc_lexeme *lexeme = calc_lexeme_arg(ctx, 0, "number lexeme", error);
+        double value = 0.0;
         if (lexeme == NULL)
         {
             return NULL;
         }
-        char *text = demo_arena_copy(&demo->arena, lexeme->text, lexeme->length);
-        if (text == NULL)
+        if (!calc_parse_number_lexeme(demo, lexeme, &value, error))
         {
-            snprintf(error->message, sizeof(error->message), "out of memory parsing number");
             return NULL;
         }
-        return calc_number(demo, error, strtod(text, NULL));
+        return calc_number(demo, error, value);
     }
     case CALC_ACTION_NEGATE:
     {
@@ -182,9 +297,21 @@ static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode
     if (mode == CALC_REDUCER_TYPED)
     {
         /*
-         * The typed path builds generated contexts from named RHS labels before
-         * delegating to the boxed reducer. That keeps the example compact while
-         * proving both generated reducer APIs can execute the same grammar.
+         * Recommended direct typed path: generated code validates named RHS
+         * labels and provides fields such as ctx->left and ctx->right to
+         * handwritten handlers. No boxed ctx->values indexing is needed here.
+         */
+        calc_typed_reducer typed = calc_make_direct_typed_reducer(demo);
+        if (!calc_parse_value_source_typed(&token_source, &typed, &value, &error))
+        {
+            return demo_set_error(message, message_size, "parse failed: %s", error.message);
+        }
+    }
+    else if (mode == CALC_REDUCER_BOXED_TO_TYPED)
+    {
+        /*
+         * Migration path: keep an older boxed reducer while letting generated
+         * typed contexts validate labels and semantic value types first.
          */
         calc_boxed_typed_reducer boxed = {0};
         calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, demo);
@@ -228,6 +355,11 @@ static int calc_run_assertions(char *message, size_t message_size)
     {
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "boxed decimal division assertion failed, got %.6f", value);
+    }
+    if (!calc_eval(&demo, "3 + 4", CALC_REDUCER_BOXED_TO_TYPED, &value, message, message_size) || !calc_close_enough(value, 7.0))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "boxed-to-typed migration assertion failed, got %.6f", value);
     }
     if (calc_eval(&demo, "1/0", CALC_REDUCER_TYPED, &value, message, message_size))
     {
@@ -301,6 +433,8 @@ int main(int argc, char **argv)
     double result = 0.0;
     int assert_mode = take_flag(&argc, argv, "--assert");
     int boxed_mode = take_flag(&argc, argv, "--boxed");
+    int boxed_typed_mode = take_flag(&argc, argv, "--boxed-typed");
+    calc_reducer_mode mode = boxed_typed_mode ? CALC_REDUCER_BOXED_TO_TYPED : (boxed_mode ? CALC_REDUCER_BOXED : CALC_REDUCER_TYPED);
     const char *log_path = read_option(&argc, argv, "--log", "dist/calc-c-demo.log");
     const char *input_path = argc > 1 ? argv[1] : "input.calc";
     if (assert_mode && !calc_run_assertions(message, sizeof(message)))
@@ -309,7 +443,7 @@ int main(int argc, char **argv)
         return 1;
     }
     if (!demo_read_file(input_path, &source, message, sizeof(message)) ||
-        !calc_eval(&demo, source.data, boxed_mode ? CALC_REDUCER_BOXED : CALC_REDUCER_TYPED, &result, message, sizeof(message)) ||
+        !calc_eval(&demo, source.data, mode, &result, message, sizeof(message)) ||
         !demo_text_appendf(&report, message, sizeof(message), "LangForge C calculator demo\nsource: %s\nresult: %.10g\n", source.data, result) ||
         !demo_write_text(log_path, report.data, message, sizeof(message)))
     {

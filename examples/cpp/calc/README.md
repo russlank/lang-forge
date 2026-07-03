@@ -28,6 +28,7 @@ The generated files are written to `generated/`:
 - `scanner.hpp`
 - `scanner.cpp`
 - `parser.hpp`
+- `parser_typed.hpp`
 - `parser.cpp`
 
 The parser rule actions in `calc.lf` are labels, not hard-coded behavior. For
@@ -35,6 +36,14 @@ example, `{cpp: add}` becomes `SemanticAction::Add`; `main.cpp` maps that enum
 value to the C++ lambda that adds two semantic values. This keeps generated code
 separate from handwritten application code while still giving the reducer a
 fast, strongly typed dispatch key.
+
+`main.cpp` demonstrates the recommended direct typed path by default:
+`parser_typed.hpp` builds contexts such as `AddReduction`, reducer lambdas read
+fields such as `ctx.left` and `ctx.right`, and handlers return native `double`
+values. The generated adapter boxes results only at the parser boundary. Pass
+`--boxed-typed` to exercise the migration adapter that validates typed contexts
+before delegating to boxed reducers, or `--boxed` to exercise the older boxed
+debug path directly.
 
 The calculator grammar intentionally stays in parity with the Go, C#, and C
 versions. The shared sample expression contains a decimal literal and evaluates

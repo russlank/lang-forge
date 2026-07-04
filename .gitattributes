@@ -1,0 +1,12 @@
+# Count only real handwritten example source files.
+examples/**/*.go -linguist-documentation
+examples/**/*.cs -linguist-documentation
+examples/**/*.c -linguist-documentation
+examples/**/*.h -linguist-documentation
+examples/**/*.cpp -linguist-documentation
+examples/**/*.hpp -linguist-documentation
+examples/**/*.lf -linguist-documentation
+
+# Do not count generated outputs.
+examples/**/generated/** linguist-generated
+examples/**/Generated/** linguist-generated

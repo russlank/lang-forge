@@ -291,7 +291,8 @@ The examples are meant to be read in increasing complexity:
 | 10 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
 | 11 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
 | 12 | `examples/cpp/*` | The same example set generated for C++17 with `enum class` actions, `ReducerMap`, and static table lookup |
-| 13 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
+| 13 | `examples/benchmarks` | Optional scanner/parser performance examples for throughput, allocation, source parsing, token slices, reducer dispatch, and recovery overhead |
+| 14 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
 
 For starter-project guidance rather than a demo tour, read
 [Example Template Guide](example-template-guide.md). It explains the
@@ -301,6 +302,29 @@ reducer helpers, parser facade templates, and reusable fragments under
 
 See [Learning Path](learning-path.md) for the guided route through these
 examples.
+
+## Optional Benchmarks
+
+Benchmark examples live under
+[examples/benchmarks](../examples/benchmarks). They are not part of
+`make examples-test` or `make ci`.
+
+Run the Go benchmark suite:
+
+```sh
+make examples-benchmarks
+make -C examples/benchmarks/go BENCHTIME=5s COUNT=5 bench
+```
+
+The Go suite uses `go test -bench` and `-benchmem` to compare generated
+scanner throughput, source parsing versus token-slice parsing, typed reducer
+dispatch versus boxed reducer dispatch, DRAW large-source parsing, recovery
+parsing, generated code size, and parse-table sizes.
+
+C#, C, and C++ benchmark harnesses are documented placeholders for now. Their
+examples already expose the same source/token and typed/boxed entry points,
+but target-specific timing harnesses should remain optional and outside normal
+CI.
 
 ## UCDT Calc Legacy Fixture
 

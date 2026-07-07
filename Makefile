@@ -1,5 +1,6 @@
 GO ?= /usr/local/go/bin/go
 DOTNET ?= dotnet
+CC ?= gcc
 CXX ?= g++
 
 APP_NAME := lang-forge
@@ -30,6 +31,7 @@ LDFLAGS := -s -w \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
 	examples-generate examples-run examples-test examples-cleanliness \
 	examples-parity examples-action-parity examples-target-env-smoke examples-testdata examples-templates examples-clean \
+	examples-benchmarks \
 	docker-build docker-smoke docker-push image-tags clean
 
 all: fmt vet test build
@@ -222,6 +224,9 @@ examples-templates:
 	$(MAKE) -C examples/templates/cpp/mini-compiler GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/templates/cpp/library-dsl GO=$(GO) CXX=$(CXX) test
 	$(MAKE) -C examples/templates/cpp/layered-compiler GO=$(GO) CXX=$(CXX) test
+
+examples-benchmarks:
+	$(MAKE) -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) CC=$(CC) CXX=$(CXX) bench
 
 examples-clean:
 	$(MAKE) -C examples/go/calc clean

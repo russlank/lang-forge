@@ -300,6 +300,17 @@ make examples-run
 make examples-cleanliness
 ```
 
+Optional benchmark examples are available separately from normal CI:
+
+```sh
+make examples-benchmarks
+make -C examples/benchmarks/go BENCHTIME=5s COUNT=5 bench
+```
+
+The Go benchmark suite reports `-benchmem` allocation data plus custom
+throughput and generated-table metrics. Benchmark numbers are approximate and
+environment-dependent, so compare runs on the same machine and toolchain.
+
 If you do not want to install a binary, a local Docker image can be used as the
 LangForge command:
 
@@ -320,6 +331,7 @@ make fuzz-smoke
 make golden-stability
 make examples-testdata
 make examples-templates
+make examples-benchmarks
 make dist VERSION=0.1.0
 make docker-build
 make docker-smoke

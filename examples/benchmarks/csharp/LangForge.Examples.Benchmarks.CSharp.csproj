@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../csharp/calc/Generated/*.cs" Link="Generated/Calc/%(Filename)%(Extension)" />
+    <Compile Include="../../csharp/draw/Generated/*.cs" Link="Generated/Draw/%(Filename)%(Extension)" />
+    <Compile Include="../../csharp/parser-recovery/Generated/*.cs" Link="Generated/ParserRecovery/%(Filename)%(Extension)" />
+    <Compile Include="../../csharp/draw/Ast.cs" Link="Draw/Ast.cs" />
+    <Compile Include="../../csharp/draw/ParserAdapter.cs" Link="Draw/ParserAdapter.cs" />
+  </ItemGroup>
+</Project>

@@ -698,14 +698,16 @@ lang-forge playground --spec grammar.lf
 
 ## 14. Add Performance and Size Reports
 
-Current status: `examples/benchmarks` now provides the first optional
-benchmark example suite. The Go suite uses the standard benchmark runner to
+Current status: `examples/benchmarks` now provides an optional benchmark
+workflow outside normal CI. The Go suite uses the standard benchmark runner to
 measure generated scanner throughput, calc-large source parsing versus
-token-slice parsing, typed versus boxed reducer dispatch, DRAW large-source
-parsing, source recovery versus token-slice recovery, allocations, generated
-artifact byte sizes, and parser/lexer table metrics. C#, C, and C++ dedicated
-benchmark harnesses remain future work, and benchmarks are intentionally not
-part of normal CI.
+pre-tokenized parsing, typed versus boxed reducer dispatch, DRAW large-source
+parsing, source recovery versus pre-tokenized recovery, and allocations. The
+C# suite uses BenchmarkDotNet with memory diagnostics for comparable scanner,
+calc, DRAW, and recovery paths. Static generated artifact sizes and parser
+table metrics are emitted as Markdown/JSON reports under `dist/benchmarks`
+instead of timed benchmark rows. C and C++ dedicated benchmark harnesses remain
+future work.
 
 ### Recommendation
 

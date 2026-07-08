@@ -3,10 +3,7 @@
 package gobenchmarks
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -53,8 +50,8 @@ func TestBenchmarkFixtures(t *testing.T) {
 	}
 }
 
-func BenchmarkGeneratedScannerThroughput(b *testing.B) {
-	b.Run("Next", func(b *testing.B) {
+func BenchmarkScanner(b *testing.B) {
+	b.Run("StreamingNext", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(calcLargeSource)))
 		start := time.Now()
@@ -77,7 +74,7 @@ func BenchmarkGeneratedScannerThroughput(b *testing.B) {
 		}
 		reportRate(b, len(calcLargeTokens), "tokens/s", start)
 	})
-	b.Run("All", func(b *testing.B) {
+	b.Run("MaterializeAll", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(calcLargeSource)))
 		start := time.Now()
@@ -94,39 +91,47 @@ func BenchmarkGeneratedScannerThroughput(b *testing.B) {
 	})
 }
 
-func BenchmarkCalcLargeParse(b *testing.B) {
-	b.Run("SourceTypedReducer", func(b *testing.B) {
-		benchmarkCalcSource(b, typedCalcReducer)
+func BenchmarkCalcParse(b *testing.B) {
+	b.Run("ParseFromSource", func(b *testing.B) {
+		b.Run("TypedReducer", func(b *testing.B) {
+			benchmarkCalcSource(b, typedCalcReducer)
+		})
+		b.Run("BoxedReducer", func(b *testing.B) {
+			benchmarkCalcSource(b, boxedCalcReducer)
+		})
 	})
-	b.Run("TokenSliceTypedReducer", func(b *testing.B) {
-		benchmarkCalcTokens(b, typedCalcReducer)
-	})
-	b.Run("SourceBoxedReducer", func(b *testing.B) {
-		benchmarkCalcSource(b, boxedCalcReducer)
-	})
-	b.Run("TokenSliceBoxedReducer", func(b *testing.B) {
-		benchmarkCalcTokens(b, boxedCalcReducer)
+	b.Run("ParsePreTokenized", func(b *testing.B) {
+		b.Run("TypedReducer", func(b *testing.B) {
+			benchmarkCalcTokens(b, typedCalcReducer)
+		})
+		b.Run("BoxedReducer", func(b *testing.B) {
+			benchmarkCalcTokens(b, boxedCalcReducer)
+		})
 	})
 }
 
-func BenchmarkDrawLargeParse(b *testing.B) {
-	b.ReportAllocs()
-	b.SetBytes(int64(len(drawLargeSource)))
-	start := time.Now()
-	for i := 0; i < b.N; i++ {
-		program, err := draw.Parse(drawLargeSource)
-		if err != nil {
-			b.Fatal(err)
-		}
-		if len(program.Statements) == 0 {
-			b.Fatal("DRAW parse produced no statements")
-		}
-	}
-	reportRate(b, lineCount(drawLargeSource), "lines/s", start)
+func BenchmarkDrawParse(b *testing.B) {
+	b.Run("ParseFromSource", func(b *testing.B) {
+		b.Run("BuildAST", func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(drawLargeSource)))
+			start := time.Now()
+			for i := 0; i < b.N; i++ {
+				program, err := draw.Parse(drawLargeSource)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if len(program.Statements) == 0 {
+					b.Fatal("DRAW parse produced no statements")
+				}
+			}
+			reportRate(b, lineCount(drawLargeSource), "lines/s", start)
+		})
+	})
 }
 
 func BenchmarkRecoveryParse(b *testing.B) {
-	b.Run("Source", func(b *testing.B) {
+	b.Run("ParseFromSource", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(recoveryLargeSource)))
 		start := time.Now()
@@ -141,7 +146,7 @@ func BenchmarkRecoveryParse(b *testing.B) {
 		}
 		reportRate(b, len(recoveryLargeTokens), "tokens/s", start)
 	})
-	b.Run("TokenSlice", func(b *testing.B) {
+	b.Run("ParsePreTokenized", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(recoveryLargeSource)))
 		start := time.Now()
@@ -158,19 +163,9 @@ func BenchmarkRecoveryParse(b *testing.B) {
 	})
 }
 
-func BenchmarkGeneratedArtifactMetrics(b *testing.B) {
-	metrics := mustArtifactMetrics()
-	b.ReportMetric(float64(metrics.CalcGeneratedBytes), "calc_generated_bytes")
-	b.ReportMetric(float64(metrics.CalcParserStates), "calc_parser_states")
-	b.ReportMetric(float64(metrics.CalcParserActions), "calc_parser_actions")
-	b.ReportMetric(float64(metrics.CalcParserGotos), "calc_parser_gotos")
-	b.ReportMetric(float64(metrics.CalcLexerStates), "calc_lexer_states")
-	b.ReportMetric(float64(metrics.RecoveryGeneratedBytes), "recovery_generated_bytes")
-	for i := 0; i < b.N; i++ {
-	}
-}
-
 func benchmarkCalcSource(b *testing.B, reducer calc.Reducer) {
+	// ParseFromSource includes scanner/token-source work in the timed loop:
+	// source text -> generated scanner -> generated parser -> reducer.
 	b.ReportAllocs()
 	b.SetBytes(int64(len(calcLargeSource)))
 	start := time.Now()
@@ -187,6 +182,8 @@ func benchmarkCalcSource(b *testing.B, reducer calc.Reducer) {
 }
 
 func benchmarkCalcTokens(b *testing.B, reducer calc.Reducer) {
+	// ParsePreTokenized uses a token slice prepared outside the timed loop, so
+	// it measures parser/reducer cost over an existing token collection.
 	b.ReportAllocs()
 	b.SetBytes(int64(len(calcLargeSource)))
 	start := time.Now()
@@ -200,6 +197,10 @@ func benchmarkCalcTokens(b *testing.B, reducer calc.Reducer) {
 		}
 	}
 	reportRate(b, len(calcLargeTokens), "tokens/s", start)
+}
+
+func BenchmarkCalcRecognition(b *testing.B) {
+	b.Skip("TODO: add recognition-only parser benchmark when generated APIs expose a no-reducer value path that does not build semantic values")
 }
 
 func makeBoxedCalcReducer() calc.ReducerMap {
@@ -368,89 +369,4 @@ func reportRate(b *testing.B, unitCount int, name string, start time.Time) {
 
 func lineCount(source string) int {
 	return strings.Count(source, "\n")
-}
-
-type artifactMetrics struct {
-	CalcGeneratedBytes     int64
-	CalcParserStates       int
-	CalcParserActions      int
-	CalcParserGotos        int
-	CalcLexerStates        int
-	RecoveryGeneratedBytes int64
-}
-
-func mustArtifactMetrics() artifactMetrics {
-	base := benchmarkDir()
-	calcGenerated := filepath.Clean(filepath.Join(base, "..", "..", "go", "calc", "generated"))
-	recoveryGenerated := filepath.Clean(filepath.Join(base, "..", "..", "go", "parser-recovery", "generated"))
-	calcTables := readTables(filepath.Join(calcGenerated, "langforge.tables.json"))
-	return artifactMetrics{
-		CalcGeneratedBytes:     generatedBytes(calcGenerated),
-		CalcParserStates:       len(calcTables.ParseTable.States),
-		CalcParserActions:      nestedEntryCount(calcTables.ParseTable.Actions),
-		CalcParserGotos:        nestedEntryCount(calcTables.ParseTable.Gotos),
-		CalcLexerStates:        len(calcTables.Lexer.States),
-		RecoveryGeneratedBytes: generatedBytes(recoveryGenerated),
-	}
-}
-
-func benchmarkDir() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	return wd
-}
-
-type tablesFile struct {
-	Lexer struct {
-		States []json.RawMessage `json:"states"`
-	} `json:"lexer"`
-	ParseTable struct {
-		States  []json.RawMessage                     `json:"states"`
-		Actions map[string]map[string]json.RawMessage `json:"actions"`
-		Gotos   map[string]map[string]json.RawMessage `json:"gotos"`
-	} `json:"parseTable"`
-}
-
-func readTables(path string) tablesFile {
-	var tables tablesFile
-	data, err := os.ReadFile(path)
-	if err != nil {
-		panic(err)
-	}
-	if err := json.Unmarshal(data, &tables); err != nil {
-		panic(err)
-	}
-	return tables
-}
-
-func generatedBytes(dir string) int64 {
-	var total int64
-	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		total += info.Size()
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-	return total
-}
-
-func nestedEntryCount(entries map[string]map[string]json.RawMessage) int {
-	count := 0
-	for _, row := range entries {
-		count += len(row)
-	}
-	return count
 }

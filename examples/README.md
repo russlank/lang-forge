@@ -27,9 +27,10 @@ LangForge examples are organized by supported target language.
 - `templates/csharp/layered-compiler` and `templates/cpp/layered-compiler`
   contain larger compiler-style starters for applications that want stronger
   facade, ownership, diagnostics, and build-system structure from day one.
-- `benchmarks` contains optional performance examples for scanner throughput,
-  source parsing versus token-slice parsing, reducer dispatch overhead, and
-  recovery overhead. These are not part of normal CI.
+- `benchmarks` contains optional Go and C# performance examples for scanner
+  throughput, source parsing versus pre-tokenized parsing, reducer dispatch
+  overhead, recovery overhead, generated artifact reports, and Go profiles.
+  These are not part of normal CI.
 - `testdata` contains shared valid, invalid, and golden fixtures consumed by
   the example gates.
 - `mk` contains shared Makefile fragments used by demos and templates.
@@ -57,6 +58,7 @@ make examples-parity
 make examples-testdata
 make examples-templates
 make examples-benchmarks
+make examples-benchmarks-report
 ```
 
 `examples-cleanliness` fails if generated or build artifacts become tracked by
@@ -69,8 +71,11 @@ library-dsl templates to catch semantic action, RHS-label, typed-context, and
 recovery-reporting drift.
 `examples-testdata` runs shared fixtures and golden checks.
 `examples-templates` validates the maintained copyable templates.
-`examples-benchmarks` runs optional benchmark examples and is intentionally
-not part of `examples-test`.
+`examples-benchmarks` runs optional benchmark examples quietly by default and is
+intentionally not part of `examples-test`. Use
+`examples-benchmarks-verbose`, `examples-benchmarks-report`, and
+`examples-benchmarks-profile` when generation logs, persistent reports, or Go
+profiles are needed.
 
 Intentional action-contract differences must be documented in
 `manifest-parity.allowlist.json` with `family`, `target`, `path`, and

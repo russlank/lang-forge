@@ -313,18 +313,24 @@ Run the Go benchmark suite:
 
 ```sh
 make examples-benchmarks
-make -C examples/benchmarks/go BENCHTIME=5s COUNT=5 bench
+make examples-benchmarks-go BENCH_COUNT=5 BENCH_TIME=2s
+make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*CalcParse*'
+make examples-benchmarks-report BENCH_COUNT=10 BENCH_TIME=1s
 ```
 
-The Go suite uses `go test -bench` and `-benchmem` to compare generated
-scanner throughput, source parsing versus token-slice parsing, typed reducer
-dispatch versus boxed reducer dispatch, DRAW large-source parsing, recovery
-parsing, generated code size, and parse-table sizes.
+The Go suite uses `go test -bench` and `-benchmem`. The C# suite uses
+BenchmarkDotNet with memory diagnostics and writes artifacts under
+`dist/benchmarks/csharp`. Both use the same vocabulary:
+`ParseFromSource` includes scanner/token-source work, while
+`ParsePreTokenized` parses tokens prepared before the timed loop.
 
-C#, C, and C++ benchmark harnesses are documented placeholders for now. Their
-examples already expose the same source/token and typed/boxed entry points,
-but target-specific timing harnesses should remain optional and outside normal
-CI.
+Static generated artifact metrics are written by
+`make examples-benchmarks-report` as Markdown and JSON under
+`dist/benchmarks`; they are not reported as timed benchmark rows.
+
+C and C++ benchmark harnesses remain future optional work. Their examples
+already expose the same source/token and typed/boxed entry points, but
+target-specific timing harnesses should stay outside normal CI.
 
 ## UCDT Calc Legacy Fixture
 

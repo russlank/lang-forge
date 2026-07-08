@@ -2,6 +2,13 @@ GO ?= /usr/local/go/bin/go
 DOTNET ?= dotnet
 CC ?= gcc
 CXX ?= g++
+BENCH_TIME ?= 1s
+BENCH_COUNT ?= 1
+BENCH_PATTERN ?= .
+BENCH_REPORT_DIR ?= $(abspath dist/benchmarks)
+CSHARP_BENCH_CONFIGURATION ?= Release
+CSHARP_BENCH_FILTER ?= *CalcParse*
+CSHARP_BENCH_ARTIFACTS ?= $(BENCH_REPORT_DIR)/csharp
 
 APP_NAME := lang-forge
 CMD_PATH := ./cmd/lang-forge
@@ -31,7 +38,9 @@ LDFLAGS := -s -w \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
 	examples-generate examples-run examples-test examples-cleanliness \
 	examples-parity examples-action-parity examples-target-env-smoke examples-testdata examples-templates examples-clean \
-	examples-benchmarks \
+	examples-benchmarks examples-benchmarks-prepare examples-benchmarks-verbose \
+	examples-benchmarks-go examples-benchmarks-csharp examples-benchmarks-report \
+	examples-benchmarks-profile examples-benchmarks-compare \
 	docker-build docker-smoke docker-push image-tags clean
 
 all: fmt vet test build
@@ -226,7 +235,28 @@ examples-templates:
 	$(MAKE) -C examples/templates/cpp/layered-compiler GO=$(GO) CXX=$(CXX) test
 
 examples-benchmarks:
-	$(MAKE) -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) CC=$(CC) CXX=$(CXX) bench
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) CC=$(CC) CXX=$(CXX) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) BENCH_PATTERN='$(BENCH_PATTERN)' REPORT_DIR='$(BENCH_REPORT_DIR)' CSHARP_BENCH_CONFIGURATION=$(CSHARP_BENCH_CONFIGURATION) CSHARP_BENCH_FILTER='$(CSHARP_BENCH_FILTER)' CSHARP_BENCH_ARTIFACTS='$(CSHARP_BENCH_ARTIFACTS)' bench
+
+examples-benchmarks-prepare:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) REPORT_DIR='$(BENCH_REPORT_DIR)' CSHARP_BENCH_ARTIFACTS='$(CSHARP_BENCH_ARTIFACTS)' prepare
+
+examples-benchmarks-verbose:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) CC=$(CC) CXX=$(CXX) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) BENCH_PATTERN='$(BENCH_PATTERN)' REPORT_DIR='$(BENCH_REPORT_DIR)' CSHARP_BENCH_CONFIGURATION=$(CSHARP_BENCH_CONFIGURATION) CSHARP_BENCH_FILTER='$(CSHARP_BENCH_FILTER)' CSHARP_BENCH_ARTIFACTS='$(CSHARP_BENCH_ARTIFACTS)' verbose
+
+examples-benchmarks-go:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) BENCH_PATTERN='$(BENCH_PATTERN)' REPORT_DIR='$(BENCH_REPORT_DIR)' go
+
+examples-benchmarks-csharp:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) CSHARP_BENCH_CONFIGURATION=$(CSHARP_BENCH_CONFIGURATION) CSHARP_BENCH_FILTER='$(CSHARP_BENCH_FILTER)' CSHARP_BENCH_ARTIFACTS='$(CSHARP_BENCH_ARTIFACTS)' csharp-required
+
+examples-benchmarks-report:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) DOTNET=$(DOTNET) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) BENCH_PATTERN='$(BENCH_PATTERN)' REPORT_DIR='$(BENCH_REPORT_DIR)' CSHARP_BENCH_CONFIGURATION=$(CSHARP_BENCH_CONFIGURATION) CSHARP_BENCH_FILTER='$(CSHARP_BENCH_FILTER)' CSHARP_BENCH_ARTIFACTS='$(CSHARP_BENCH_ARTIFACTS)' report
+
+examples-benchmarks-profile:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) BENCH_TIME=$(BENCH_TIME) BENCH_COUNT=$(BENCH_COUNT) REPORT_DIR='$(BENCH_REPORT_DIR)' profile
+
+examples-benchmarks-compare:
+	@$(MAKE) --no-print-directory -C examples/benchmarks GO=$(GO) compare BEFORE='$(BEFORE)' AFTER='$(AFTER)'
 
 examples-clean:
 	$(MAKE) -C examples/go/calc clean

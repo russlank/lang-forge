@@ -706,8 +706,10 @@ parsing, source recovery versus pre-tokenized recovery, and allocations. The
 C# suite uses BenchmarkDotNet with memory diagnostics for comparable scanner,
 calc, DRAW, and recovery paths. Static generated artifact sizes and parser
 table metrics are emitted as Markdown/JSON reports under `dist/benchmarks`
-instead of timed benchmark rows. C and C++ dedicated benchmark harnesses remain
-future work.
+instead of timed benchmark rows. The current reporting layer writes compact Go
+and C# Markdown summaries, keeps raw outputs beside them, labels quick versus
+stable modes, and keeps C# summary paths repository-relative. C and C++
+dedicated benchmark harnesses remain future work.
 
 ### Recommendation
 

@@ -4,8 +4,10 @@ LANG_FORGE_VERBOSITY ?= 0
 PROJECT := LangForge.Examples.Benchmarks.CSharp.csproj
 CSHARP_BENCH_CONFIGURATION ?= Release
 CSHARP_BENCH_FILTER ?= *CalcParse*
+CSHARP_BENCH_JOB ?= short
 CSHARP_BENCH_ARTIFACTS ?= $(abspath ../../../dist/benchmarks/csharp)
 REPORT_DIR ?= $(abspath ../../../dist/benchmarks)
+REPO_ROOT ?= $(abspath ../../..)
 
 .PHONY: prepare prepare-verbose bench bench-verbose report print-summary test clean
 
@@ -22,40 +24,24 @@ prepare-verbose:
 
 bench: prepare
 	@mkdir -p $(REPORT_DIR) $(CSHARP_BENCH_ARTIFACTS)
-	@echo "Running C# BenchmarkDotNet benchmarks (filter: $(CSHARP_BENCH_FILTER))..."
-	@$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' > $(REPORT_DIR)/csharp-benchmarks.txt || { echo "C# BenchmarkDotNet failed; see $(REPORT_DIR)/csharp-benchmarks.txt"; exit 1; }
+	@echo "Running C# BenchmarkDotNet benchmarks (filter: $(CSHARP_BENCH_FILTER), job: $(CSHARP_BENCH_JOB))..."
+	@rm -rf $(CSHARP_BENCH_ARTIFACTS)/results
+	@$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' --lf-job '$(CSHARP_BENCH_JOB)' > $(REPORT_DIR)/csharp-benchmarks.txt || { echo "C# BenchmarkDotNet failed; see $(REPORT_DIR)/csharp-benchmarks.txt"; exit 1; }
 	@$(MAKE) --no-print-directory -s print-summary
 
 bench-verbose: prepare-verbose
-	$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)'
+	rm -rf $(CSHARP_BENCH_ARTIFACTS)/results
+	$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' --lf-job '$(CSHARP_BENCH_JOB)'
 
 report: prepare
 	@mkdir -p $(REPORT_DIR)
-	@echo "Running C# BenchmarkDotNet report (filter: $(CSHARP_BENCH_FILTER))..."
-	@$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' > $(REPORT_DIR)/csharp-benchmarks.txt || { echo "C# BenchmarkDotNet failed; see $(REPORT_DIR)/csharp-benchmarks.txt"; exit 1; }
+	@echo "Running C# BenchmarkDotNet report (filter: $(CSHARP_BENCH_FILTER), job: $(CSHARP_BENCH_JOB))..."
+	@rm -rf $(CSHARP_BENCH_ARTIFACTS)/results
+	@$(DOTNET) run -c $(CSHARP_BENCH_CONFIGURATION) --project $(PROJECT) -- --filter '$(CSHARP_BENCH_FILTER)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' --lf-job '$(CSHARP_BENCH_JOB)' > $(REPORT_DIR)/csharp-benchmarks.txt || { echo "C# BenchmarkDotNet failed; see $(REPORT_DIR)/csharp-benchmarks.txt"; exit 1; }
 	@$(MAKE) --no-print-directory -s print-summary
 
 print-summary:
-	@{ \
-		echo "# C# Benchmark Summary"; \
-		echo; \
-		echo "Generated on: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
-		echo; \
-		echo "BenchmarkDotNet artifacts are under \`$(CSHARP_BENCH_ARTIFACTS)\`."; \
-		echo; \
-		echo "Markdown result files:"; \
-		echo; \
-		find $(CSHARP_BENCH_ARTIFACTS) -name '*.md' -print 2>/dev/null | sort | sed 's#^#- #'; \
-		echo; \
-		echo "Benchmark tables:"; \
-		for file in $$(find $(CSHARP_BENCH_ARTIFACTS) -name '*-report-github.md' -print 2>/dev/null | sort); do \
-			echo; \
-			echo "## $$file"; \
-			sed -n '/| Method /,/^$$/p' "$$file"; \
-		done; \
-		echo; \
-		echo "Use the BenchmarkDotNet Markdown, CSV, and JSON exporters for C# before/after analysis."; \
-	} > $(REPORT_DIR)/csharp-benchmarks-summary.md
+	@$(GO) run ../tools/csharp-summary --repo '$(REPO_ROOT)' --artifacts '$(CSHARP_BENCH_ARTIFACTS)' --out '$(REPORT_DIR)/csharp-benchmarks-summary.md' --job '$(CSHARP_BENCH_JOB)' --filter '$(CSHARP_BENCH_FILTER)'
 	@sed -n '1,160p' $(REPORT_DIR)/csharp-benchmarks-summary.md
 
 test: prepare

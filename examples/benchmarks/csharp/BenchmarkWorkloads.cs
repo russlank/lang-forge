@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using CalcLexeme = LangForge.Examples.Calc.Generated.Lexeme;
 using CalcParser = LangForge.Examples.Calc.Generated.Parser;
 using CalcReducer = LangForge.Examples.Calc.Generated.IReducer;
@@ -30,6 +31,32 @@ internal static class BenchmarkWorkloads
 
     public static readonly string RecoveryLargeSource = MakeRecoveryLargeSource(1500, 7);
     public static readonly IReadOnlyList<RecoveryLexeme> RecoveryLargeTokens = RecoveryScanner.Tokenize(RecoveryLargeSource);
+
+    public static void WriteMetrics(string path)
+    {
+        var payload = new
+        {
+            generatedAt = DateTimeOffset.UtcNow,
+            workloads = new[]
+            {
+                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.StreamingNext), CalcLargeSource, CalcLargeTokens.Count, "Streaming scanner.Next over the calc fixture."),
+                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.MaterializeAll), CalcLargeSource, CalcLargeTokens.Count, "Materializes all calc tokens."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromSource_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "Source parse includes scanner/token-source work and typed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParsePreTokenized_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "Pre-tokenized parse uses tokens prepared outside the timed operation and typed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromSource_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "Source parse includes scanner/token-source work and boxed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParsePreTokenized_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "Pre-tokenized parse uses tokens prepared outside the timed operation and boxed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(DrawParseBenchmarks), nameof(DrawParseBenchmarks.ParseFromSource_BuildAst), DrawLargeSource, null, "Source parse through the DRAW handwritten AST-building facade."),
+                WorkloadMetric.ForSource(nameof(RecoveryParseBenchmarks), nameof(RecoveryParseBenchmarks.ParseFromSource), RecoveryLargeSource, RecoveryLargeTokens.Count, "Recovering source parse over malformed recovery fixture."),
+                WorkloadMetric.ForSource(nameof(RecoveryParseBenchmarks), nameof(RecoveryParseBenchmarks.ParsePreTokenized), RecoveryLargeSource, RecoveryLargeTokens.Count, "Recovering parse over tokens prepared outside the timed operation."),
+            },
+        };
+        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+        });
+        File.WriteAllText(path, json + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
 
     public static void ValidateFixtures()
     {
@@ -229,5 +256,25 @@ internal static class BenchmarkWorkloads
             builder.AppendLine();
         }
         return builder.ToString();
+    }
+
+    private sealed record WorkloadMetric(
+        string Class,
+        string Method,
+        int Bytes,
+        int? Tokens,
+        int Lines,
+        string Note)
+    {
+        public static WorkloadMetric ForSource(string benchmarkClass, string method, string source, int? tokens, string note)
+        {
+            return new WorkloadMetric(
+                benchmarkClass,
+                method,
+                Encoding.UTF8.GetByteCount(source),
+                tokens,
+                source.Count(static c => c == '\n'),
+                note);
+        }
     }
 }

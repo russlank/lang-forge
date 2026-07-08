@@ -19,6 +19,7 @@ make examples-benchmarks-go BENCH_PATTERN='CalcParse'
 make examples-benchmarks-csharp
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*CalcParse*'
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*'
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=medium CSHARP_BENCH_FILTER='*CalcParse*'
 make examples-benchmarks-report BENCH_COUNT=10 BENCH_TIME=1s
 make examples-benchmarks-verbose
 make examples-benchmarks-profile
@@ -26,8 +27,21 @@ make examples-benchmarks-profile
 
 `make examples-benchmarks` prepares generated benchmark dependencies quietly,
 runs Go benchmarks, and runs the C# BenchmarkDotNet calc-parse benchmark group
-when `dotnet` is available. If `.NET` is missing, the C# part is skipped with a
-short message. Explicit `make examples-benchmarks-csharp` requires `.NET`.
+in quick mode when `dotnet` is available. If `.NET` is missing, the C# part is
+skipped with a short message. Explicit `make examples-benchmarks-csharp`
+requires `.NET`.
+
+Quick mode is for smoke checks and performance sanity checks. Use stable mode
+before making before/after conclusions:
+
+```sh
+make examples-benchmarks-go BENCH_COUNT=5 BENCH_TIME=2s
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=medium CSHARP_BENCH_FILTER='*CalcParse*'
+```
+
+Do not compare absolute numbers across different machines. CPU model, OS
+scheduling, power settings, runtime versions, and background load can dominate
+small benchmark differences.
 
 `make examples-benchmarks-verbose` keeps LangForge validation/generation output
 visible. Use it when grammar changes, generated files, or benchmark fixtures are
@@ -127,6 +141,11 @@ Use `BENCH_COUNT=5` or `BENCH_COUNT=10` before drawing conclusions. Single Go
 benchmark samples are useful as smoke checks, but they are too noisy for
 performance claims.
 
+Raw Go benchmark output is saved to `dist/benchmarks/go-benchmarks.txt`.
+LangForge also writes a compact Markdown summary to
+`dist/benchmarks/go-benchmarks-summary.md` with GOOS, GOARCH, Go version, CPU,
+package, timestamp, timing, throughput, and allocation columns.
+
 Go output fields:
 
 - `ns/op`: nanoseconds per operation.
@@ -158,6 +177,7 @@ Make variables:
 DOTNET ?= dotnet
 CSHARP_BENCH_CONFIGURATION ?= Release
 CSHARP_BENCH_FILTER ?= *CalcParse*
+CSHARP_BENCH_JOB ?= short
 CSHARP_BENCH_ARTIFACTS ?= dist/benchmarks/csharp
 ```
 
@@ -168,7 +188,19 @@ make examples-benchmarks-csharp
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*CalcParse*'
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*Scanner*'
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*'
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=medium CSHARP_BENCH_FILTER='*CalcParse*'
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=default CSHARP_BENCH_FILTER='*CalcParse*'
 ```
+
+`CSHARP_BENCH_JOB=short` is the default quick mode and uses BenchmarkDotNet
+ShortRun. `CSHARP_BENCH_JOB=medium` and `CSHARP_BENCH_JOB=default` are more
+stable BenchmarkDotNet modes for before/after conclusions. BenchmarkDotNet
+`Error` can be large in ShortRun because it uses few iterations.
+
+The default C# filter remains `*CalcParse*` so the top-level quick benchmark
+stays fast. Scanner, DRAW, and recovery benchmarks are implemented and can be
+run explicitly with filters such as `*Scanner*`, `*DrawParse*`, `*Recovery*`,
+or `*`.
 
 BenchmarkDotNet output fields:
 
@@ -182,8 +214,10 @@ BenchmarkDotNet writes Markdown, HTML, CSV, and JSON artifacts under
 `dist/benchmarks/csharp/` when run through the Make targets. Normal Make
 targets save the raw BenchmarkDotNet console stream to
 `dist/benchmarks/csharp-benchmarks.txt` and print the generated Markdown
-tables. Prefer those generated summaries over the raw console stream when
-reviewing C# numbers.
+tables. LangForge also writes `dist/benchmarks/csharp-benchmarks-summary.md`
+with repository-relative paths and derived MB/s, tokens/s, and lines/s columns
+where the workload has enough metadata. Prefer those generated summaries over
+the raw console stream when reviewing C# numbers.
 
 For C# before/after work, run the same `CSHARP_BENCH_FILTER` before and after a
 change, keep the generated `dist/benchmarks/csharp/results` files, and compare
@@ -279,3 +313,22 @@ go tool pprof dist/benchmarks/profiles/go/calc-source-typed.cpu.pprof
 
 The profile target currently covers calc parse-from-source with typed reducers
 and DRAW large-source AST construction.
+
+## Pre-Tokenized Parse Notes
+
+The Go `ParsePreTokenized` benchmarks use token slices prepared before the
+timed loop. The generated collection API adapts that existing slice through a
+small pull-based token source, so it does not tokenize or copy the full slice in
+the timed operation.
+
+On some machines or short runs, `ParsePreTokenized` can still appear slower
+than `ParseFromSource`. Treat that as a signal to rerun with stable settings
+before drawing conclusions:
+
+```sh
+make examples-benchmarks-go BENCH_PATTERN='CalcParse' BENCH_COUNT=10 BENCH_TIME=2s
+```
+
+The likely causes are benchmark noise, CPU cache effects, or the tiny adapter
+path being measured differently from the scanner path. Do not assume hidden
+tokenization cost unless a repeated stable run and profile show it.

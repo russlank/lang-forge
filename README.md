@@ -306,14 +306,17 @@ Optional benchmark examples are available separately from normal CI:
 make examples-benchmarks
 make examples-benchmarks-go BENCH_COUNT=5 BENCH_TIME=2s
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*CalcParse*'
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=medium CSHARP_BENCH_FILTER='*CalcParse*'
 make examples-benchmarks-report BENCH_COUNT=10 BENCH_TIME=1s
 ```
 
-The benchmark workflow is quiet by default, keeps a verbose generation path
-through `make examples-benchmarks-verbose`, reports Go `-benchmem` data, uses
-BenchmarkDotNet for optional C# measurements, and writes longer reports under
-`dist/benchmarks/`. Benchmark numbers are approximate and environment-dependent,
-so compare runs on the same machine and toolchain.
+The default benchmark workflow is quick mode: quiet generation, compact Go and
+C# summaries, Go `-benchmem` data, and BenchmarkDotNet ShortRun for optional
+C# measurements. Use `make examples-benchmarks-verbose` for generation logs,
+`BENCH_COUNT=5` or `10` for steadier Go runs, and `CSHARP_BENCH_JOB=medium` or
+`default` for steadier C# runs. Reports are written under `dist/benchmarks/`.
+Benchmark numbers are approximate and environment-dependent, so compare runs on
+the same machine and toolchain.
 
 If you do not want to install a binary, a local Docker image can be used as the
 LangForge command:

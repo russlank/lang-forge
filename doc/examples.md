@@ -315,6 +315,7 @@ Run the Go benchmark suite:
 make examples-benchmarks
 make examples-benchmarks-go BENCH_COUNT=5 BENCH_TIME=2s
 make examples-benchmarks-csharp CSHARP_BENCH_FILTER='*CalcParse*'
+make examples-benchmarks-csharp CSHARP_BENCH_JOB=medium CSHARP_BENCH_FILTER='*CalcParse*'
 make examples-benchmarks-report BENCH_COUNT=10 BENCH_TIME=1s
 ```
 
@@ -323,6 +324,15 @@ BenchmarkDotNet with memory diagnostics and writes artifacts under
 `dist/benchmarks/csharp`. Both use the same vocabulary:
 `ParseFromSource` includes scanner/token-source work, while
 `ParsePreTokenized` parses tokens prepared before the timed loop.
+The default path is quick mode. Use repeated Go runs through `BENCH_COUNT=5`
+or `10`, and use `CSHARP_BENCH_JOB=medium` or `default`, before drawing
+before/after conclusions. BenchmarkDotNet `Error` can be large in short mode
+because it intentionally uses few iterations.
+
+The benchmark report target writes raw and summarized output under
+`dist/benchmarks`, including `go-benchmarks-summary.md` and
+`csharp-benchmarks-summary.md`. Summary paths are repository-relative where
+practical so reports can be shared between local checkouts.
 
 Static generated artifact metrics are written by
 `make examples-benchmarks-report` as Markdown and JSON under

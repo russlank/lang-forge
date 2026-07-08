@@ -72,10 +72,13 @@ recovery-reporting drift.
 `examples-testdata` runs shared fixtures and golden checks.
 `examples-templates` validates the maintained copyable templates.
 `examples-benchmarks` runs optional benchmark examples quietly by default and is
-intentionally not part of `examples-test`. Use
-`examples-benchmarks-verbose`, `examples-benchmarks-report`, and
-`examples-benchmarks-profile` when generation logs, persistent reports, or Go
-profiles are needed.
+intentionally not part of `examples-test`. The default path is quick mode:
+compact Go Markdown output plus BenchmarkDotNet ShortRun for the default C#
+calc-parse filter. Use `examples-benchmarks-verbose`,
+`examples-benchmarks-report`, and `examples-benchmarks-profile` when generation
+logs, persistent reports, or Go profiles are needed. Use `BENCH_COUNT=5` or
+`10` for steadier Go conclusions and `CSHARP_BENCH_JOB=medium` or `default`
+for steadier C# conclusions.
 
 Intentional action-contract differences must be documented in
 `manifest-parity.allowlist.json` with `family`, `target`, `path`, and

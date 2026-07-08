@@ -1,11 +1,9 @@
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 
 namespace LangForge.Examples.Benchmarks.CSharp;
 
 /// <summary>Benchmarks generated scanner throughput over the calc workload.</summary>
 [MemoryDiagnoser]
-[ShortRunJob]
 public class ScannerBenchmarks
 {
     [Benchmark]
@@ -17,7 +15,6 @@ public class ScannerBenchmarks
 
 /// <summary>Benchmarks source parsing versus pre-tokenized parsing and typed versus boxed reducers.</summary>
 [MemoryDiagnoser]
-[ShortRunJob]
 public class CalcParseBenchmarks
 {
     [Benchmark]
@@ -35,7 +32,6 @@ public class CalcParseBenchmarks
 
 /// <summary>Benchmarks DRAW parsing through the handwritten AST-building facade.</summary>
 [MemoryDiagnoser]
-[ShortRunJob]
 public class DrawParseBenchmarks
 {
     [Benchmark]
@@ -44,7 +40,6 @@ public class DrawParseBenchmarks
 
 /// <summary>Benchmarks recovering parser runs with source and pre-tokenized inputs.</summary>
 [MemoryDiagnoser]
-[ShortRunJob]
 public class RecoveryParseBenchmarks
 {
     [Benchmark]

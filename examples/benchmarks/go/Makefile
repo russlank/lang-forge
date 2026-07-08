@@ -35,7 +35,11 @@ prepare-verbose:
 	$(MAKE) -C ../../go/parser-recovery GO=$(GO) LANG_FORGE_VERBOSITY=1 generate
 
 bench: prepare
-	@$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./...
+	@mkdir -p $(REPORT_DIR)
+	@echo "Running Go benchmarks (pattern: $(BENCH_PATTERN), time: $(BENCH_TIME), count: $(BENCH_COUNT))..."
+	@$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./... > $(REPORT_DIR)/go-benchmarks.txt || { cat $(REPORT_DIR)/go-benchmarks.txt; exit 1; }
+	@$(GO) run ../tools/go-bench-summary --input $(REPORT_DIR)/go-benchmarks.txt --out $(REPORT_DIR)/go-benchmarks-summary.md --go $(GO) --command "$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./..."
+	@sed -n '1,160p' $(REPORT_DIR)/go-benchmarks-summary.md
 
 bench-verbose: prepare-verbose
 	$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./...
@@ -49,24 +53,10 @@ test: prepare
 
 report: prepare
 	@mkdir -p $(REPORT_DIR)
-	@$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./... | tee $(REPORT_DIR)/go-benchmarks.txt
-	@{ \
-		echo "# Go Benchmark Summary"; \
-		echo; \
-		echo "Generated on: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; \
-		echo; \
-		echo "Command:"; \
-		echo; \
-		echo '```sh'; \
-		echo "$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./..."; \
-		echo '```'; \
-		echo; \
-		echo "Benchmark lines:"; \
-		echo; \
-		grep '^Benchmark' $(REPORT_DIR)/go-benchmarks.txt | sed 's/^/- `/; s/$$/`/'; \
-		echo; \
-		echo "Use benchstat for before/after comparisons; do not compare absolute timings across different machines."; \
-	} > $(REPORT_DIR)/go-benchmarks-summary.md
+	@echo "Running Go benchmark report (pattern: $(BENCH_PATTERN), time: $(BENCH_TIME), count: $(BENCH_COUNT))..."
+	@$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./... > $(REPORT_DIR)/go-benchmarks.txt || { cat $(REPORT_DIR)/go-benchmarks.txt; exit 1; }
+	@$(GO) run ../tools/go-bench-summary --input $(REPORT_DIR)/go-benchmarks.txt --out $(REPORT_DIR)/go-benchmarks-summary.md --go $(GO) --command "$(GO) test -tags $(TAGS) -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime $(BENCH_TIME) -count $(BENCH_COUNT) ./..."
+	@sed -n '1,160p' $(REPORT_DIR)/go-benchmarks-summary.md
 
 profile: prepare
 	@mkdir -p $(PROFILE_DIR)

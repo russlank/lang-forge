@@ -287,17 +287,24 @@ static library_dsl_value reduce_value_ident(const library_dsl_value_ident_reduct
 }
 
 library_dsl_typed_reducer dsl_make_typed_reducer(dsl_semantic_context *context) {
-    library_dsl_typed_reducer reducer;
+    /*
+     * Handler function pointers are static reducer wiring. The only per-parse
+     * field is `user`, which points to the semantic allocator/context owned by
+     * parser_facade.c.
+     */
+    static const library_dsl_typed_reducer reducer_template = {
+        .document = reduce_document,
+        .entries = reduce_entries,
+        .entries_empty = reduce_entries_empty,
+        .entries_tail_more = reduce_entries_tail_more,
+        .entries_tail_empty = reduce_entries_tail_empty,
+        .entry_set = reduce_entry_set,
+        .entry_enable = reduce_entry_enable,
+        .value_number = reduce_value_number,
+        .value_string = reduce_value_string,
+        .value_ident = reduce_value_ident,
+    };
+    library_dsl_typed_reducer reducer = reducer_template;
     reducer.user = context;
-    reducer.document = reduce_document;
-    reducer.entries = reduce_entries;
-    reducer.entries_empty = reduce_entries_empty;
-    reducer.entries_tail_more = reduce_entries_tail_more;
-    reducer.entries_tail_empty = reduce_entries_tail_empty;
-    reducer.entry_set = reduce_entry_set;
-    reducer.entry_enable = reduce_entry_enable;
-    reducer.value_number = reduce_value_number;
-    reducer.value_string = reduce_value_string;
-    reducer.value_ident = reduce_value_ident;
     return reducer;
 }

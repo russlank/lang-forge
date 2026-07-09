@@ -4,7 +4,7 @@ Document id: `lang-forge-generated-code-and-semantics-v1`
 
 Status: `active`
 
-Last updated: `2026-07-04`
+Last updated: `2026-07-09`
 
 Owner: `Project maintainers`
 
@@ -118,6 +118,23 @@ Source-based parsing reduces peak token-storage allocation, but it is not a
 different parser algorithm and it is not asynchronous. The parser still owns
 its state stack, semantic value stack, diagnostics, and any reducer-built AST
 or domain values for as long as the parse requires.
+
+Source-based parsing has two layers. The parser pulls lexemes lazily from a
+generated scanner or token source. The scanner can now be constructed either
+from in-memory source text or from a target-native demand-fed input:
+
+- Go: `NewScannerFromReader(io.Reader, ...)` and `TokenizeReader`.
+- C#: `Scanner.FromTextReader`, `Scanner.FromStream`, and reader overloads of
+  `Scanner.Tokenize`.
+- C: `*_stream_scanner` with a read callback, user pointer, buffer limits, and
+  `*_stream_scanner_free`.
+- C++: `StreamScanner` over `std::istream`.
+
+C and C++ stream-backed scanners own copied visible-token text. Keep the
+stream scanner alive while parser/reducer code reads lexeme text, and free the
+C stream scanner when parsing is finished. C# `Scanner.FromStream` returns a
+disposable reader scanner for the internally-created `StreamReader`;
+`Scanner.FromTextReader` leaves caller-owned readers open.
 
 | Need | Recommended API shape |
 |---|---|

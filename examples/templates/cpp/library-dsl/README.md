@@ -6,7 +6,9 @@ This template demonstrates a reusable C++17 layout:
 - handwritten source lives under `src`;
 - generated LangForge files live under `src/generated`;
 - `ParserFacade` hides generated scanner/parser details;
-- reducers use generated typed contexts from `parser_typed.hpp`.
+- reducers use generated typed contexts from `parser_typed.hpp`;
+- the pure reducer map is a function-local static, so action dispatch wiring is
+  created once while scanner/parser state remains per parse.
 
 Run it with the repository Makefile:
 

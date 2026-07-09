@@ -143,11 +143,11 @@ static Color parse_color(std::string text) {
     };
 }
 
-draw::ReducerMap make_reducers() {
+const draw::ReducerMap& make_reducers() {
     // The map keys are generated from {cpp: ...} labels in draw.lf. Each lambda
     // is handwritten semantic code that builds the DRAW AST consumed by the
     // renderer.
-    return draw::ReducerMap{
+    static const draw::ReducerMap reducers{
         {draw::SemanticAction::Program, [](const draw::Reduction& ctx) -> draw::Value {
             auto program = std::make_shared<Program>();
             program->statements = value_arg<StatementList>(ctx, 0, "statement list");
@@ -288,10 +288,12 @@ draw::ReducerMap make_reducers() {
         }},
         {draw::SemanticAction::Group, [](const draw::Reduction& ctx) -> draw::Value { return ctx.values.at(1); }},
     };
+    return reducers;
 }
 
-draw::ReducerMap make_typed_reducers() {
-    return draw::typed_reducer_map_from_boxed(make_reducers());
+const draw::ReducerMap& make_typed_reducers() {
+    static const draw::ReducerMap reducers = draw::typed_reducer_map_from_boxed(make_reducers());
+    return reducers;
 }
 
 ProgramPtr parse_program(const std::string& source, bool typed) {

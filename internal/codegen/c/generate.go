@@ -161,9 +161,16 @@ func renderScannerHeader(prefix string, source string) string {
 	b.WriteString("typedef struct " + prefix + "_error {\n    char message[256];\n} " + prefix + "_error;\n\n")
 	b.WriteString("typedef struct " + prefix + "_lexeme {\n    " + prefix + "_token token;\n    const char *text;\n    size_t length;\n    const char *channel;\n    size_t start;\n    size_t end;\n    int start_line;\n    int start_column;\n    int end_line;\n    int end_column;\n} " + prefix + "_lexeme;\n\n")
 	b.WriteString("typedef struct " + prefix + "_scanner {\n    const char *input;\n    size_t length;\n    size_t pos;\n    int line;\n    int column;\n    int include_hidden;\n} " + prefix + "_scanner;\n\n")
+	b.WriteString("typedef int (*" + prefix + "_stream_read_fn)(void *user, char *buffer, size_t capacity, size_t *read, " + prefix + "_error *error);\n\n")
+	b.WriteString("typedef struct " + prefix + "_stream_scanner {\n    " + prefix + "_stream_read_fn read;\n    void *user;\n    char *buffer;\n    size_t length;\n    size_t capacity;\n    size_t base;\n    int line;\n    int column;\n    int include_hidden;\n    int eof;\n    size_t read_buffer_size;\n    size_t max_buffered_token_bytes;\n    char **owned_texts;\n    size_t owned_count;\n    size_t owned_capacity;\n} " + prefix + "_stream_scanner;\n\n")
 	b.WriteString("void " + prefix + "_scanner_init(" + prefix + "_scanner *scanner, const char *input);\n")
 	b.WriteString("void " + prefix + "_scanner_include_hidden(" + prefix + "_scanner *scanner, int include_hidden);\n")
 	b.WriteString("int " + prefix + "_scanner_next(" + prefix + "_scanner *scanner, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
+	b.WriteString("void " + prefix + "_stream_scanner_init(" + prefix + "_stream_scanner *scanner, " + prefix + "_stream_read_fn read, void *user);\n")
+	b.WriteString("void " + prefix + "_stream_scanner_init_ex(" + prefix + "_stream_scanner *scanner, " + prefix + "_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_token_bytes);\n")
+	b.WriteString("void " + prefix + "_stream_scanner_include_hidden(" + prefix + "_stream_scanner *scanner, int include_hidden);\n")
+	b.WriteString("int " + prefix + "_stream_scanner_next(" + prefix + "_stream_scanner *scanner, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
+	b.WriteString("void " + prefix + "_stream_scanner_free(" + prefix + "_stream_scanner *scanner);\n")
 	b.WriteString("int " + prefix + "_tokenize(const char *input, " + prefix + "_lexeme **out, size_t *count, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_free_lexemes(" + prefix + "_lexeme *lexemes);\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
@@ -377,6 +384,8 @@ int ` + prefix + `_scanner_next(` + prefix + `_scanner *scanner, ` + prefix + `_
     return 1;
 }
 
+` + cStreamScannerRuntime(prefix) + `
+
 int ` + prefix + `_tokenize(const char *input, ` + prefix + `_lexeme **out, size_t *count, ` + prefix + `_error *error) {
     lf_clear_error(error);
     if (out == NULL || count == NULL) { lf_set_error(error, "tokenize output arguments are required"); return 0; }
@@ -413,6 +422,223 @@ void ` + prefix + `_free_lexemes(` + prefix + `_lexeme *lexemes) {
 	return b.String()
 }
 
+func cStreamScannerRuntime(prefix string) string {
+	return `
+static int lf_utf8_expected_size(unsigned char b0) {
+    if (b0 < 0x80) { return 1; }
+    if ((b0 & 0xe0) == 0xc0) { return 2; }
+    if ((b0 & 0xf0) == 0xe0) { return 3; }
+    if ((b0 & 0xf8) == 0xf0) { return 4; }
+    return 0;
+}
+
+static int lf_decode_utf8_stream(const char *input, size_t length, size_t pos, int eof, uint32_t *out, size_t *size, int *need_more, ` + prefix + `_error *error) {
+    if (need_more != NULL) { *need_more = 0; }
+    if (pos >= length) {
+        if (!eof && need_more != NULL) { *need_more = 1; return 1; }
+        lf_set_error(error, "invalid UTF-8 input");
+        return 0;
+    }
+    int expected = lf_utf8_expected_size((unsigned char)input[pos]);
+    if (expected > 1 && pos + (size_t)expected > length && !eof) {
+        if (need_more != NULL) { *need_more = 1; }
+        return 1;
+    }
+    return lf_decode_utf8(input, length, pos, out, size, error);
+}
+
+static int lf_stream_ensure_capacity(` + prefix + `_stream_scanner *scanner, size_t needed, ` + prefix + `_error *error) {
+    if (scanner->capacity >= needed) { return 1; }
+    size_t next_capacity = scanner->capacity == 0 ? scanner->read_buffer_size : scanner->capacity;
+    while (next_capacity < needed) {
+        next_capacity *= 2;
+    }
+    char *next = (char *)realloc(scanner->buffer, next_capacity);
+    if (next == NULL) { lf_set_error(error, "out of memory"); return 0; }
+    scanner->buffer = next;
+    scanner->capacity = next_capacity;
+    return 1;
+}
+
+static int lf_stream_read_more(` + prefix + `_stream_scanner *scanner, ` + prefix + `_error *error) {
+    if (scanner->eof) { return 1; }
+    if (scanner->read == NULL) { lf_set_error(error, "stream scanner read callback is required"); return 0; }
+    if (scanner->read_buffer_size == 0) { scanner->read_buffer_size = 4096; }
+    if (scanner->max_buffered_token_bytes == 0) { scanner->max_buffered_token_bytes = 1048576; }
+    if (!lf_stream_ensure_capacity(scanner, scanner->length + scanner->read_buffer_size, error)) { return 0; }
+    size_t read = 0;
+    if (!scanner->read(scanner->user, scanner->buffer + scanner->length, scanner->read_buffer_size, &read, error)) {
+        return 0;
+    }
+    if (read > scanner->read_buffer_size) {
+        lf_set_error(error, "stream scanner read callback returned too many bytes");
+        return 0;
+    }
+    if (read == 0) {
+        scanner->eof = 1;
+        return 1;
+    }
+    scanner->length += read;
+    if (scanner->length > scanner->max_buffered_token_bytes) {
+        lf_set_error(error, "scanner buffered token exceeds limit");
+        return 0;
+    }
+    return 1;
+}
+
+static int lf_stream_match(` + prefix + `_stream_scanner *scanner, int *rule, size_t *end, ` + prefix + `_error *error) {
+    int state = 0;
+    int best_rule = ` + prefix + `_states[state].accept;
+    size_t best_end = 0;
+    size_t pos = 0;
+    while (1) {
+        if (pos >= scanner->length) {
+            ` + prefix + `_state st = ` + prefix + `_states[state];
+            if (scanner->eof || st.count == 0) { break; }
+            if (!lf_stream_read_more(scanner, error)) { return 0; }
+            continue;
+        }
+        uint32_t r = 0;
+        size_t size = 0;
+        int need_more = 0;
+        if (!lf_decode_utf8_stream(scanner->buffer, scanner->length, pos, scanner->eof, &r, &size, &need_more, error)) {
+            if (best_rule > 0) { break; }
+            return 0;
+        }
+        if (need_more) {
+            if (!lf_stream_read_more(scanner, error)) { return 0; }
+            continue;
+        }
+        int next = -1;
+        ` + prefix + `_state st = ` + prefix + `_states[state];
+        for (size_t i = 0; i < st.count; i++) {
+            ` + prefix + `_transition tr = ` + prefix + `_transitions[st.start + i];
+            if (r >= tr.lo && r <= tr.hi) { next = tr.target; break; }
+        }
+        if (next < 0) { break; }
+        pos += size;
+        state = next;
+        if (` + prefix + `_states[state].accept > 0) {
+            best_rule = ` + prefix + `_states[state].accept;
+            best_end = pos;
+        }
+    }
+    *rule = best_rule;
+    *end = best_end;
+    return 1;
+}
+
+static int lf_stream_retain_text(` + prefix + `_stream_scanner *scanner, char *text, ` + prefix + `_error *error) {
+    if (scanner->owned_count == scanner->owned_capacity) {
+        size_t next_capacity = scanner->owned_capacity == 0 ? 16 : scanner->owned_capacity * 2;
+        char **next = (char **)realloc(scanner->owned_texts, next_capacity * sizeof(char *));
+        if (next == NULL) { free(text); lf_set_error(error, "out of memory"); return 0; }
+        scanner->owned_texts = next;
+        scanner->owned_capacity = next_capacity;
+    }
+    scanner->owned_texts[scanner->owned_count++] = text;
+    return 1;
+}
+
+static int lf_stream_copy_text(` + prefix + `_stream_scanner *scanner, size_t length, char **out, ` + prefix + `_error *error) {
+    char *text = (char *)malloc(length + 1);
+    if (text == NULL) { lf_set_error(error, "out of memory"); return 0; }
+    if (length != 0) { memcpy(text, scanner->buffer, length); }
+    text[length] = '\0';
+    if (!lf_stream_retain_text(scanner, text, error)) { return 0; }
+    *out = text;
+    return 1;
+}
+
+void ` + prefix + `_stream_scanner_init_ex(` + prefix + `_stream_scanner *scanner, ` + prefix + `_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_token_bytes) {
+    if (scanner == NULL) { return; }
+    memset(scanner, 0, sizeof(*scanner));
+    scanner->read = read;
+    scanner->user = user;
+    scanner->line = 1;
+    scanner->column = 1;
+    scanner->read_buffer_size = read_buffer_size == 0 ? 4096 : read_buffer_size;
+    scanner->max_buffered_token_bytes = max_buffered_token_bytes == 0 ? 1048576 : max_buffered_token_bytes;
+}
+
+void ` + prefix + `_stream_scanner_init(` + prefix + `_stream_scanner *scanner, ` + prefix + `_stream_read_fn read, void *user) {
+    ` + prefix + `_stream_scanner_init_ex(scanner, read, user, 4096, 1048576);
+}
+
+void ` + prefix + `_stream_scanner_include_hidden(` + prefix + `_stream_scanner *scanner, int include_hidden) {
+    if (scanner != NULL) { scanner->include_hidden = include_hidden; }
+}
+
+int ` + prefix + `_stream_scanner_next(` + prefix + `_stream_scanner *scanner, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+    lf_clear_error(error);
+    if (ok != NULL) { *ok = 0; }
+    if (scanner == NULL || lexeme == NULL || ok == NULL) { lf_set_error(error, "stream scanner arguments are required"); return 0; }
+    while (1) {
+        if (scanner->length == 0 && !scanner->eof) {
+            if (!lf_stream_read_more(scanner, error)) { return 0; }
+        }
+        if (scanner->length == 0 && scanner->eof) {
+            lexeme->token = ` + tokenEOF(prefix) + `;
+            lexeme->text = "";
+            lexeme->length = 0;
+            lexeme->channel = "";
+            lexeme->start = scanner->base;
+            lexeme->end = scanner->base;
+            lexeme->start_line = scanner->line;
+            lexeme->start_column = scanner->column;
+            lexeme->end_line = scanner->line;
+            lexeme->end_column = scanner->column;
+            *ok = 0;
+            return 1;
+        }
+        size_t start = scanner->base;
+        int start_line = scanner->line;
+        int start_column = scanner->column;
+        int rule = 0;
+        size_t end = 0;
+        if (!lf_stream_match(scanner, &rule, &end, error)) { return 0; }
+        if (rule <= 0) { lf_set_error(error, "no lexical rule matched input"); return 0; }
+        if (end == 0) { lf_set_error(error, "lexer rule matched empty input"); return 0; }
+        ` + prefix + `_rule_action action = ` + prefix + `_rule_actions[rule];
+        int end_line = scanner->line;
+        int end_column = scanner->column;
+        lf_advance(scanner->buffer, 0, end, &end_line, &end_column);
+        int return_token = !action.skip && (action.channel[0] == '\0' || scanner->include_hidden);
+        char *owned_text = NULL;
+        if (return_token && !lf_stream_copy_text(scanner, end, &owned_text, error)) { return 0; }
+        scanner->length -= end;
+        if (scanner->length != 0) { memmove(scanner->buffer, scanner->buffer + end, scanner->length); }
+        scanner->base += end;
+        scanner->line = end_line;
+        scanner->column = end_column;
+        if (!return_token) { continue; }
+        lexeme->token = action.token;
+        lexeme->text = owned_text;
+        lexeme->length = end;
+        lexeme->channel = action.channel;
+        lexeme->start = start;
+        lexeme->end = start + end;
+        lexeme->start_line = start_line;
+        lexeme->start_column = start_column;
+        lexeme->end_line = end_line;
+        lexeme->end_column = end_column;
+        *ok = 1;
+        return 1;
+    }
+}
+
+void ` + prefix + `_stream_scanner_free(` + prefix + `_stream_scanner *scanner) {
+    if (scanner == NULL) { return; }
+    for (size_t i = 0; i < scanner->owned_count; i++) {
+        free(scanner->owned_texts[i]);
+    }
+    free(scanner->owned_texts);
+    free(scanner->buffer);
+    memset(scanner, 0, sizeof(*scanner));
+}
+`
+}
+
 func renderParserHeader(prefix string, source string, actions []SemanticAction) string {
 	guard := headerGuard(prefix, "PARSER")
 	var b strings.Builder
@@ -435,7 +661,8 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("typedef struct " + prefix + "_lexeme_array_source {\n    const " + prefix + "_lexeme *tokens;\n    size_t count;\n    size_t pos;\n} " + prefix + "_lexeme_array_source;\n\n")
 	b.WriteString("void " + prefix + "_lexeme_array_source_init(" + prefix + "_lexeme_array_source *array_source, const " + prefix + "_lexeme *tokens, size_t count);\n")
 	b.WriteString("int " + prefix + "_lexeme_array_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_stream_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n\n")
 	b.WriteString("/* One expected terminal or reporting group. */\n")
 	b.WriteString("typedef struct " + prefix + "_expected_token {\n    const char *symbol;\n    const char *display;\n    const char *const *members;\n    size_t member_count;\n} " + prefix + "_expected_token;\n\n")
 	b.WriteString("/* One source-rich parser syntax diagnostic. */\n")
@@ -637,6 +864,10 @@ int ` + prefix + `_lexeme_array_source_next(void *user, ` + prefix + `_lexeme *l
 
 int ` + prefix + `_scanner_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
     return ` + prefix + `_scanner_next((` + prefix + `_scanner *)user, lexeme, ok, error);
+}
+
+int ` + prefix + `_stream_scanner_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+    return ` + prefix + `_stream_scanner_next((` + prefix + `_stream_scanner *)user, lexeme, ok, error);
 }
 
 static ` + prefix + `_lexeme lf_eof_lexeme(const lf_cursor *cursor) {

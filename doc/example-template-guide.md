@@ -101,6 +101,9 @@ compiler-style pipeline:
   `NumberExprNode`, and `AddExprNode`;
 - `Semantics/ReducerFactory.cs` is the only handwritten layer that maps
   generated typed reducer contexts to AST construction;
+- pure reducer maps are cached by the parser facade or reducer factory, while
+  parse-owned state such as policies, allocators, and AST builders remains
+  explicit;
 - `Semantics/INumberLiteralPolicy.cs` shows where domain services can be
   injected without teaching generated code about a DI container;
 - `Parsing/IMiniCompilerParser.cs` and `MiniCompilerParser.cs` expose the

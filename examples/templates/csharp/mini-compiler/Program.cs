@@ -3,9 +3,11 @@ using System.Text;
 using LangForge.Examples.Templates.MiniCompiler.Generated;
 using static LangForge.Examples.Templates.MiniCompiler.Generated.SemanticReducerContexts;
 
-static ProgramNode ParseProgram(string source)
+var reducers = CreateReducers();
+
+static ProgramNode ParseProgram(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), reducers);
     if (value is ProgramNode program)
     {
         return program;
@@ -138,16 +140,16 @@ static List<T> Prepend<T>(T head, List<T> tail)
     return result;
 }
 
-static void RunAssertions(string source)
+static void RunAssertions(string source, ReducerMap reducers)
 {
-    var output = Run(Compile(ParseProgram(source)));
+    var output = Run(Compile(ParseProgram(source, reducers)));
     if (output.Count != 2 || output[0] != 3 || output[1] != 42)
     {
         throw new InvalidOperationException($"unexpected output: [{string.Join(", ", output)}]");
     }
     try
     {
-        ParseProgram("print 1 +;");
+        ParseProgram("print 1 +;", reducers);
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error", StringComparison.Ordinal))
@@ -155,7 +157,7 @@ static void RunAssertions(string source)
     }
     try
     {
-        ParseProgram("print 999999999999999999999999;");
+        ParseProgram("print 999999999999999999999999;", reducers);
         throw new InvalidOperationException("expected reducer failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("action number", StringComparison.Ordinal) && ex.Message.Contains("label token", StringComparison.Ordinal))
@@ -177,9 +179,9 @@ var inputPath = argsList.Count > 0 ? argsList[0] : "input.mini";
 var source = File.ReadAllText(inputPath);
 if (assert)
 {
-    RunAssertions(source);
+    RunAssertions(source, reducers);
 }
-var program = ParseProgram(source);
+var program = ParseProgram(source, reducers);
 var code = Compile(program);
 var output = Run(code);
 var report = BuildReport(inputPath, source, code, output);

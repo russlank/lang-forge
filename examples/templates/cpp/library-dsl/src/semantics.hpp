@@ -5,6 +5,6 @@
 
 namespace library_dsl {
 
-LangForge::Examples::Templates::LibraryDsl::Generated::ReducerMap make_reducers();
+const LangForge::Examples::Templates::LibraryDsl::Generated::ReducerMap& make_reducers();
 
 } // namespace library_dsl

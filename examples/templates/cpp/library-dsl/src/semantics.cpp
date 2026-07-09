@@ -33,8 +33,8 @@ static std::string unquote(std::string text) {
     return out;
 }
 
-lfgen::ReducerMap make_reducers() {
-    return lfgen::ReducerMap{
+const lfgen::ReducerMap& make_reducers() {
+    static const lfgen::ReducerMap reducers{
         // Document : entries=Entries {cpp: document}
         {lfgen::SemanticAction::Document, lfgen::typed_document([](const lfgen::DocumentReduction& ctx) -> Document {
             return Document{ctx.entries};
@@ -98,6 +98,7 @@ lfgen::ReducerMap make_reducers() {
             return Value::identifier_value(std::string(ctx.token.text));
         })},
     };
+    return reducers;
 }
 
 } // namespace library_dsl

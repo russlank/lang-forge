@@ -9,21 +9,25 @@ namespace LangForge.Examples.Draw;
 /// </summary>
 internal static class DrawParser
 {
+    private static readonly Lazy<ReducerMap> Reducers = new(CreateReducersCore);
+
     /// <summary>
     /// Converts DRAW source text into an AST using the generated scanner/parser.
     /// </summary>
     public static DrawProgram Parse(string source)
     {
-        var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
+        var value = Parser.ParseWithReducerFromSource(new Scanner(source), Reducers.Value);
         return value is DrawProgram program
             ? program
             : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of DrawProgram");
     }
 
     /// <summary>
-    /// Creates the semantic reducer map used by the generated parser.
+    /// Returns the shared semantic reducer map used by the generated parser.
     /// </summary>
-    public static ReducerMap CreateReducers()
+    public static ReducerMap CreateReducers() => Reducers.Value;
+
+    private static ReducerMap CreateReducersCore()
     {
         // The generated adapters validate the action ID, read named RHS labels,
         // and pass a typed context into each handwritten AST-building function.

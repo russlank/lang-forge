@@ -197,9 +197,17 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	b.WriteString("using System;\n")
 	b.WriteString("using System.Buffers;\n")
 	b.WriteString("using System.Collections.Generic;\n")
+	b.WriteString("using System.IO;\n")
 	b.WriteString("using System.Text;\n\n")
 	b.WriteString("/// <summary>One scanner result with UTF-16 offsets and Unicode scalar positions.</summary>\n")
 	b.WriteString("public readonly record struct Lexeme(Token Token, string Text, string Channel, int Start, int End, int StartLine, int StartColumn, int EndLine, int EndColumn);\n\n")
+	b.WriteString("/// <summary>Options for reader-backed scanner input.</summary>\n")
+	b.WriteString("public sealed class ScannerOptions\n{\n")
+	b.WriteString("    /// <summary>Number of UTF-16 code units requested from the reader at a time.</summary>\n")
+	b.WriteString("    public int ReadBufferSize { get; set; } = 4096;\n")
+	b.WriteString("    /// <summary>Maximum buffered UTF-16 code units retained while deciding one token.</summary>\n")
+	b.WriteString("    public int MaxBufferedTokenLength { get; set; } = 1048576;\n")
+	b.WriteString("}\n\n")
 	b.WriteString("/// <summary>Incrementally tokenizes an input string.</summary>\n")
 	b.WriteString("/// <remarks>Scanner methods are thread-safe. Concurrent calls to Next share one serialized input cursor.</remarks>\n")
 	b.WriteString("public sealed class Scanner : ILexemeSource\n{\n")
@@ -210,14 +218,23 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	b.WriteString("    private int _column = 1;\n")
 	b.WriteString("    private bool _includeHidden;\n\n")
 	b.WriteString("    public Scanner(string input)\n    {\n        _input = input ?? throw new ArgumentNullException(nameof(input));\n    }\n\n")
+	b.WriteString("    /// <summary>Creates a scanner that pulls source text from a TextReader on demand.</summary>\n")
+	b.WriteString("    public static ReaderScanner FromTextReader(TextReader reader, ScannerOptions? options = null) => new ReaderScanner(reader, options, ownsReader: false);\n\n")
+	b.WriteString("    /// <summary>Creates a scanner that decodes source bytes from a stream and pulls text on demand.</summary>\n")
+	b.WriteString("    public static ReaderScanner FromStream(Stream stream, Encoding? encoding = null, ScannerOptions? options = null)\n    {\n        if (stream is null) { throw new ArgumentNullException(nameof(stream)); }\n        encoding ??= new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);\n        int bufferSize = Math.Max(1, options?.ReadBufferSize ?? 4096);\n        return new ReaderScanner(new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: true), options, ownsReader: true);\n    }\n\n")
 	b.WriteString("    /// <summary>Controls whether channel tokens are returned.</summary>\n")
 	b.WriteString("    public void IncludeHidden(bool include)\n    {\n        lock (_gate) { _includeHidden = include; }\n    }\n\n")
 	b.WriteString("    /// <summary>Returns every visible token in input.</summary>\n")
 	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(string input) => new Scanner(input).All();\n\n")
+	b.WriteString("    /// <summary>Returns every visible token read from a TextReader.</summary>\n")
+	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(TextReader reader, ScannerOptions? options = null) => FromTextReader(reader, options).All();\n\n")
+	b.WriteString("    /// <summary>Returns every visible token decoded from a stream.</summary>\n")
+	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(Stream stream, Encoding? encoding = null, ScannerOptions? options = null) => FromStream(stream, encoding, options).All();\n\n")
 	b.WriteString("    /// <summary>Returns all tokens until end-of-input.</summary>\n")
 	b.WriteString("    public IReadOnlyList<Lexeme> All()\n    {\n        var output = new List<Lexeme>();\n        while (Next(out var lexeme))\n        {\n            output.Add(lexeme);\n        }\n        return output;\n    }\n\n")
 	b.WriteString("    /// <summary>Returns the next visible token, or false at end-of-input.</summary>\n")
 	b.WriteString("    public bool Next(out Lexeme lexeme)\n    {\n        lock (_gate)\n        {\n            while (_pos < _input.Length)\n            {\n                int start = _pos;\n                int startLine = _line;\n                int startColumn = _column;\n                var match = MatchAt(_input, _pos);\n                if (match.Rule <= 0)\n                {\n                    throw new InvalidOperationException($\"no lexical rule matched offset {_pos} near '{Preview(_input, _pos)}'\");\n                }\n                if (match.End == _pos)\n                {\n                    throw new InvalidOperationException($\"lexer rule {match.Rule} matched empty input at offset {_pos}\");\n                }\n                var action = RuleActions[match.Rule];\n                var endPosition = AdvancePosition(_input, _pos, match.End, _line, _column);\n                lexeme = new Lexeme(action.Token, _input.Substring(start, match.End - start), action.Channel, start, match.End, startLine, startColumn, endPosition.Line, endPosition.Column);\n                _pos = match.End;\n                _line = endPosition.Line;\n                _column = endPosition.Column;\n                if (action.Skip) { continue; }\n                if (action.Channel.Length != 0 && !_includeHidden) { continue; }\n                return true;\n            }\n            lexeme = new Lexeme(Token.EOF, string.Empty, string.Empty, _pos, _pos, _line, _column, _line, _column);\n            return false;\n        }\n    }\n\n")
+	b.WriteString(csharpReaderScannerRuntime())
 	b.WriteString("    private readonly record struct ScannerTransition(int Lo, int Hi, int Target);\n")
 	b.WriteString("    private readonly record struct ScannerState(int Accept, ScannerTransition[] Transitions);\n")
 	b.WriteString("    private readonly record struct RuleAction(Token Token, bool Skip, string Channel);\n")
@@ -253,6 +270,183 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	b.WriteString("    private static string Preview(string input, int pos)\n    {\n        int end = Math.Min(input.Length, pos + 16);\n        return input.Substring(pos, end - pos);\n    }\n")
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func csharpReaderScannerRuntime() string {
+	return `    /// <summary>Scanner that pulls source text synchronously from a TextReader.</summary>
+    /// <remarks>
+    /// The parser still consumes an ILexemeSource. This scanner widens the source
+    /// input side for files, stdin, streams, and virtual text providers without
+    /// introducing async or queue-based parser machinery.
+    /// </remarks>
+    public sealed class ReaderScanner : ILexemeSource, IDisposable
+    {
+        private readonly object _readerGate = new();
+        private readonly TextReader _reader;
+        private readonly bool _ownsReader;
+        private readonly char[] _readBuffer;
+        private readonly int _maxBufferedTokenLength;
+        private string _buffer = string.Empty;
+        private int _base;
+        private int _line = 1;
+        private int _column = 1;
+        private bool _includeHidden;
+        private bool _eof;
+
+        internal ReaderScanner(TextReader reader, ScannerOptions? options, bool ownsReader)
+        {
+            _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+            _ownsReader = ownsReader;
+            int readBufferSize = Math.Max(1, options?.ReadBufferSize ?? 4096);
+            _maxBufferedTokenLength = Math.Max(1, options?.MaxBufferedTokenLength ?? 1048576);
+            _readBuffer = new char[readBufferSize];
+        }
+
+        /// <summary>Disposes the internal TextReader only when this scanner created it from a stream.</summary>
+        public void Dispose()
+        {
+            if (_ownsReader)
+            {
+                _reader.Dispose();
+            }
+        }
+
+        /// <summary>Controls whether channel tokens are returned.</summary>
+        public void IncludeHidden(bool include)
+        {
+            lock (_readerGate) { _includeHidden = include; }
+        }
+
+        /// <summary>Returns all tokens until end-of-input.</summary>
+        public IReadOnlyList<Lexeme> All()
+        {
+            var output = new List<Lexeme>();
+            while (Next(out var lexeme))
+            {
+                output.Add(lexeme);
+            }
+            return output;
+        }
+
+        /// <summary>Returns the next visible token, or false at end-of-input.</summary>
+        public bool Next(out Lexeme lexeme)
+        {
+            lock (_readerGate)
+            {
+                while (true)
+                {
+                    if (_buffer.Length == 0 && !_eof)
+                    {
+                        ReadMore();
+                    }
+                    if (_buffer.Length == 0 && _eof)
+                    {
+                        lexeme = new Lexeme(Token.EOF, string.Empty, string.Empty, _base, _base, _line, _column, _line, _column);
+                        return false;
+                    }
+                    int start = _base;
+                    int startLine = _line;
+                    int startColumn = _column;
+                    var match = MatchBuffered();
+                    if (match.Rule <= 0)
+                    {
+                        throw new InvalidOperationException($"no lexical rule matched offset {_base} near '{Preview(_buffer, 0)}'");
+                    }
+                    if (match.End == 0)
+                    {
+                        throw new InvalidOperationException($"lexer rule {match.Rule} matched empty input at offset {_base}");
+                    }
+                    var action = RuleActions[match.Rule];
+                    var endPosition = AdvancePosition(_buffer, 0, match.End, _line, _column);
+                    string text = _buffer.Substring(0, match.End);
+                    _buffer = _buffer.Substring(match.End);
+                    _base += match.End;
+                    _line = endPosition.Line;
+                    _column = endPosition.Column;
+                    if (action.Skip) { continue; }
+                    if (action.Channel.Length != 0 && !_includeHidden) { continue; }
+                    lexeme = new Lexeme(action.Token, text, action.Channel, start, start + match.End, startLine, startColumn, endPosition.Line, endPosition.Column);
+                    return true;
+                }
+            }
+        }
+
+        private void ReadMore()
+        {
+            int read = _reader.Read(_readBuffer, 0, _readBuffer.Length);
+            if (read == 0)
+            {
+                _eof = true;
+                return;
+            }
+            _buffer += new string(_readBuffer, 0, read);
+            if (_buffer.Length > _maxBufferedTokenLength)
+            {
+                throw new InvalidOperationException($"scanner buffered token exceeds {_maxBufferedTokenLength} UTF-16 code units");
+            }
+        }
+
+        private MatchResult MatchBuffered()
+        {
+            int stateID = 0;
+            int bestRule = ScannerStates[stateID].Accept;
+            int bestEnd = 0;
+            for (int pos = 0; ; )
+            {
+                if (pos >= _buffer.Length)
+                {
+                    if (_eof || ScannerStates[stateID].Transitions.Length == 0)
+                    {
+                        return new MatchResult(bestRule, bestEnd);
+                    }
+                    ReadMore();
+                    continue;
+                }
+                var decoded = DecodeStreamingScannerRune(_buffer, pos, _eof, _base);
+                if (decoded.NeedMore)
+                {
+                    ReadMore();
+                    continue;
+                }
+                int next = -1;
+                foreach (var transition in ScannerStates[stateID].Transitions)
+                {
+                    if (decoded.Value >= transition.Lo && decoded.Value <= transition.Hi)
+                    {
+                        next = transition.Target;
+                        break;
+                    }
+                }
+                if (next < 0) { break; }
+                pos += decoded.Length;
+                stateID = next;
+                if (ScannerStates[stateID].Accept > 0)
+                {
+                    bestRule = ScannerStates[stateID].Accept;
+                    bestEnd = pos;
+                }
+            }
+            return new MatchResult(bestRule, bestEnd);
+        }
+    }
+
+    private readonly record struct StreamingDecodedRune(int Value, int Length, bool NeedMore);
+
+    private static StreamingDecodedRune DecodeStreamingScannerRune(string input, int pos, bool eof, int absoluteBase)
+    {
+        var status = Rune.DecodeFromUtf16(input.AsSpan(pos), out var rune, out int consumed);
+        if (status == OperationStatus.NeedMoreData && !eof)
+        {
+            return new StreamingDecodedRune(0, 0, true);
+        }
+        if (status != OperationStatus.Done)
+        {
+            throw new InvalidOperationException($"invalid UTF-16 scalar at offset {absoluteBase + pos}");
+        }
+        return new StreamingDecodedRune(rune.Value, consumed, false);
+    }
+
+`
 }
 
 func renderParser(namespace string, source string, project *spec.Spec, table *parse.Table, tokens []string, tokenIDs map[string]string, actions []SemanticAction, actionManifest action.Manifest) string {

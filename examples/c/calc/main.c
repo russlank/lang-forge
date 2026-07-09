@@ -192,17 +192,19 @@ static calc_value calc_typed_divide(const calc_divide_reduction *ctx, void *user
 
 static calc_typed_reducer calc_make_direct_typed_reducer(calc_demo *demo)
 {
-    calc_typed_reducer typed;
+    static const calc_typed_reducer typed_template = {
+        .start = calc_typed_start,
+        .add = calc_typed_add,
+        .subtract = calc_typed_subtract,
+        .pass = calc_typed_pass,
+        .multiply = calc_typed_multiply,
+        .divide = calc_typed_divide,
+        .number = calc_typed_number,
+        .group = calc_typed_group,
+        .negate = calc_typed_negate,
+    };
+    calc_typed_reducer typed = typed_template;
     typed.user = demo;
-    typed.start = calc_typed_start;
-    typed.add = calc_typed_add;
-    typed.subtract = calc_typed_subtract;
-    typed.pass = calc_typed_pass;
-    typed.multiply = calc_typed_multiply;
-    typed.divide = calc_typed_divide;
-    typed.number = calc_typed_number;
-    typed.group = calc_typed_group;
-    typed.negate = calc_typed_negate;
     return typed;
 }
 

@@ -6,9 +6,11 @@ using static LangForge.Examples.VehicleReport.Generated.SemanticReducerContexts;
 // Vehicle report parsing demonstrates a data-extraction compiler front-end:
 // generated parser tables validate syntax, while typed reducers build a model
 // that reporting code can consume normally.
-static Vehicle ParseVehicle(string source)
+var reducers = CreateReducers();
+
+static Vehicle ParseVehicle(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), reducers);
     return value is Vehicle vehicle
         ? vehicle
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Vehicle");
@@ -112,14 +114,14 @@ static void Check(bool condition, string message)
     }
 }
 
-static void RunAssertions(string source)
+static void RunAssertions(string source, ReducerMap reducers)
 {
-    var vehicle = ParseVehicle(source);
+    var vehicle = ParseVehicle(source, reducers);
     Check(vehicle.Info.Model == "KIA", "expected model KIA");
     Check(vehicle.Info.Features.Count == 4, "expected four features");
     Check(vehicle.Info.Repairs.Count == 3, "expected three repairs");
 
-    var parser = new Parser(CreateReducers());
+    var parser = new Parser(reducers);
     Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
 
     var empty = source.Replace(
@@ -138,7 +140,7 @@ static void RunAssertions(string source)
         """,
         "",
         StringComparison.Ordinal);
-    var emptyVehicle = ParseVehicle(empty);
+    var emptyVehicle = ParseVehicle(empty, reducers);
     Check(emptyVehicle.Info.Features.Count == 0, "expected empty features to parse");
     Check(emptyVehicle.Info.Repairs.Count == 0, "expected empty repairs to parse");
 
@@ -175,10 +177,10 @@ var inputPath = argsList.Count > 0 ? argsList[0] : "sample.vehicle";
 var source = File.ReadAllText(inputPath);
 if (assert)
 {
-    RunAssertions(source);
+    RunAssertions(source, reducers);
 }
 
-var reportText = BuildReport(ParseVehicle(source));
+var reportText = BuildReport(ParseVehicle(source, reducers));
 Console.Write(reportText);
 Directory.CreateDirectory(Path.GetDirectoryName(logPath) ?? ".");
 File.WriteAllText(logPath, reportText);

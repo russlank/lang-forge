@@ -76,8 +76,8 @@ static lfcalc::Lexeme lexeme_arg(const lfcalc::Reduction& ctx, std::size_t index
 /// This boxed reducer map is intentionally kept as migration material. New C++
 /// code should prefer `make_direct_typed_reducers`, where generated contexts
 /// expose named fields and handwritten handlers return native semantic types.
-static lfcalc::ReducerMap make_boxed_reducers() {
-    return lfcalc::ReducerMap{
+static const lfcalc::ReducerMap& make_boxed_reducers() {
+    static const lfcalc::ReducerMap reducers{
         {lfcalc::SemanticAction::Start, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
         {lfcalc::SemanticAction::Pass, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(0); }},
         {lfcalc::SemanticAction::Group, [](const lfcalc::Reduction& ctx) -> lfcalc::Value { return ctx.values.at(1); }},
@@ -105,6 +105,7 @@ static lfcalc::ReducerMap make_boxed_reducers() {
             return number_arg(ctx, 0, "left operand") / right;
         }},
     };
+    return reducers;
 }
 
 /// Builds direct typed reducers, the recommended path for new C++ code.
@@ -114,8 +115,8 @@ static lfcalc::ReducerMap make_boxed_reducers() {
 /// (`ctx.left`, `ctx.right`, `ctx.token`) and return the declared native
 /// semantic type (`double` here). LangForge boxes the result only at the parser
 /// boundary, so the recommended handwritten path does not need std::any_cast.
-static lfcalc::ReducerMap make_direct_typed_reducers() {
-    return lfcalc::ReducerMap{
+static const lfcalc::ReducerMap& make_direct_typed_reducers() {
+    static const lfcalc::ReducerMap reducers{
         {lfcalc::SemanticAction::Start, lfcalc::typed_start([](const lfcalc::StartReduction& ctx) -> double {
             return ctx.value;
         })},
@@ -147,18 +148,20 @@ static lfcalc::ReducerMap make_direct_typed_reducers() {
             return ctx.left / ctx.right;
         })},
     };
+    return reducers;
 }
 
 /// Builds reducers through generated typed contexts while reusing boxed semantics.
 ///
 /// This is the migration bridge for older boxed reducers. It validates named
 /// contexts first, then delegates to `make_boxed_reducers`.
-static lfcalc::ReducerMap make_boxed_to_typed_reducers() {
-    return lfcalc::typed_reducer_map_from_boxed(make_boxed_reducers());
+static const lfcalc::ReducerMap& make_boxed_to_typed_reducers() {
+    static const lfcalc::ReducerMap reducers = lfcalc::typed_reducer_map_from_boxed(make_boxed_reducers());
+    return reducers;
 }
 
 /// Selects the reducer ABI used by the demo.
-static lfcalc::ReducerMap make_reducers(ReducerMode mode) {
+static const lfcalc::ReducerMap& make_reducers(ReducerMode mode) {
     switch (mode) {
     case ReducerMode::DirectTyped:
         return make_direct_typed_reducers();

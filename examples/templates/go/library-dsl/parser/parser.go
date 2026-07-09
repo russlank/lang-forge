@@ -22,7 +22,7 @@ type Parser struct {
 
 // New creates a parser facade with complete reducer coverage.
 func New() Parser {
-	return Parser{reducers: reducers()}
+	return Parser{reducers: sharedReducers}
 }
 
 // Parse consumes source through the generated scanner token source.
@@ -75,51 +75,49 @@ func FormatError(err error) string {
 	return err.Error()
 }
 
-func reducers() librarydslgenerated.ReducerMap {
-	return librarydslgenerated.ReducerMap{
-		// Document : entries=Entries {go: document}
-		librarydslgenerated.SemanticActionDocument: librarydslgenerated.TypedDocument(func(ctx librarydslgenerated.DocumentReduction) (model.Document, error) {
-			return model.Document{Entries: ctx.Entries}, nil
-		}),
-		// Entries : head=Entry tail=EntriesTail {go: entries}
-		librarydslgenerated.SemanticActionEntries: librarydslgenerated.TypedEntries(func(ctx librarydslgenerated.EntriesReduction) ([]model.Entry, error) {
-			return prepend(ctx.Head, ctx.Tail), nil
-		}),
-		// Entries : %empty {go: entries.empty}
-		librarydslgenerated.SemanticActionEntriesEmpty: librarydslgenerated.TypedEntriesEmpty(func(librarydslgenerated.EntriesEmptyReduction) ([]model.Entry, error) {
-			return nil, nil
-		}),
-		// EntriesTail : head=Entry tail=EntriesTail {go: entries.tail.more}
-		librarydslgenerated.SemanticActionEntriesTailMore: librarydslgenerated.TypedEntriesTailMore(func(ctx librarydslgenerated.EntriesTailMoreReduction) ([]model.Entry, error) {
-			return prepend(ctx.Head, ctx.Tail), nil
-		}),
-		// EntriesTail : %empty {go: entries.tail.empty}
-		librarydslgenerated.SemanticActionEntriesTailEmpty: librarydslgenerated.TypedEntriesTailEmpty(func(librarydslgenerated.EntriesTailEmptyReduction) ([]model.Entry, error) {
-			return nil, nil
-		}),
-		// Entry : Set name=Ident Assign value=Value Semi {go: entry.set}
-		librarydslgenerated.SemanticActionEntrySet: librarydslgenerated.TypedEntrySet(func(ctx librarydslgenerated.EntrySetReduction) (model.Entry, error) {
-			return model.Entry{Kind: model.SetEntry, Name: ctx.Name.Text, Value: ctx.Value}, nil
-		}),
-		// Entry : Enable name=Ident Semi {go: entry.enable}
-		librarydslgenerated.SemanticActionEntryEnable: librarydslgenerated.TypedEntryEnable(func(ctx librarydslgenerated.EntryEnableReduction) (model.Entry, error) {
-			return model.Entry{Kind: model.EnableEntry, Name: ctx.Name.Text, Value: model.Value{Kind: model.BoolValue, Bool: true}}, nil
-		}),
-		// Value : token=Number {go: value.number}
-		librarydslgenerated.SemanticActionValueNumber: librarydslgenerated.TypedValueNumber(reduceNumber),
-		// Value : token=String {go: value.string}
-		librarydslgenerated.SemanticActionValueString: librarydslgenerated.TypedValueString(func(ctx librarydslgenerated.ValueStringReduction) (model.Value, error) {
-			text, err := unquote(ctx.Token.Text)
-			if err != nil {
-				return model.Value{}, fmt.Errorf("rule %d action %s label token: %w", ctx.Reduction.Rule, ctx.Reduction.Action, err)
-			}
-			return model.Value{Kind: model.StringValue, Text: text}, nil
-		}),
-		// Value : token=Ident {go: value.ident}
-		librarydslgenerated.SemanticActionValueIdent: librarydslgenerated.TypedValueIdent(func(ctx librarydslgenerated.ValueIdentReduction) (model.Value, error) {
-			return model.Value{Kind: model.IdentValue, Text: ctx.Token.Text}, nil
-		}),
-	}
+var sharedReducers = librarydslgenerated.ReducerMap{
+	// Document : entries=Entries {go: document}
+	librarydslgenerated.SemanticActionDocument: librarydslgenerated.TypedDocument(func(ctx librarydslgenerated.DocumentReduction) (model.Document, error) {
+		return model.Document{Entries: ctx.Entries}, nil
+	}),
+	// Entries : head=Entry tail=EntriesTail {go: entries}
+	librarydslgenerated.SemanticActionEntries: librarydslgenerated.TypedEntries(func(ctx librarydslgenerated.EntriesReduction) ([]model.Entry, error) {
+		return prepend(ctx.Head, ctx.Tail), nil
+	}),
+	// Entries : %empty {go: entries.empty}
+	librarydslgenerated.SemanticActionEntriesEmpty: librarydslgenerated.TypedEntriesEmpty(func(librarydslgenerated.EntriesEmptyReduction) ([]model.Entry, error) {
+		return nil, nil
+	}),
+	// EntriesTail : head=Entry tail=EntriesTail {go: entries.tail.more}
+	librarydslgenerated.SemanticActionEntriesTailMore: librarydslgenerated.TypedEntriesTailMore(func(ctx librarydslgenerated.EntriesTailMoreReduction) ([]model.Entry, error) {
+		return prepend(ctx.Head, ctx.Tail), nil
+	}),
+	// EntriesTail : %empty {go: entries.tail.empty}
+	librarydslgenerated.SemanticActionEntriesTailEmpty: librarydslgenerated.TypedEntriesTailEmpty(func(librarydslgenerated.EntriesTailEmptyReduction) ([]model.Entry, error) {
+		return nil, nil
+	}),
+	// Entry : Set name=Ident Assign value=Value Semi {go: entry.set}
+	librarydslgenerated.SemanticActionEntrySet: librarydslgenerated.TypedEntrySet(func(ctx librarydslgenerated.EntrySetReduction) (model.Entry, error) {
+		return model.Entry{Kind: model.SetEntry, Name: ctx.Name.Text, Value: ctx.Value}, nil
+	}),
+	// Entry : Enable name=Ident Semi {go: entry.enable}
+	librarydslgenerated.SemanticActionEntryEnable: librarydslgenerated.TypedEntryEnable(func(ctx librarydslgenerated.EntryEnableReduction) (model.Entry, error) {
+		return model.Entry{Kind: model.EnableEntry, Name: ctx.Name.Text, Value: model.Value{Kind: model.BoolValue, Bool: true}}, nil
+	}),
+	// Value : token=Number {go: value.number}
+	librarydslgenerated.SemanticActionValueNumber: librarydslgenerated.TypedValueNumber(reduceNumber),
+	// Value : token=String {go: value.string}
+	librarydslgenerated.SemanticActionValueString: librarydslgenerated.TypedValueString(func(ctx librarydslgenerated.ValueStringReduction) (model.Value, error) {
+		text, err := unquote(ctx.Token.Text)
+		if err != nil {
+			return model.Value{}, fmt.Errorf("rule %d action %s label token: %w", ctx.Reduction.Rule, ctx.Reduction.Action, err)
+		}
+		return model.Value{Kind: model.StringValue, Text: text}, nil
+	}),
+	// Value : token=Ident {go: value.ident}
+	librarydslgenerated.SemanticActionValueIdent: librarydslgenerated.TypedValueIdent(func(ctx librarydslgenerated.ValueIdentReduction) (model.Value, error) {
+		return model.Value{Kind: model.IdentValue, Text: ctx.Token.Text}, nil
+	}),
 }
 
 func reduceNumber(ctx librarydslgenerated.ValueNumberReduction) (model.Value, error) {

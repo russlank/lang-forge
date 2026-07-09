@@ -4,9 +4,11 @@ using static LangForge.Examples.DataKeeper.Generated.SemanticReducerContexts;
 
 // This example keeps the generated scanner/parser in Generated/ and expresses
 // DataKeeper-specific lowering in ordinary typed C# reducer code.
-static Script ParseScript(string source)
+var reducers = CreateReducers();
+
+static Script ParseScript(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers());
+    var value = Parser.ParseWithReducerFromSource(new Scanner(source), reducers);
     return value is Script script
         ? script
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Script");
@@ -128,14 +130,14 @@ static void Check(bool condition, string message)
     }
 }
 
-static void RunAssertions(string source)
+static void RunAssertions(string source, ReducerMap reducers)
 {
-    var script = ParseScript(source);
+    var script = ParseScript(source, reducers);
     Check(script.Parameters.Count == 4, "expected four parameters");
     Check(script.Commands.Count == 8, $"expected eight commands, got {script.Commands.Count}");
     Check(script.Commands.Any(command => command.Kind == "runobjectsjob"), "expected runobjectsjob command");
 
-    var parser = new Parser(CreateReducers());
+    var parser = new Parser(reducers);
     Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
 
     try
@@ -171,10 +173,10 @@ var inputPath = argsList.Count > 0 ? argsList[0] : "sample.dks";
 var source = File.ReadAllText(inputPath);
 if (assert)
 {
-    RunAssertions(source);
+    RunAssertions(source, reducers);
 }
 
-var reportText = BuildReport(ParseScript(source));
+var reportText = BuildReport(ParseScript(source, reducers));
 Console.Write(reportText);
 Directory.CreateDirectory(Path.GetDirectoryName(logPath) ?? ".");
 File.WriteAllText(logPath, reportText);

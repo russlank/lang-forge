@@ -44,6 +44,9 @@ Ownership rules:
   freed inside the facade with `library_dsl_parse_result_free`.
 - Reducer handlers allocate AST nodes and copied token text from one per-parse
   `dsl_allocator`.
+- The typed reducer function-pointer table is static and immutable. Each parse
+  copies it and attaches the current semantic context through the generated
+  `user` pointer.
 - On syntax or reducer failure, the facade destroys that allocator, so partial
   AST nodes built before the error are released.
 - On success, the allocator is transferred to the returned `dsl_document`.

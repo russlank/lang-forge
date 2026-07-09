@@ -182,7 +182,7 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 	}
 	var b strings.Builder
 	b.WriteString(generatedHeader(pkg, source))
-	b.WriteString("import (\n\t\"fmt\"\n\t\"sync\"\n\t\"unicode/utf8\"\n)\n\n")
+	b.WriteString("import (\n\t\"fmt\"\n\t\"io\"\n\t\"strings\"\n\t\"sync\"\n\t\"unicode/utf8\"\n)\n\n")
 	b.WriteString("// Lexeme is one scanner result with byte offsets and scalar positions.\n")
 	b.WriteString("type Lexeme struct {\n\tToken Token\n\tText string\n\tChannel string\n\tStart int\n\tEnd int\n\tStartLine int\n\tStartColumn int\n\tEndLine int\n\tEndColumn int\n}\n\n")
 	b.WriteString("// Scanner incrementally tokenizes an input string.\n//\n// Scanner methods are safe for concurrent use. Concurrent calls to Next share\n// one input cursor and therefore observe one serialized token stream.\n")
@@ -197,6 +197,7 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 	b.WriteString("func (s *Scanner) All() ([]Lexeme, error) {\n\tvar out []Lexeme\n\tfor {\n\t\tlexeme, ok, err := s.Next()\n\t\tif err != nil { return nil, err }\n\t\tif !ok { return out, nil }\n\t\tout = append(out, lexeme)\n\t}\n}\n\n")
 	b.WriteString("// Next returns the next visible token, or ok=false at end-of-input.\n")
 	b.WriteString("func (s *Scanner) Next() (Lexeme, bool, error) {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tfor s.pos < len(s.input) {\n\t\tstart, startLine, startColumn := s.pos, s.line, s.column\n\t\trule, end, err := matchAt(s.input, s.pos)\n\t\tif err != nil { return Lexeme{}, false, err }\n\t\tif rule <= 0 { return Lexeme{}, false, fmt.Errorf(\"no lexical rule matched byte %d near %q\", s.pos, preview(s.input, s.pos)) }\n\t\tif end == s.pos { return Lexeme{}, false, fmt.Errorf(\"lexer rule %d matched empty input at byte %d\", rule, s.pos) }\n\t\taction := ruleActions[rule]\n\t\tendLine, endColumn := advancePosition(s.input, s.pos, end, s.line, s.column)\n\t\tlex := Lexeme{Token: action.token, Text: s.input[start:end], Channel: action.channel, Start: start, End: end, StartLine: startLine, StartColumn: startColumn, EndLine: endLine, EndColumn: endColumn}\n\t\ts.pos, s.line, s.column = end, endLine, endColumn\n\t\tif action.skip { continue }\n\t\tif action.channel != \"\" && !s.includeHidden { continue }\n\t\treturn lex, true, nil\n\t}\n\treturn Lexeme{Token: TokenEOF, Start: s.pos, End: s.pos, StartLine: s.line, StartColumn: s.column, EndLine: s.line, EndColumn: s.column}, false, nil\n}\n\n")
+	b.WriteString(goReaderScannerRuntime())
 	b.WriteString("type scannerTransition struct { lo rune; hi rune; target int }\n")
 	b.WriteString("type scannerState struct { accept int; transitions []scannerTransition }\n")
 	b.WriteString("type ruleAction struct { token Token; skip bool; channel string }\n\n")
@@ -228,6 +229,205 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 	b.WriteString("func advancePosition(input string, start, end, line, column int) (int, int) {\n\tfor pos := start; pos < end; {\n\t\tr, size, err := decodeScannerRune(input, pos)\n\t\tif err != nil { return line, column }\n\t\tpos += size\n\t\tif r == '\\n' { line++; column = 1 } else { column++ }\n\t}\n\treturn line, column\n}\n\n")
 	b.WriteString("func preview(input string, pos int) string {\n\tend := pos + 16\n\tif end > len(input) { end = len(input) }\n\treturn input[pos:end]\n}\n")
 	return b.String()
+}
+
+func goReaderScannerRuntime() string {
+	return `const defaultScannerReadBufferSize = 4096
+const defaultScannerMaxBufferedTokenBytes = 1048576
+
+// ScannerOption configures scanner constructors that pull source text from a reader.
+type ScannerOption func(*scannerOptions)
+
+type scannerOptions struct {
+	readBufferSize int
+	maxBufferedTokenBytes int
+}
+
+func defaultScannerOptions() scannerOptions {
+	return scannerOptions{readBufferSize: defaultScannerReadBufferSize, maxBufferedTokenBytes: defaultScannerMaxBufferedTokenBytes}
+}
+
+// WithScannerReadBufferSize changes the temporary read buffer size used by NewScannerFromReader.
+func WithScannerReadBufferSize(size int) ScannerOption {
+	return func(options *scannerOptions) {
+		if size > 0 { options.readBufferSize = size }
+	}
+}
+
+// WithMaxBufferedTokenBytes limits how many bytes a reader-backed scanner may buffer while deciding one token.
+func WithMaxBufferedTokenBytes(size int) ScannerOption {
+	return func(options *scannerOptions) {
+		if size > 0 { options.maxBufferedTokenBytes = size }
+	}
+}
+
+// ReaderScanner tokenizes UTF-8 source text pulled synchronously from an io.Reader.
+//
+// The parser still pulls lexemes through TokenSource. ReaderScanner is the scanner-side
+// input adapter for files, stdin, pipes, and other readers. It reads more source text
+// only when the DFA needs another rune to decide the current longest-match token.
+type ReaderScanner struct {
+	mu sync.Mutex
+	reader io.Reader
+	buffer string
+	base int
+	line int
+	column int
+	includeHidden bool
+	eof bool
+	pendingErr error
+	readBuffer []byte
+	maxBufferedTokenBytes int
+}
+
+// NewScannerFromReader creates a scanner that pulls source text from reader on demand.
+func NewScannerFromReader(reader io.Reader, options ...ScannerOption) *ReaderScanner {
+	config := defaultScannerOptions()
+	for _, option := range options {
+		if option != nil { option(&config) }
+	}
+	if config.readBufferSize <= 0 { config.readBufferSize = defaultScannerReadBufferSize }
+	if config.maxBufferedTokenBytes <= 0 { config.maxBufferedTokenBytes = defaultScannerMaxBufferedTokenBytes }
+	return &ReaderScanner{
+		reader: reader,
+		line: 1,
+		column: 1,
+		readBuffer: make([]byte, config.readBufferSize),
+		maxBufferedTokenBytes: config.maxBufferedTokenBytes,
+	}
+}
+
+// TokenizeReader returns every visible token read from reader.
+func TokenizeReader(reader io.Reader, options ...ScannerOption) ([]Lexeme, error) {
+	return NewScannerFromReader(reader, options...).All()
+}
+
+// IncludeHidden controls whether channel tokens are returned.
+func (s *ReaderScanner) IncludeHidden(include bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.includeHidden = include
+}
+
+// All returns all tokens until end-of-input.
+func (s *ReaderScanner) All() ([]Lexeme, error) {
+	var out []Lexeme
+	for {
+		lexeme, ok, err := s.Next()
+		if err != nil { return nil, err }
+		if !ok { return out, nil }
+		out = append(out, lexeme)
+	}
+}
+
+// Next returns the next visible token, or ok=false at end-of-input.
+func (s *ReaderScanner) Next() (Lexeme, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if len(s.buffer) == 0 && !s.eof {
+			if err := s.readMore(); err != nil { return Lexeme{}, false, err }
+		}
+		if len(s.buffer) == 0 && s.eof {
+			return Lexeme{Token: TokenEOF, Start: s.base, End: s.base, StartLine: s.line, StartColumn: s.column, EndLine: s.line, EndColumn: s.column}, false, nil
+		}
+		start, startLine, startColumn := s.base, s.line, s.column
+		rule, end, err := s.matchBuffered()
+		if err != nil { return Lexeme{}, false, err }
+		if rule <= 0 { return Lexeme{}, false, fmt.Errorf("no lexical rule matched byte %d near %q", s.base, preview(s.buffer, 0)) }
+		if end == 0 { return Lexeme{}, false, fmt.Errorf("lexer rule %d matched empty input at byte %d", rule, s.base) }
+		action := ruleActions[rule]
+		endLine, endColumn := advancePosition(s.buffer, 0, end, s.line, s.column)
+		text := strings.Clone(s.buffer[:end])
+		s.buffer = s.buffer[end:]
+		s.base += end
+		s.line, s.column = endLine, endColumn
+		if action.skip { continue }
+		if action.channel != "" && !s.includeHidden { continue }
+		return Lexeme{Token: action.token, Text: text, Channel: action.channel, Start: start, End: start + end, StartLine: startLine, StartColumn: startColumn, EndLine: endLine, EndColumn: endColumn}, true, nil
+	}
+}
+
+func (s *ReaderScanner) readMore() error {
+	if s.pendingErr != nil {
+		err := s.pendingErr
+		s.pendingErr = nil
+		return err
+	}
+	if s.eof { return nil }
+	if s.reader == nil { return fmt.Errorf("nil scanner reader") }
+	n, err := s.reader.Read(s.readBuffer)
+	if n > 0 {
+		s.buffer += string(s.readBuffer[:n])
+		if len(s.buffer) > s.maxBufferedTokenBytes {
+			return fmt.Errorf("scanner buffered token exceeds %d bytes", s.maxBufferedTokenBytes)
+		}
+	}
+	if err != nil {
+		if err == io.EOF {
+			s.eof = true
+			return nil
+		}
+		if n > 0 {
+			s.pendingErr = err
+			return nil
+		}
+		return err
+	}
+	if n == 0 {
+		return io.ErrNoProgress
+	}
+	return nil
+}
+
+func (s *ReaderScanner) matchBuffered() (int, int, error) {
+	stateID := 0
+	bestRule := scannerStates[stateID].accept
+	bestEnd := 0
+	for pos := 0; ; {
+		if pos >= len(s.buffer) {
+			if s.eof || len(scannerStates[stateID].transitions) == 0 {
+				return bestRule, bestEnd, nil
+			}
+			if err := s.readMore(); err != nil { return 0, 0, err }
+			continue
+		}
+		r, size, needMore, err := decodeStreamingScannerRune(s.buffer, pos, s.eof, s.base)
+		if needMore {
+			if err := s.readMore(); err != nil { return 0, 0, err }
+			continue
+		}
+		if err != nil {
+			if bestRule > 0 { break }
+			return 0, 0, err
+		}
+		next := -1
+		for _, tr := range scannerStates[stateID].transitions {
+			if r >= tr.lo && r <= tr.hi { next = tr.target; break }
+		}
+		if next < 0 { break }
+		pos += size
+		stateID = next
+		if scannerStates[stateID].accept > 0 { bestRule = scannerStates[stateID].accept; bestEnd = pos }
+	}
+	return bestRule, bestEnd, nil
+}
+
+func decodeStreamingScannerRune(input string, pos int, eof bool, base int) (rune, int, bool, error) {
+	if pos >= len(input) {
+		return 0, 0, !eof, nil
+	}
+	if !utf8.FullRuneInString(input[pos:]) && !eof {
+		return 0, 0, true, nil
+	}
+	r, size := utf8.DecodeRuneInString(input[pos:])
+	if r == utf8.RuneError && size == 1 && input[pos] >= utf8.RuneSelf {
+		return 0, 0, false, fmt.Errorf("invalid UTF-8 at byte %d", base+pos)
+	}
+	return r, size, false, nil
+}
+
+`
 }
 
 func renderParserImports(b *strings.Builder, mode spec.SemanticActionMode, includes []spec.SemanticInclude, actionManifest action.Manifest) {

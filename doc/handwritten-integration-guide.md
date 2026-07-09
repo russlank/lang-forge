@@ -4,7 +4,7 @@ Document id: `lang-forge-handwritten-integration-guide-v1`
 
 Status: `active`
 
-Last updated: `2026-07-04`
+Last updated: `2026-07-09`
 
 Owner: `Project maintainers`
 
@@ -226,6 +226,14 @@ source text -> generated scanner.Next() -> generated parser -> reducers
 The parser pulls one token at a time from the scanner or token source. This
 avoids building a complete token list for normal use, and it keeps scanner
 errors in the same flow as parser and reducer errors.
+
+Generated scanners can start from in-memory source text or from target-native
+demand-fed input. Go exposes `NewScannerFromReader`; C# exposes
+`Scanner.FromTextReader` and `Scanner.FromStream`; C exposes
+`*_stream_scanner` with a read callback and `*_stream_scanner_free`; C++
+exposes `StreamScanner` over `std::istream`. This lets a facade pull source
+text on demand from files, stdin, virtual sources, or large inputs while the
+parser still sees the same token-source shape.
 
 Token collections are still useful when you want to inspect, snapshot, filter,
 or test the token stream:
@@ -557,21 +565,29 @@ public interface ICalcParser
 
 public sealed class CalcParser : ICalcParser
 {
-    private readonly CalcSemantics semantics;
+    private readonly ReducerMap reducers;
 
     public CalcParser(CalcSemantics semantics)
     {
-        this.semantics = semantics;
+        // Build pure reducer wiring once for this facade. The parse call still
+        // creates fresh scanner/parser state for each source string.
+        reducers = semantics.CreateReducers();
     }
 
     public double Evaluate(string source)
     {
         return (double)Parser.ParseWithReducerFromSource(
             new Scanner(source),
-            semantics.CreateReducers())!;
+            reducers)!;
     }
 }
 ```
+
+When reducer handlers are stateless, cache the reducer map as package/static
+data or as a readonly facade field. Do not rebuild it on every parse. If a
+handler depends on per-parse state, such as a C allocator, AST builder, or
+diagnostic sink, cache only the immutable callback table and attach the
+per-parse state separately.
 
 For a compiler-style C# starter that already applies this shape, see
 `examples/templates/csharp/layered-compiler`. Its public boundary is:
@@ -589,7 +605,6 @@ The concrete facade keeps generated scanner/parser details inside
 ```csharp
 public ParseResult<ProgramNode> Parse(string source)
 {
-    var reducers = ReducerFactory.Create(numberPolicy);
     var parser = new Parser(reducers);
     var result = parser.ParseRecoveringSource(new Scanner(source));
     // Convert generated diagnostics/final values into domain ParseResult<T>.

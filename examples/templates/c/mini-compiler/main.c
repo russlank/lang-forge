@@ -220,17 +220,22 @@ static mini_compiler_typed_reducer make_typed_reducer(context *state) {
      * Each handler receives a generated typed context. For example, the
      * `Expr : left=Expr Plus right=Term {c: add}` rule becomes fields named
      * `left` and `right`, avoiding positional `ctx->values[index]` access.
+     *
+     * The callback table itself is static and immutable; each parse only copies
+     * it and fills the parse-owned `user` pointer.
      */
-    mini_compiler_typed_reducer reducer;
+    static const mini_compiler_typed_reducer reducer_template = {
+        .program = reduce_program,
+        .statements = reduce_statements,
+        .statements_tail_more = reduce_statements_tail_more,
+        .statements_tail_empty = reduce_statements_tail_empty,
+        .print = reduce_print,
+        .add = reduce_add,
+        .pass = reduce_pass,
+        .number = reduce_number,
+    };
+    mini_compiler_typed_reducer reducer = reducer_template;
     reducer.user = state;
-    reducer.program = reduce_program;
-    reducer.statements = reduce_statements;
-    reducer.statements_tail_more = reduce_statements_tail_more;
-    reducer.statements_tail_empty = reduce_statements_tail_empty;
-    reducer.print = reduce_print;
-    reducer.add = reduce_add;
-    reducer.pass = reduce_pass;
-    reducer.number = reduce_number;
     return reducer;
 }
 

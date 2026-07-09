@@ -173,8 +173,12 @@ func renderScannerHeader(namespace []string, source string) string {
 	b.WriteString("#pragma once\n\n")
 	b.WriteString("#include \"tokens.hpp\"\n\n")
 	b.WriteString("#include <cstddef>\n")
+	b.WriteString("#include <deque>\n")
+	b.WriteString("#include <istream>\n")
 	b.WriteString("#include <mutex>\n")
+	b.WriteString("#include <string>\n")
 	b.WriteString("#include <string_view>\n")
+	b.WriteString("#include <utility>\n")
 	b.WriteString("#include <vector>\n\n")
 	b.WriteString(openNamespace(namespace))
 	b.WriteString("/// One scanner result with byte offsets and Unicode scalar line/column positions.\n")
@@ -216,6 +220,31 @@ func renderScannerHeader(namespace []string, source string) string {
 	b.WriteString("    int line_ = 1;\n")
 	b.WriteString("    int column_ = 1;\n")
 	b.WriteString("    bool include_hidden_ = false;\n")
+	b.WriteString("};\n\n")
+	b.WriteString("/// Tokenizes UTF-8 source text pulled synchronously from an input stream.\n")
+	b.WriteString("///\n")
+	b.WriteString("/// Returned lexeme text views point into storage owned by this scanner. Keep\n")
+	b.WriteString("/// the StreamScanner alive while parser/reducer code reads those views.\n")
+	b.WriteString("class StreamScanner : public LexemeSource {\n")
+	b.WriteString("public:\n")
+	b.WriteString("    explicit StreamScanner(std::istream& input, std::size_t read_buffer_size = 4096, std::size_t max_buffered_token_bytes = 1048576);\n")
+	b.WriteString("    void include_hidden(bool include);\n")
+	b.WriteString("    bool next(Lexeme& lexeme) override;\n")
+	b.WriteString("    std::vector<Lexeme> all();\n\n")
+	b.WriteString("private:\n")
+	b.WriteString("    void read_more();\n")
+	b.WriteString("    std::pair<int, std::size_t> match_buffered();\n")
+	b.WriteString("    std::mutex gate_;\n")
+	b.WriteString("    std::istream* input_ = nullptr;\n")
+	b.WriteString("    std::string buffer_;\n")
+	b.WriteString("    std::size_t base_ = 0;\n")
+	b.WriteString("    int line_ = 1;\n")
+	b.WriteString("    int column_ = 1;\n")
+	b.WriteString("    bool include_hidden_ = false;\n")
+	b.WriteString("    bool eof_ = false;\n")
+	b.WriteString("    std::size_t read_buffer_size_ = 4096;\n")
+	b.WriteString("    std::size_t max_buffered_token_bytes_ = 1048576;\n")
+	b.WriteString("    std::deque<std::string> owned_texts_;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("/// Tokenizes every visible token in UTF-8 source text.\n")
 	b.WriteString("std::vector<Lexeme> tokenize(std::string_view input);\n\n")
@@ -267,6 +296,7 @@ func renderScannerSource(namespace []string, source string, dfa *lex.DFA, tokens
 	b.WriteString("struct RuleAction { Token token; bool skip; std::string_view channel; };\n")
 	b.WriteString("struct MatchResult { int rule; std::size_t end; };\n")
 	b.WriteString("struct DecodedRune { std::uint32_t value; std::size_t length; };\n")
+	b.WriteString("struct StreamDecodedRune { std::uint32_t value; std::size_t length; bool need_more; };\n")
 	b.WriteString("struct Position { int line; int column; };\n\n")
 	b.WriteString(fmt.Sprintf("static constexpr std::array<ScannerTransition, %d> scanner_transitions = {{\n", max(1, len(transitions))))
 	if len(transitions) == 0 {
@@ -349,6 +379,141 @@ std::vector<Lexeme> Scanner::all() {
     return output;
 }
 
+StreamScanner::StreamScanner(std::istream& input, std::size_t read_buffer_size, std::size_t max_buffered_token_bytes)
+    : input_(&input),
+      read_buffer_size_(read_buffer_size == 0 ? static_cast<std::size_t>(4096) : read_buffer_size),
+      max_buffered_token_bytes_(max_buffered_token_bytes == 0 ? static_cast<std::size_t>(1048576) : max_buffered_token_bytes) {}
+
+void StreamScanner::include_hidden(bool include) {
+    std::lock_guard<std::mutex> lock(gate_);
+    include_hidden_ = include;
+}
+
+void StreamScanner::read_more() {
+    if (eof_) {
+        return;
+    }
+    if (input_ == nullptr) {
+        throw std::runtime_error("stream scanner input is required");
+    }
+    std::string chunk(read_buffer_size_, '\0');
+    input_->read(&chunk[0], static_cast<std::streamsize>(chunk.size()));
+    const auto read = input_->gcount();
+    if (read > 0) {
+        chunk.resize(static_cast<std::size_t>(read));
+        buffer_ += chunk;
+        if (buffer_.size() > max_buffered_token_bytes_) {
+            throw std::runtime_error("scanner buffered token exceeds limit");
+        }
+    }
+    if (input_->bad()) {
+        throw std::runtime_error("stream scanner read failed");
+    }
+    if (input_->eof()) {
+        eof_ = true;
+    }
+    if (read == 0 && !eof_) {
+        throw std::runtime_error("stream scanner made no progress");
+    }
+}
+
+std::pair<int, std::size_t> StreamScanner::match_buffered() {
+    int state = 0;
+    int best_rule = scanner_states[static_cast<std::size_t>(state)].accept;
+    std::size_t best_end = 0;
+    for (std::size_t pos = 0;;) {
+        if (pos >= buffer_.size()) {
+            const auto current = scanner_states[static_cast<std::size_t>(state)];
+            if (eof_ || current.count == 0) {
+                return {best_rule, best_end};
+            }
+            read_more();
+            continue;
+        }
+        StreamDecodedRune decoded{};
+        try {
+            decoded = decode_utf8_stream(buffer_, pos, eof_, base_);
+        } catch (const std::runtime_error&) {
+            if (best_rule > 0) {
+                break;
+            }
+            throw;
+        }
+        if (decoded.need_more) {
+            read_more();
+            continue;
+        }
+        int next = -1;
+        const auto current = scanner_states[static_cast<std::size_t>(state)];
+        for (std::size_t i = 0; i < current.count; ++i) {
+            const auto transition = scanner_transitions[current.start + i];
+            if (decoded.value >= transition.lo && decoded.value <= transition.hi) {
+                next = transition.target;
+                break;
+            }
+        }
+        if (next < 0) {
+            break;
+        }
+        pos += decoded.length;
+        state = next;
+        if (scanner_states[static_cast<std::size_t>(state)].accept > 0) {
+            best_rule = scanner_states[static_cast<std::size_t>(state)].accept;
+            best_end = pos;
+        }
+    }
+    return {best_rule, best_end};
+}
+
+bool StreamScanner::next(Lexeme& lexeme) {
+    std::lock_guard<std::mutex> lock(gate_);
+    while (true) {
+        if (buffer_.empty() && !eof_) {
+            read_more();
+        }
+        if (buffer_.empty() && eof_) {
+            lexeme = Lexeme{Token::End, std::string_view{}, std::string_view{}, base_, base_, line_, column_, line_, column_};
+            return false;
+        }
+        const auto start = base_;
+        const auto start_line = line_;
+        const auto start_column = column_;
+        const auto match = match_buffered();
+        if (match.first <= 0) {
+            throw std::runtime_error("no lexical rule matched offset " + std::to_string(base_) + " near '" + preview(buffer_, 0) + "'");
+        }
+        if (match.second == 0) {
+            throw std::runtime_error("lexer rule " + std::to_string(match.first) + " matched empty input at offset " + std::to_string(base_));
+        }
+        const auto action = rule_actions.at(static_cast<std::size_t>(match.first));
+        const auto end_position = advance_position(buffer_, 0, match.second, line_, column_);
+        const auto return_token = !action.skip && (action.channel.empty() || include_hidden_);
+        std::string_view text;
+        if (return_token) {
+            owned_texts_.emplace_back(buffer_.substr(0, match.second));
+            text = std::string_view{owned_texts_.back().data(), owned_texts_.back().size()};
+        }
+        buffer_.erase(0, match.second);
+        base_ += match.second;
+        line_ = end_position.line;
+        column_ = end_position.column;
+        if (!return_token) {
+            continue;
+        }
+        lexeme = Lexeme{action.token, text, action.channel, start, start + match.second, start_line, start_column, end_position.line, end_position.column};
+        return true;
+    }
+}
+
+std::vector<Lexeme> StreamScanner::all() {
+    std::vector<Lexeme> output;
+    Lexeme lexeme;
+    while (next(lexeme)) {
+        output.push_back(lexeme);
+    }
+    return output;
+}
+
 std::vector<Lexeme> tokenize(std::string_view input) {
     return Scanner(input).all();
 }
@@ -394,6 +559,31 @@ func scannerRuntime() string {
         }
     }
     throw std::runtime_error("invalid UTF-8 input at byte offset " + std::to_string(pos));
+}
+
+int utf8_expected_size(unsigned char b0) {
+    if (b0 < 0x80) { return 1; }
+    if ((b0 & 0xe0) == 0xc0) { return 2; }
+    if ((b0 & 0xf0) == 0xe0) { return 3; }
+    if ((b0 & 0xf8) == 0xf0) { return 4; }
+    return 0;
+}
+
+StreamDecodedRune decode_utf8_stream(std::string_view input, std::size_t pos, bool eof, std::size_t base) {
+    if (pos >= input.size()) {
+        if (!eof) { return StreamDecodedRune{0, 0, true}; }
+        throw std::runtime_error("invalid UTF-8 input at byte offset " + std::to_string(base + pos));
+    }
+    const auto expected = utf8_expected_size(static_cast<unsigned char>(input[pos]));
+    if (expected > 1 && pos + static_cast<std::size_t>(expected) > input.size() && !eof) {
+        return StreamDecodedRune{0, 0, true};
+    }
+    try {
+        const auto decoded = decode_utf8(input, pos);
+        return StreamDecodedRune{decoded.value, decoded.length, false};
+    } catch (const std::runtime_error&) {
+        throw std::runtime_error("invalid UTF-8 input at byte offset " + std::to_string(base + pos));
+    }
 }
 
 Position advance_position(std::string_view input, std::size_t start, std::size_t end, int line, int column) {

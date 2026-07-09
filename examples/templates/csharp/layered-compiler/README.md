@@ -67,6 +67,10 @@ services.AddSingleton<IMiniCompilerParser, MiniCompilerParser>();
 The generated recognizer remains container-agnostic. DI is used only at the
 handwritten facade/semantic-policy boundary.
 
+`MiniCompilerParser` builds its reducer map once in the facade constructor.
+Each `Parse` call still uses fresh scanner/parser state, but stable semantic
+dispatch wiring is not rebuilt for every input.
+
 ## Failure Paths
 
 `make test` runs `Program.cs --assert`, which checks:

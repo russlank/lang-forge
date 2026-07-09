@@ -50,6 +50,10 @@ handwritten facade. The target guides document the practical ownership rules:
 Go and C# use ordinary managed values/results, C uses explicit init/free and
 semantic-value ownership, and C++ uses RAII/domain result types with generated
 boxing hidden behind typed adapters where practical.
+Pure reducer dispatch tables are cached or stored on the facade so they are not
+rebuilt for every parse. Per-parse state such as scanners, parser stacks, C
+allocators, AST builders, and injected semantic policies remains explicit and
+owned by the parse or facade that needs it.
 The repository root also provides source-health checks:
 
 ```sh

@@ -9,8 +9,18 @@ namespace LangForge.Examples.Templates.LibraryDsl.Semantics;
 /// <summary>Creates generated reducer maps for the library DSL grammar.</summary>
 public static class ReducerFactory
 {
-    /// <summary>Builds a reducer map with full generated coverage validation.</summary>
-    public static ReducerMap Create() => new()
+    private static readonly Lazy<ReducerMap> SharedReducers = new(CreateCore);
+
+    /// <summary>
+    /// Returns the shared reducer map with full generated coverage validation.
+    /// </summary>
+    /// <remarks>
+    /// The handlers are stateless and thread-safe, so the map can be created
+    /// once and reused by parser facades. Treat the returned map as read-only.
+    /// </remarks>
+    public static ReducerMap Create() => SharedReducers.Value;
+
+    private static ReducerMap CreateCore() => new()
     {
         // Document : entries=Entries {csharp: document}
         [SemanticAction.Document] = TypedDocument(ctx => new Document(ctx.Entries)),

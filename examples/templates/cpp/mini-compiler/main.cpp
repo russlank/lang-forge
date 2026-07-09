@@ -79,11 +79,11 @@ static std::vector<Statement> prepend(Statement head, std::vector<Statement> tai
     return out;
 }
 
-static mini::ReducerMap reducers() {
+static const mini::ReducerMap& reducers() {
     // Each entry adapts a typed handler to the generated boxed parser ABI.
     // The typed adapter reads named grammar labels such as `left=Expr`,
     // `right=Term`, and `token=Number` before this handwritten code runs.
-    return mini::ReducerMap{
+    static const mini::ReducerMap map{
         {mini::SemanticAction::Program, mini::typed_program([](const mini::ProgramReduction& ctx) -> Program {
             return Program{ctx.statements};
         })},
@@ -122,6 +122,7 @@ static mini::ReducerMap reducers() {
             }
         })},
     };
+    return map;
 }
 
 static Program parse_program(std::string_view source) {

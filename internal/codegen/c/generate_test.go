@@ -110,6 +110,14 @@ S : left=A right=B {c: program.withParameters}
 			t.Fatalf("generated C source does not clear stale errors:\n%s", source)
 		}
 	}
+	for _, fragment := range []string{"_stream_read_fn", "_stream_scanner", "_stream_scanner_next", "_stream_scanner_free"} {
+		if !strings.Contains(readGeneratedFile(t, out, "scanner.h")+scannerSource, fragment) {
+			t.Fatalf("generated C scanner missing stream fragment %q", fragment)
+		}
+	}
+	if !strings.Contains(readGeneratedFile(t, out, "parser.h")+parserSource, "_stream_scanner_source_next") {
+		t.Fatalf("generated C parser missing stream scanner source adapter")
+	}
 }
 
 func TestCPrefixSanitizesNamesForPublicSymbols(t *testing.T) {

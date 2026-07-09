@@ -84,6 +84,20 @@ S : left=A right=B {cpp: program.withParameters}
 		}
 	}
 
+	scannerHeader := readGeneratedFile(t, out, "scanner.hpp")
+	for _, fragment := range []string{"class StreamScanner", "std::istream", "owned_texts_"} {
+		if !strings.Contains(scannerHeader, fragment) {
+			t.Fatalf("scanner.hpp missing %q:\n%s", fragment, scannerHeader)
+		}
+	}
+
+	scannerSource := readGeneratedFile(t, out, "scanner.cpp")
+	for _, fragment := range []string{"StreamScanner::next", "decode_utf8_stream", "scanner buffered token exceeds"} {
+		if !strings.Contains(scannerSource, fragment) {
+			t.Fatalf("scanner.cpp missing %q:\n%s", fragment, scannerSource)
+		}
+	}
+
 	parserHeader := readGeneratedFile(t, out, "parser.hpp")
 	for _, fragment := range []string{"enum class SemanticAction", "ProgramWithParameters", "AddObject", "std::vector<std::string_view> labels", "value_for", "class ReducerMap", "validate_coverage", "struct ParseResult", "class ParseError", "parse_recovering"} {
 		if !strings.Contains(parserHeader, fragment) {

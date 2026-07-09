@@ -21,3 +21,6 @@ types. The template does not reference a dependency-injection package so it can
 build with only the .NET SDK; when moving it into an application, register
 `LibraryDslParser` with your usual container as the `ILibraryDslParser`
 implementation.
+
+`ReducerFactory` lazily builds the pure reducer map once and the parser facade
+reuses it. Scanner and parser state are still fresh for each `Parse` call.

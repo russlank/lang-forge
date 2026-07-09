@@ -818,6 +818,81 @@ machinery.
 
 ---
 
+## 14.6. Add Reader/Stream-Backed Scanner Inputs
+
+### Problem
+
+The token-source parser path is implemented, but generated scanners still
+primarily accept complete in-memory source strings or buffers. That means a
+caller often has to do this before parsing:
+
+```text
+file/stdin/network/editor source
+  -> read whole source into string
+  -> scanner.Next()
+  -> parser consumes token source
+```
+
+That is fine for examples and many small DSLs, but production tools often want
+to parse from `io.Reader`, `TextReader`, `Stream`, `FILE`-like callbacks,
+`std::istream`, stdin, pipes, virtual files, or editor buffers without forcing
+the entire source into one string first.
+
+### Recommendation
+
+Status: initial generated-runtime support implemented for Go, C#, C, and C++;
+example adoption and benchmark comparisons remain follow-up work.
+
+Add generated streaming scanner variants below the existing parser token-source
+API:
+
+```text
+reader/stream/callback/source
+  -> generated scanner pulls enough input to recognize next lexeme
+  -> generated parser pulls lexemes from the scanner
+  -> reducers run during parsing
+```
+
+Implemented target API direction:
+
+```text
+Go:      NewScannerFromReader(io.Reader, ...ScannerOption), TokenizeReader
+C#:      Scanner.FromTextReader(TextReader), Scanner.FromStream(Stream, Encoding, ScannerOptions)
+C:       *_stream_scanner with read callback, user pointer, buffer limits, dispose
+C++:     StreamScanner over std::istream with read-buffer and max-token limits
+```
+
+The existing string/buffer scanner path remains the simple and fastest path.
+The streaming path must be synchronous and pull-based; it must not introduce
+async, channels, queues, worker threads, or producer/consumer parser machinery.
+
+The important implementation concerns are:
+
+- maximal-munch lexing across chunk boundaries;
+- UTF-8/scalar sequences split across chunks;
+- source spans based on absolute offsets and line/column positions;
+- read errors reported as scanner/source failures;
+- configurable maximum buffered token length;
+- lexeme text ownership, especially for C and C++ where lexemes currently
+  borrow from caller-owned input.
+
+### Acceptance Criteria
+
+- Implemented: generated Go, C#, C, and C++ scanners can read from
+  target-idiomatic synchronous stream/reader/callback inputs.
+- Implemented: existing string scanner APIs remain source-compatible.
+- Implemented in generated integration tests: valid input, lexical errors,
+  read failures, syntax recovery, source spans, buffer limits, and UTF-8 split
+  behavior where target input encoding makes that applicable.
+- Implemented: C and C++ stream scanners own copied visible-token text and
+  document scanner-lifetime/disposal rules in generated APIs and public docs.
+- Follow-up: update more runnable examples/templates to prefer reader/stream
+  parsing at facade boundaries where it improves realism.
+- Follow-up: add benchmark comparisons for in-memory source parsing versus
+  reader/stream-backed scanner parsing.
+
+---
+
 ## 15. Improve Runtime Packaging and Versioning
 
 ### Problem

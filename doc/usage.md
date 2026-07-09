@@ -4,7 +4,7 @@ Document id: `lang-forge-usage-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-09`
 
 Owner: `Project maintainers`
 
@@ -255,6 +255,11 @@ value, err := calc.ParseWithReducerFromSource(
 )
 ```
 
+Generated scanners support both in-memory and demand-fed source inputs. Use
+the in-memory constructors for small strings and tests. Use the reader,
+stream, callback, or `std::istream` constructors when a facade naturally reads
+from files, stdin, pipes, virtual sources, or large inputs.
+
 Use source-based parsing when:
 
 - the caller has source text and wants the final parse or semantic result;
@@ -298,6 +303,21 @@ propagate through the target's normal error mechanism.
 | C# | `Parser.ParseWithReducerFromSource(new Scanner(source), reducers)` or `Parser.ParseValueFromSource(new Scanner(source))` | `Parser.ParseRecoveringFromSource(new Scanner(source))` or instance `ParseRecoveringSource(...)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
 | C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_source` or `*_parse_value_source_typed` | `*_parse_recovering_source` | `*_tokenize`, then `*_parse_value` / `*_parse_value_typed` / `*_parse_recovering` |
 | C++ | construct `Generated::Scanner scanner(sourceText)`, then call `parse_value(scanner, reducers)` | `parse_recovering(scanner)` | `tokenize(sourceText)`, then `parse_value(tokens, reducers)` / `parse_recovering(tokens)` |
+
+| Target | In-memory scanner input | Reader/stream-backed scanner input |
+| --- | --- | --- |
+| Go | `NewScanner(source)` | `NewScannerFromReader(reader, WithScannerReadBufferSize(...), WithMaxBufferedTokenBytes(...))`; `TokenizeReader(reader)` |
+| C# | `new Scanner(source)` | `Scanner.FromTextReader(reader, options)`; `Scanner.FromStream(stream, encoding, options)`; `Scanner.Tokenize(reader, options)` |
+| C | `*_scanner_init(&scanner, source)` | `*_stream_scanner_init(_ex)`, a `*_stream_read_fn`, `*_stream_scanner_next`, and `*_stream_scanner_free` |
+| C++ | `Scanner scanner(sourceText)` | `StreamScanner scanner(inputStream, readBufferSize, maxBufferedTokenBytes)` |
+
+C and C++ stream-backed scanners own copied visible-token text because lexemes
+cannot borrow safely from a moving chunk buffer. Keep the stream scanner alive
+while parser/reducer code reads those lexeme text views, and call the generated
+C `*_stream_scanner_free` function when parsing is finished.
+For C#, dispose the `ReaderScanner` returned by `Scanner.FromStream` when the
+facade is done parsing; `Scanner.FromTextReader` leaves the caller-owned reader
+open.
 
 Generated parsers can be used in two semantic styles:
 

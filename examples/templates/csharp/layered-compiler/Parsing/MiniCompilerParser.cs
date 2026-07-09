@@ -10,7 +10,7 @@ namespace LangForge.Examples.Templates.LayeredCompiler.Parsing;
 /// </summary>
 public sealed class MiniCompilerParser : IMiniCompilerParser
 {
-    private readonly INumberLiteralPolicy numberPolicy;
+    private readonly ReducerMap reducers;
 
     /// <summary>Creates a parser facade with the default semantic policies.</summary>
     public MiniCompilerParser()
@@ -28,7 +28,7 @@ public sealed class MiniCompilerParser : IMiniCompilerParser
     /// </remarks>
     public MiniCompilerParser(INumberLiteralPolicy numberPolicy)
     {
-        this.numberPolicy = numberPolicy;
+        reducers = ReducerFactory.Create(numberPolicy);
     }
 
     /// <inheritdoc />
@@ -36,7 +36,6 @@ public sealed class MiniCompilerParser : IMiniCompilerParser
     {
         try
         {
-            var reducers = ReducerFactory.Create(numberPolicy);
             var parser = new Parser(reducers);
             var result = parser.ParseRecoveringSource(new Scanner(source));
             if (!result.Accepted || result.Diagnostics.Count != 0)

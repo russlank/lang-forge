@@ -5,9 +5,11 @@ using static LangForge.Examples.Calc.Generated.SemanticReducerContexts;
 // The handwritten part of the calculator example is deliberately tiny:
 // generated scanner/parser code handles syntax, while typed reducer handlers
 // give each grammar action label its semantic meaning.
-static double Eval(string source)
+var reducers = CreateReducers();
+
+static double Eval(string source, ReducerMap reducers)
 {
-    return (double)Parser.ParseWithReducerFromSource(new Scanner(source), CreateReducers())!;
+    return (double)Parser.ParseWithReducerFromSource(new Scanner(source), reducers)!;
 }
 
 static ReducerMap CreateReducers()
@@ -64,12 +66,12 @@ static void Check(bool condition, string message)
     }
 }
 
-static void RunAssertions()
+static void RunAssertions(ReducerMap reducers)
 {
     // These checks exercise normal parsing, concurrent parser reuse, scanner
     // synchronization, and the two most common failure paths.
-    Check(Math.Abs(Eval("1 + 2 * (3 - 4.5)") - -2) < 0.0001, "wrong arithmetic result");
-    Check(Math.Abs(Eval("7.5/2.5") - 3) < 0.0001, "wrong decimal division result");
+    Check(Math.Abs(Eval("1 + 2 * (3 - 4.5)", reducers) - -2) < 0.0001, "wrong arithmetic result");
+    Check(Math.Abs(Eval("7.5/2.5", reducers) - 3) < 0.0001, "wrong decimal division result");
     Parser.ParseFromSource(new Scanner("1+2"));
     Parser.Parse(Scanner.Tokenize("1+2"));
 
@@ -89,7 +91,7 @@ static void RunAssertions()
 
     try
     {
-        Eval("1/0");
+        Eval("1/0", reducers);
         throw new InvalidOperationException("expected division-by-zero error");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("division by zero"))
@@ -107,7 +109,7 @@ static void RunAssertions()
 
     try
     {
-        Eval("1@");
+        Eval("1@", reducers);
         throw new InvalidOperationException("expected source scanner error");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
@@ -129,11 +131,11 @@ var assert = argsList.Remove("--assert");
 var inputPath = argsList.Count > 0 ? argsList[0] : "input.calc";
 if (assert)
 {
-    RunAssertions();
+    RunAssertions(reducers);
 }
 
 var source = File.ReadAllText(inputPath);
-var result = Eval(source);
+var result = Eval(source, reducers);
 var report = $"source: {source.Trim()}{Environment.NewLine}result: {result.ToString(CultureInfo.InvariantCulture)}{Environment.NewLine}";
 Console.Write(report);
 Directory.CreateDirectory("dist");

@@ -524,6 +524,7 @@ func TestRunGenerate_GeneratedGoScannerParserCompilesAndParses(t *testing.T) {
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -564,6 +565,28 @@ func (s *failingSource) Next() (Lexeme, bool, error) {
 	return lexeme, true, nil
 }
 
+type chunkReader struct {
+	current string
+	chunks []string
+	err error
+}
+
+func (r *chunkReader) Read(p []byte) (int, error) {
+	if r.current == "" && len(r.chunks) != 0 {
+		r.current = r.chunks[0]
+		r.chunks = r.chunks[1:]
+	}
+	if r.current == "" {
+		if r.err != nil {
+			return 0, r.err
+		}
+		return 0, io.EOF
+	}
+	n := copy(p, r.current)
+	r.current = r.current[n:]
+	return n, nil
+}
+
 func completeReducer(handler ReductionHandler) ReducerMap {
 	return ReducerMap{
 		SemanticActionStart: handler,
@@ -595,6 +618,16 @@ func TestGeneratedScannerParser(t *testing.T) {
 	if err := ParseFromSource(NewScanner("1+2*(3-4)")); err != nil {
 		t.Fatalf("scanner source parse failed: %v", err)
 	}
+	if err := ParseFromSource(NewScannerFromReader(&chunkReader{chunks: []string{"1", "+", "2*", "(3", "-4)"}, err: io.EOF}, WithScannerReadBufferSize(1))); err != nil {
+		t.Fatalf("reader scanner parse failed: %v", err)
+	}
+	readerTokens, err := TokenizeReader(strings.NewReader("1+2*(3-4)"), WithScannerReadBufferSize(1))
+	if err != nil {
+		t.Fatalf("reader tokenization failed: %v", err)
+	}
+	if len(readerTokens) != len(tokens) || readerTokens[0].Text != tokens[0].Text || readerTokens[len(readerTokens)-1].Text != tokens[len(tokens)-1].Text {
+		t.Fatalf("reader tokens = %#v, want same shape as %#v", readerTokens, tokens)
+	}
 	source := &spySource{tokens: append([]Lexeme{}, tokens...)}
 	if err := ParseFromSource(source); err != nil {
 		t.Fatalf("source parse failed: %v", err)
@@ -625,6 +658,19 @@ func TestGeneratedScannerParser(t *testing.T) {
 	}
 	if _, err := Tokenize("1@"); err == nil {
 		t.Fatal("expected scanner error for unmatched input")
+	}
+	if _, err := TokenizeReader(strings.NewReader("1@"), WithScannerReadBufferSize(1)); err == nil || !strings.Contains(err.Error(), "no lexical rule") {
+		t.Fatalf("reader scanner lexical error = %v", err)
+	}
+	readErr := errors.New("reader failed")
+	if _, err := TokenizeReader(&chunkReader{chunks: []string{"1"}, err: readErr}, WithScannerReadBufferSize(1)); !errors.Is(err, readErr) {
+		t.Fatalf("reader failure = %v", err)
+	}
+	if _, err := TokenizeReader(strings.NewReader("123"), WithScannerReadBufferSize(1), WithMaxBufferedTokenBytes(2)); err == nil || !strings.Contains(err.Error(), "buffered token exceeds") {
+		t.Fatalf("buffer limit error = %v", err)
+	}
+	if _, _, err := NewScannerFromReader(nil).Next(); err == nil || !strings.Contains(err.Error(), "nil scanner reader") {
+		t.Fatalf("nil reader scanner error = %v", err)
 	}
 	if err := ParseFromSource(NewScanner("1@")); err == nil || !strings.Contains(err.Error(), "no lexical rule") {
 		t.Fatalf("source scanner error = %v", err)
@@ -899,6 +945,36 @@ static int failing_source_next(void *user, recovery_lexeme *lexeme, int *ok, rec
     return 1;
 }
 
+typedef struct chunk_reader {
+    const char **chunks;
+    size_t count;
+    size_t pos;
+    size_t offset;
+} chunk_reader;
+
+static int chunk_reader_next(void *user, char *buffer, size_t capacity, size_t *read, recovery_error *error) {
+    chunk_reader *reader = (chunk_reader *)user;
+    (void)error;
+    if (read != NULL) { *read = 0; }
+    if (reader == NULL || buffer == NULL || read == NULL || capacity == 0) { return 0; }
+    while (reader->pos < reader->count) {
+        const char *chunk = reader->chunks[reader->pos];
+        size_t length = strlen(chunk);
+        if (reader->offset >= length) {
+            reader->pos++;
+            reader->offset = 0;
+            continue;
+        }
+        size_t available = length - reader->offset;
+        size_t n = available < capacity ? available : capacity;
+        memcpy(buffer, chunk + reader->offset, n);
+        reader->offset += n;
+        *read = n;
+        return 1;
+    }
+    return 1;
+}
+
 int main(void) {
     recovery_error error = {{0}};
     recovery_lexeme *tokens = NULL;
@@ -929,6 +1005,16 @@ int main(void) {
     if (!recovery_parse_recovering_source(&source, &result, &error)) { return 13; }
     if (!require(result.accepted && result.diagnostic_count == 2, "wrong scanner-source recovery result")) { return 14; }
     recovery_parse_result_free(&result);
+    const char *chunks[] = {"x", "=y;", " y=2", "; z=;", " w=3;"};
+    chunk_reader reader = {chunks, sizeof(chunks) / sizeof(chunks[0]), 0, 0};
+    recovery_stream_scanner stream_scanner;
+    recovery_stream_scanner_init_ex(&stream_scanner, chunk_reader_next, &reader, 1, 1024);
+    source.user = &stream_scanner;
+    source.next = recovery_stream_scanner_source_next;
+    if (!recovery_parse_recovering_source(&source, &result, &error)) { recovery_stream_scanner_free(&stream_scanner); return 20; }
+    if (!require(result.accepted && result.diagnostic_count == 2, "wrong stream scanner recovery result")) { recovery_stream_scanner_free(&stream_scanner); return 21; }
+    recovery_parse_result_free(&result);
+    recovery_stream_scanner_free(&stream_scanner);
     recovery_lexeme eof_then_token[2];
     memset(eof_then_token, 0, sizeof(eof_then_token));
     eof_then_token[0].token = RECOVERY_TOKEN_EOF;
@@ -980,6 +1066,7 @@ func TestRunGenerate_GeneratedCppParserRecoversAndReportsExpectedTokens(t *testi
 
 #include <stdexcept>
 #include <string>
+#include <sstream>
 
 using namespace Recovery::Generated;
 
@@ -1001,6 +1088,10 @@ int main() {
     const auto source_result = parse_recovering(source_scanner);
     require(source_result.accepted && source_result.diagnostics.size() == result.diagnostics.size(), "wrong source recovery result");
     require(source_result.diagnostics.front().unexpected == first.unexpected && source_result.diagnostics.front().recovery.kind == first.recovery.kind, "wrong source recovery diagnostic");
+    std::istringstream stream("x=y; y=2; z=; w=3;");
+    StreamScanner stream_scanner(stream, 1, 1024);
+    const auto stream_result = parse_recovering(stream_scanner);
+    require(stream_result.accepted && stream_result.diagnostics.size() == result.diagnostics.size(), "wrong stream recovery result");
     try {
         parse(tokens);
         throw std::runtime_error("compatibility parse should fail");
@@ -1343,7 +1434,10 @@ S : Word ;
 	}
 	writeFile(t, filepath.Join(out, "generated_test.go"), `package unicodelex
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestGeneratedUTF8Scanner(t *testing.T) {
 	tokens, err := Tokenize("åβ")
@@ -1362,8 +1456,18 @@ func TestGeneratedUTF8Scanner(t *testing.T) {
 	if err := Parse(tokens); err != nil {
 		t.Fatal(err)
 	}
+	readerTokens, err := TokenizeReader(strings.NewReader("åβ"), WithScannerReadBufferSize(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(readerTokens) != 1 || readerTokens[0].Text != "åβ" || readerTokens[0].End != len("åβ") {
+		t.Fatalf("reader tokens = %#v", readerTokens)
+	}
 	if _, err := Tokenize(string([]byte{0xff})); err == nil {
 		t.Fatal("expected invalid UTF-8 scanner error")
+	}
+	if _, err := TokenizeReader(strings.NewReader(string([]byte{0xc3})), WithScannerReadBufferSize(1)); err == nil {
+		t.Fatal("expected incomplete UTF-8 reader scanner error")
 	}
 }
 `)
@@ -1651,6 +1755,7 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 `)
 	writeFile(t, filepath.Join(dir, "Program.cs"), `using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using LangForge.Examples.Calc.Generated;
@@ -1682,6 +1787,13 @@ static double EvalFromSource(string source)
     return (double)Parser.ParseWithReducerFromSource(new Scanner(source), Reducers())!;
 }
 
+static double EvalFromTextReader(TextReader reader)
+{
+    return (double)Parser.ParseWithReducerFromSource(
+        Scanner.FromTextReader(reader, new ScannerOptions { ReadBufferSize = 1 }),
+        Reducers())!;
+}
+
 static void Check(bool condition, string message)
 {
     if (!condition)
@@ -1692,9 +1804,11 @@ static void Check(bool condition, string message)
 
 Check(Math.Abs(Eval("1+2*(3-4)") - -1) < 0.0001, "wrong expression result");
 Check(Math.Abs(EvalFromSource("1+2*(3-4)") - -1) < 0.0001, "wrong source expression result");
+Check(Math.Abs(EvalFromTextReader(new ChunkTextReader("1", "+", "2*", "(3", "-4)")) - -1) < 0.0001, "wrong reader expression result");
 var visible = Scanner.Tokenize("1+2");
 Parser.Parse(visible);
 Parser.ParseFromSource(new Scanner("1+2"));
+Parser.ParseFromSource(Scanner.FromTextReader(new StringReader("1+2"), new ScannerOptions { ReadBufferSize = 1 }));
 var spy = new SpySource(visible);
 Parser.ParseFromSource(spy);
 Check(spy.Pulls == visible.Count + 1, $"source pulls {spy.Pulls}");
@@ -1727,6 +1841,30 @@ try
     throw new InvalidOperationException("expected scanner error");
 }
 catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
+{
+}
+try
+{
+    Scanner.Tokenize(new StringReader("1@"), new ScannerOptions { ReadBufferSize = 1 });
+    throw new InvalidOperationException("expected reader scanner error");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
+{
+}
+try
+{
+    Scanner.Tokenize(new StringReader("123"), new ScannerOptions { ReadBufferSize = 1, MaxBufferedTokenLength = 2 });
+    throw new InvalidOperationException("expected reader buffer limit error");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("buffered token exceeds"))
+{
+}
+try
+{
+    Scanner.Tokenize(new ThrowingTextReader("1", new InvalidOperationException("reader failed")), new ScannerOptions { ReadBufferSize = 1 });
+    throw new InvalidOperationException("expected reader failure");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("reader failed"))
 {
 }
 try
@@ -1848,6 +1986,57 @@ sealed class FailingSource : ILexemeSource
         }
         lexeme = _tokens[_index++];
         return true;
+    }
+}
+
+sealed class ChunkTextReader : TextReader
+{
+    private readonly Queue<string> _chunks;
+    private string _current = string.Empty;
+
+    public ChunkTextReader(params string[] chunks)
+    {
+        _chunks = new Queue<string>(chunks);
+    }
+
+    public override int Read(char[] buffer, int index, int count)
+    {
+        if (_current.Length == 0 && _chunks.Count != 0)
+        {
+            _current = _chunks.Dequeue();
+        }
+        if (_current.Length == 0)
+        {
+            return 0;
+        }
+        int read = Math.Min(count, _current.Length);
+        _current.CopyTo(0, buffer, index, read);
+        _current = _current.Substring(read);
+        return read;
+    }
+}
+
+sealed class ThrowingTextReader : TextReader
+{
+    private string _prefix;
+    private readonly Exception _failure;
+
+    public ThrowingTextReader(string prefix, Exception failure)
+    {
+        _prefix = prefix;
+        _failure = failure;
+    }
+
+    public override int Read(char[] buffer, int index, int count)
+    {
+        if (_prefix.Length != 0)
+        {
+            int read = Math.Min(count, _prefix.Length);
+            _prefix.CopyTo(0, buffer, index, read);
+            _prefix = _prefix.Substring(read);
+            return read;
+        }
+        throw _failure;
     }
 }
 `)

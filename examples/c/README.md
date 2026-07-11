@@ -30,8 +30,16 @@ The examples default to the generated typed reducer wrapper, which validates
 named RHS labels and required handlers before delegating to the boxed C reducer.
 Pass `--boxed` to any C demo to run the compatibility reducer path directly.
 Production paths wrap a generated scanner in a `<prefix>_lexeme_source` and
-call source APIs such as `<prefix>_parse_value_source_typed`. Token arrays are
+call source APIs such as `<prefix>_parse_value_lexeme_source_typed`. Token arrays are
 kept for compatibility and token-inspection tests.
+
+When learning from a C example, read the files in this order:
+
+1. `*.lf` for the grammar contract.
+2. `main.c` or `semantics.c` for the reducer handlers.
+3. `parser_facade.c` in templates for reusable ownership and cleanup shape.
+4. generated `scanner.c` and `parser.c` after `make generate` for DFA and
+   ACTION/GOTO table output.
 
 C callers own cleanup explicitly. Keep source text alive until parsing
 returns, free generated token arrays and recovery results with the generated

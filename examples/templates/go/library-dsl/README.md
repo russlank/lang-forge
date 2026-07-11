@@ -19,6 +19,6 @@ set title = "nightly";
 enable audit;
 ```
 
-The parser facade uses `ParseWithReducerFromSource(new Scanner(...), reducers)`
+The parser facade uses `ParseWithReducerFromLexemeSource(new Scanner(...), reducers)`
 so production code consumes tokens lazily from the generated scanner. A
 collection-based `ParseTokens` method is kept for debugging and compatibility.

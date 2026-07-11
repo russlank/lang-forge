@@ -37,13 +37,36 @@ LangForge examples are organized by supported target language.
 
 Generated folders, build outputs, and demo logs are ignored. Run each example's
 Makefile to regenerate the target-specific scanner/parser before building.
-Production paths in the examples prefer scanner/token-source parsing, where
-the parser pulls tokens lazily from the generated scanner. Token collection
-APIs are still demonstrated where they are useful for debugging, tests, or
-token inspection.
-The calc examples exercise source-based value parsing, including scanner,
-syntax, and reducer failures. The parser-recovery examples exercise
+Production paths in the examples prefer scanner/lexeme-source parsing, where
+the parser pulls tokens lazily from the generated scanner. The calc family now
+shows both in-memory and reader/stream-backed scanner inputs across Go, C#,
+C, and C++: Go `io.Reader`, C# `TextReader`/`Stream`, C read callbacks, and
+C++ `std::istream`. Token collection APIs are still demonstrated where they
+are useful for debugging, tests, or token inspection.
+The calc examples exercise streamed value parsing, including chunked input,
+scanner, syntax, reducer, reader-failure, and buffer-limit failures. The
+parser-recovery examples exercise
 source-based recovery diagnostics and accepted/partial-result handling.
+
+## How To Read An Example
+
+Each runnable example is meant to teach the same layers in the same order:
+
+| Step | File to open | What to learn |
+|---|---|---|
+| 1 | `*.lf` | Token rules, parser rules, named RHS labels, semantic action labels, and target package/namespace settings. |
+| 2 | handwritten reducer or semantics file | How labels such as `{go: add}` or `{csharp: add}` become application behavior. |
+| 3 | parser facade or adapter | How generated scanner/parser APIs are hidden behind a stable domain API. |
+| 4 | AST/model/compiler/renderer files | What the parsed language means after syntax recognition succeeds. |
+| 5 | generated files after `make generate` | How DFA scanner tables, LR parser tables, and typed reducer contexts look in the target language. |
+
+The first four steps are the part a LangForge user normally writes and
+reviews. The generated files are useful for learning, debugging, and IDE
+navigation, but they should be treated as rebuildable output.
+
+For the visual relationship between `.lf`, generated automata, driving tables,
+and reducers, read
+[../doc/automata-and-tables.md](../doc/automata-and-tables.md).
 
 For reusable code, keep generated packages, namespaces, and headers behind a
 handwritten facade. The target guides document the practical ownership rules:

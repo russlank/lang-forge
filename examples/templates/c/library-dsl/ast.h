@@ -83,7 +83,7 @@ dsl_entry_list *dsl_entry_list_prepend(dsl_allocator *memory, dsl_entry *head, d
  * owns memory and must be released with dsl_document_free by the caller.
  */
 dsl_document *dsl_document_create(dsl_allocator *memory, dsl_entry_list *entries);
-/* Releases a document returned by dsl_parse_source, including all child nodes. */
+/* Releases a document returned by dsl_parse_lexeme_source, including all child nodes. */
 void dsl_document_free(dsl_document *document);
 
 /* Returns a stable lower-case name for reports. */

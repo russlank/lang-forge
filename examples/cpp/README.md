@@ -58,6 +58,12 @@ where practical, keep `std::any_cast` at compatibility boundaries, and express
 ownership with `std::unique_ptr`, `std::variant`, or a domain result type
 instead of exposing generated parser stack values.
 
+When learning from a C++ example, read `*.lf` first, then reducer-map creation
+such as `make_direct_typed_reducers`, then the parser facade or demo entrypoint.
+Generated `scanner.cpp` and `parser.cpp` are useful after that: they show the
+scanner DFA tables, static sorted parser ACTION/GOTO tables, and typed reducer
+adapter layer that the handwritten code calls.
+
 The DRAW C++ example writes a PNG image with a tiny local encoder rather than
 using an external image library.
 

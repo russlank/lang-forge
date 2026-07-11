@@ -26,22 +26,28 @@ var (
 )
 
 func TestBenchmarkFixtures(t *testing.T) {
-	if _, err := calc.ParseWithReducerFromSource(calc.NewScanner(calcLargeSource), typedCalcReducer); err != nil {
+	if _, err := calc.ParseWithReducerFromLexemeSource(calc.NewScanner(calcLargeSource), typedCalcReducer); err != nil {
 		t.Fatalf("calc source parse failed: %v", err)
+	}
+	if _, err := calc.ParseWithReducerFromLexemeSource(calc.NewReaderScanner(strings.NewReader(calcLargeSource), calc.WithReaderScannerBufferSize(7)), typedCalcReducer); err != nil {
+		t.Fatalf("calc reader parse failed: %v", err)
 	}
 	if _, err := calc.ParseWithReducer(calcLargeTokens, boxedCalcReducer); err != nil {
 		t.Fatalf("calc token parse failed: %v", err)
 	}
-	if _, err := calc.ParseWithReducerFromSource(calc.NewScanner("1 / 0"), typedCalcReducer); err == nil {
+	if _, err := calc.ParseWithReducerFromLexemeSource(calc.NewScanner("1 / 0"), typedCalcReducer); err == nil {
 		t.Fatal("calc reducer error was not propagated")
 	}
-	if _, err := calc.ParseWithReducerFromSource(calc.NewScanner("1 + @"), typedCalcReducer); err == nil {
+	if _, err := calc.ParseWithReducerFromLexemeSource(calc.NewScanner("1 + @"), typedCalcReducer); err == nil {
 		t.Fatal("calc lexical error was not propagated")
+	}
+	if _, err := calc.ParseWithReducerFromLexemeSource(calc.NewReaderScanner(strings.NewReader("123"), calc.WithReaderScannerBufferSize(1), calc.WithMaxBufferedLexemeBytes(2)), typedCalcReducer); err == nil {
+		t.Fatal("calc reader buffer-limit error was not propagated")
 	}
 	if _, err := draw.Parse(drawLargeSource); err != nil {
 		t.Fatalf("draw parse failed: %v", err)
 	}
-	result, err := recovery.ParseRecoveringFromSource(recovery.NewScanner(recoveryLargeSource))
+	result, err := recovery.ParseRecoveringFromLexemeSource(recovery.NewScanner(recoveryLargeSource))
 	if err != nil {
 		t.Fatalf("recovery source parse failed: %v", err)
 	}
@@ -51,7 +57,7 @@ func TestBenchmarkFixtures(t *testing.T) {
 }
 
 func BenchmarkScanner(b *testing.B) {
-	b.Run("StreamingNext", func(b *testing.B) {
+	b.Run("StringScannerNext", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(calcLargeSource)))
 		start := time.Now()
@@ -74,7 +80,7 @@ func BenchmarkScanner(b *testing.B) {
 		}
 		reportRate(b, len(calcLargeTokens), "tokens/s", start)
 	})
-	b.Run("MaterializeAll", func(b *testing.B) {
+	b.Run("StringScannerMaterializeAll", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(calcLargeSource)))
 		start := time.Now()
@@ -89,15 +95,46 @@ func BenchmarkScanner(b *testing.B) {
 		}
 		reportRate(b, len(calcLargeTokens), "tokens/s", start)
 	})
+	b.Run("ReaderScannerNext", func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(int64(len(calcLargeSource)))
+		start := time.Now()
+		for i := 0; i < b.N; i++ {
+			scanner := calc.NewReaderScanner(strings.NewReader(calcLargeSource))
+			count := 0
+			for {
+				_, ok, err := scanner.Next()
+				if err != nil {
+					b.Fatal(err)
+				}
+				if !ok {
+					break
+				}
+				count++
+			}
+			if count != len(calcLargeTokens) {
+				b.Fatalf("token count = %d, want %d", count, len(calcLargeTokens))
+			}
+		}
+		reportRate(b, len(calcLargeTokens), "tokens/s", start)
+	})
 }
 
 func BenchmarkCalcParse(b *testing.B) {
-	b.Run("ParseFromSource", func(b *testing.B) {
+	b.Run("ParseFromStringScanner", func(b *testing.B) {
 		b.Run("TypedReducer", func(b *testing.B) {
-			benchmarkCalcSource(b, typedCalcReducer)
+			benchmarkCalcStringScanner(b, typedCalcReducer)
 		})
 		b.Run("BoxedReducer", func(b *testing.B) {
-			benchmarkCalcSource(b, boxedCalcReducer)
+			benchmarkCalcStringScanner(b, boxedCalcReducer)
+		})
+	})
+	b.Run("ParseFromReaderScanner", func(b *testing.B) {
+		b.Run("TypedReducer", func(b *testing.B) {
+			benchmarkCalcReader(b, typedCalcReducer)
+		})
+		b.Run("BoxedReducer", func(b *testing.B) {
+			benchmarkCalcReader(b, boxedCalcReducer)
 		})
 	})
 	b.Run("ParsePreTokenized", func(b *testing.B) {
@@ -111,7 +148,7 @@ func BenchmarkCalcParse(b *testing.B) {
 }
 
 func BenchmarkDrawParse(b *testing.B) {
-	b.Run("ParseFromSource", func(b *testing.B) {
+	b.Run("ParseFromStringScanner", func(b *testing.B) {
 		b.Run("BuildAST", func(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(drawLargeSource)))
@@ -131,12 +168,12 @@ func BenchmarkDrawParse(b *testing.B) {
 }
 
 func BenchmarkRecoveryParse(b *testing.B) {
-	b.Run("ParseFromSource", func(b *testing.B) {
+	b.Run("ParseFromStringScanner", func(b *testing.B) {
 		b.ReportAllocs()
 		b.SetBytes(int64(len(recoveryLargeSource)))
 		start := time.Now()
 		for i := 0; i < b.N; i++ {
-			result, err := recovery.ParseRecoveringFromSource(recovery.NewScanner(recoveryLargeSource))
+			result, err := recovery.ParseRecoveringFromLexemeSource(recovery.NewScanner(recoveryLargeSource))
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -163,14 +200,33 @@ func BenchmarkRecoveryParse(b *testing.B) {
 	})
 }
 
-func benchmarkCalcSource(b *testing.B, reducer calc.Reducer) {
-	// ParseFromSource includes scanner/token-source work in the timed loop:
-	// source text -> generated scanner -> generated parser -> reducer.
+func benchmarkCalcStringScanner(b *testing.B, reducer calc.Reducer) {
+	// ParseFromStringScanner includes scanning in the measured operation:
+	// source text -> generated string scanner -> parser lexeme source -> reducer.
 	b.ReportAllocs()
 	b.SetBytes(int64(len(calcLargeSource)))
 	start := time.Now()
 	for i := 0; i < b.N; i++ {
-		value, err := calc.ParseWithReducerFromSource(calc.NewScanner(calcLargeSource), reducer)
+		value, err := calc.ParseWithReducerFromLexemeSource(calc.NewScanner(calcLargeSource), reducer)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, ok := value.(float64); !ok {
+			b.Fatalf("value type = %T, want float64", value)
+		}
+	}
+	reportRate(b, len(calcLargeTokens), "tokens/s", start)
+}
+
+func benchmarkCalcReader(b *testing.B, reducer calc.Reducer) {
+	// ParseFromReaderScanner uses the same pull parser path as ParseFromStringScanner, but
+	// the scanner fills its buffer from an io.Reader instead of an in-memory
+	// string. The timed loop includes reader construction and scanner reads.
+	b.ReportAllocs()
+	b.SetBytes(int64(len(calcLargeSource)))
+	start := time.Now()
+	for i := 0; i < b.N; i++ {
+		value, err := calc.ParseWithReducerFromLexemeSource(calc.NewReaderScanner(strings.NewReader(calcLargeSource)), reducer)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -182,8 +238,8 @@ func benchmarkCalcSource(b *testing.B, reducer calc.Reducer) {
 }
 
 func benchmarkCalcTokens(b *testing.B, reducer calc.Reducer) {
-	// ParsePreTokenized uses a token slice prepared outside the timed loop, so
-	// it measures parser/reducer cost over an existing token collection.
+	// ParsePreTokenized uses a lexeme slice prepared outside the timed loop, so
+	// it measures parser/reducer cost over an existing lexeme collection.
 	b.ReportAllocs()
 	b.SetBytes(int64(len(calcLargeSource)))
 	start := time.Now()

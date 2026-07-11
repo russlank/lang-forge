@@ -10,7 +10,7 @@ var reducers = CreateReducers();
 
 static Vehicle ParseVehicle(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), reducers);
+    var value = Parser.ParseWithReducerFromLexemeSource(new Scanner(source), reducers);
     return value is Vehicle vehicle
         ? vehicle
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Vehicle");
@@ -122,7 +122,7 @@ static void RunAssertions(string source, ReducerMap reducers)
     Check(vehicle.Info.Repairs.Count == 3, "expected three repairs");
 
     var parser = new Parser(reducers);
-    Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
+    Parallel.For(0, 8, _ => parser.ParseValueLexemeSource(new Scanner(source)));
 
     var empty = source.Replace(
         """
@@ -155,7 +155,7 @@ static void RunAssertions(string source, ReducerMap reducers)
 
     try
     {
-        Parser.ParseFromSource(new Scanner("car = { model = \"KIA\" }"));
+        Parser.ParseFromLexemeSource(new Scanner("car = { model = \"KIA\" }"));
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

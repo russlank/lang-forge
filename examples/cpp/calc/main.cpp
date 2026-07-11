@@ -115,6 +115,17 @@ static const lfcalc::ReducerMap& make_boxed_reducers() {
 /// (`ctx.left`, `ctx.right`, `ctx.token`) and return the declared native
 /// semantic type (`double` here). LangForge boxes the result only at the parser
 /// boundary, so the recommended handwritten path does not need std::any_cast.
+///
+/// Grammar alternatives implemented here:
+/// - S : value=Expr {cpp: start}
+/// - Expr : left=Expr Plus right=Term {cpp: add}
+/// - Expr : left=Expr Minus right=Term {cpp: subtract}
+/// - Expr : value=Term {cpp: pass}
+/// - Term : left=Term Mul right=Factor {cpp: multiply}
+/// - Term : left=Term Div right=Factor {cpp: divide}
+/// - Factor : token=Number {cpp: number}
+/// - Factor : LParen value=Expr RParen {cpp: group}
+/// - Factor : Minus value=Factor {cpp: negate}
 static const lfcalc::ReducerMap& make_direct_typed_reducers() {
     static const lfcalc::ReducerMap reducers{
         {lfcalc::SemanticAction::Start, lfcalc::typed_start([](const lfcalc::StartReduction& ctx) -> double {
@@ -173,11 +184,21 @@ static const lfcalc::ReducerMap& make_reducers(ReducerMode mode) {
     throw std::runtime_error("unknown reducer mode");
 }
 
-/// Scans, parses, and evaluates one calculator expression.
-static double evaluate(std::string_view source, ReducerMode mode = ReducerMode::DirectTyped) {
-    lfcalc::Scanner scanner(source);
+/// Scans, parses, and evaluates one calculator expression from a stream.
+///
+/// InputStreamScanner pulls UTF-8 source text only when the parser asks for the next
+/// lexeme. Returned lexeme text is owned by the scanner, so the scanner must
+/// stay alive until parsing and reducer code finish.
+static double evaluate_stream(std::istream& source, ReducerMode mode = ReducerMode::DirectTyped, std::size_t read_buffer_size = 4096, std::size_t max_buffered_lexeme_bytes = 1048576) {
+    lfcalc::InputStreamScanner scanner(source, read_buffer_size, max_buffered_lexeme_bytes);
     const auto value = lfcalc::parse_value(scanner, make_reducers(mode));
     return std::any_cast<double>(value);
+}
+
+/// Scans, parses, and evaluates one calculator expression from in-memory text.
+static double evaluate(std::string_view source, ReducerMode mode = ReducerMode::DirectTyped) {
+    std::istringstream input{std::string(source)};
+    return evaluate_stream(input, mode);
 }
 
 /// Throws when a condition used by the example self-test is false.
@@ -190,6 +211,10 @@ static void require(bool condition, const std::string& message) {
 /// Covers behavior that is easy to regress while changing generated runtimes.
 static void run_assertions() {
     require(std::fabs(evaluate("1 + 2 * (3 - 4.5)") - -2.0) < 0.000001, "wrong expression result");
+    {
+        std::istringstream input{"1 + 2 * (3 - 4.5)"};
+        require(std::fabs(evaluate_stream(input, ReducerMode::DirectTyped, 1) - -2.0) < 0.000001, "wrong chunked stream expression result");
+    }
     require(std::fabs(evaluate("7.5/2.5", ReducerMode::Boxed) - 3.0) < 0.000001, "wrong boxed decimal division result");
     require(std::fabs(evaluate("3+4", ReducerMode::BoxedToTyped) - 7.0) < 0.000001, "wrong boxed-to-typed migration result");
 
@@ -227,6 +252,14 @@ static void run_assertions() {
         throw std::runtime_error("expected source parser error");
     } catch (const std::runtime_error& ex) {
         require(std::string(ex.what()).find("parse error") != std::string::npos, "wrong source parse error");
+    }
+
+    try {
+        std::istringstream input{"123"};
+        evaluate_stream(input, ReducerMode::DirectTyped, 1, 2);
+        throw std::runtime_error("expected buffered-lexeme stream error");
+    } catch (const std::runtime_error& ex) {
+        require(std::string(ex.what()).find("buffered lexeme exceeds") != std::string::npos, "wrong stream buffer-limit error");
     }
 
     try {
@@ -306,7 +339,11 @@ int main(int argc, char** argv) {
         }
 
         const std::string source = read_text_file(input_path);
-        const double result = evaluate(source, mode);
+        std::ifstream input(input_path);
+        if (!input) {
+            throw std::runtime_error("cannot open input file for parse: " + input_path);
+        }
+        const double result = evaluate_stream(input, mode);
         std::ostringstream report;
         report << "LangForge C++ calculator demo\n";
         report << "source: " << source;

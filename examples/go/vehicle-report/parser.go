@@ -17,7 +17,7 @@ import (
 // VehicleReduction and FeatureReduction, keeping this adapter free from
 // positional semantic-value casts.
 func Parse(source string) (*Vehicle, error) {
-	value, err := vehiclegen.ParseWithReducerFromSource(vehiclegen.NewScanner(source), vehicleReducers)
+	value, err := vehiclegen.ParseWithReducerFromLexemeSource(vehiclegen.NewScanner(source), vehicleReducers)
 	if err != nil {
 		return nil, err
 	}

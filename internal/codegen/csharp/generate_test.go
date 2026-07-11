@@ -83,7 +83,7 @@ func TestRenderTypedReductionContexts_GeneratesCSharpAdapters(t *testing.T) {
 		"internal sealed record AddReduction(Reduction Reduction, double Left, double Right);",
 		"internal delegate double AddHandler(AddReduction ctx);",
 		"internal static class SemanticReducerContexts",
-		"internal static AddReduction NewAddReduction(Reduction ctx)",
+		"internal static AddReduction AddReductionFrom(Reduction ctx)",
 		"SemanticValueAs<double>(ctx, \"left\")",
 		"internal static Func<Reduction, object?> TypedAdd(AddHandler handler)",
 	} {

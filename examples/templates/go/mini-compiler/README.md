@@ -17,7 +17,7 @@ typed reducer map, compiler, runtime, and report output together.
 
 Reducer errors are ordinary returned errors. For example, an oversized integer
 literal reaches the `number` reducer as a valid token, then returns a semantic
-error through `ParseWithReducerFromSource`; the template does not panic for
+error through `ParseWithReducerFromLexemeSource`; the template does not panic for
 user-facing reducer failures.
 
 Run it from this directory:

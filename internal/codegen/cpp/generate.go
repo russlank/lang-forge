@@ -224,10 +224,10 @@ func renderScannerHeader(namespace []string, source string) string {
 	b.WriteString("/// Tokenizes UTF-8 source text pulled synchronously from an input stream.\n")
 	b.WriteString("///\n")
 	b.WriteString("/// Returned lexeme text views point into storage owned by this scanner. Keep\n")
-	b.WriteString("/// the StreamScanner alive while parser/reducer code reads those views.\n")
-	b.WriteString("class StreamScanner : public LexemeSource {\n")
+	b.WriteString("/// the InputStreamScanner alive while parser/reducer code reads those views.\n")
+	b.WriteString("class InputStreamScanner : public LexemeSource {\n")
 	b.WriteString("public:\n")
-	b.WriteString("    explicit StreamScanner(std::istream& input, std::size_t read_buffer_size = 4096, std::size_t max_buffered_token_bytes = 1048576);\n")
+	b.WriteString("    explicit InputStreamScanner(std::istream& input, std::size_t read_buffer_size = 4096, std::size_t max_buffered_lexeme_bytes = 1048576);\n")
 	b.WriteString("    void include_hidden(bool include);\n")
 	b.WriteString("    bool next(Lexeme& lexeme) override;\n")
 	b.WriteString("    std::vector<Lexeme> all();\n\n")
@@ -243,7 +243,7 @@ func renderScannerHeader(namespace []string, source string) string {
 	b.WriteString("    bool include_hidden_ = false;\n")
 	b.WriteString("    bool eof_ = false;\n")
 	b.WriteString("    std::size_t read_buffer_size_ = 4096;\n")
-	b.WriteString("    std::size_t max_buffered_token_bytes_ = 1048576;\n")
+	b.WriteString("    std::size_t max_buffered_lexeme_bytes_ = 1048576;\n")
 	b.WriteString("    std::deque<std::string> owned_texts_;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("/// Tokenizes every visible token in UTF-8 source text.\n")
@@ -379,17 +379,17 @@ std::vector<Lexeme> Scanner::all() {
     return output;
 }
 
-StreamScanner::StreamScanner(std::istream& input, std::size_t read_buffer_size, std::size_t max_buffered_token_bytes)
+InputStreamScanner::InputStreamScanner(std::istream& input, std::size_t read_buffer_size, std::size_t max_buffered_lexeme_bytes)
     : input_(&input),
       read_buffer_size_(read_buffer_size == 0 ? static_cast<std::size_t>(4096) : read_buffer_size),
-      max_buffered_token_bytes_(max_buffered_token_bytes == 0 ? static_cast<std::size_t>(1048576) : max_buffered_token_bytes) {}
+      max_buffered_lexeme_bytes_(max_buffered_lexeme_bytes == 0 ? static_cast<std::size_t>(1048576) : max_buffered_lexeme_bytes) {}
 
-void StreamScanner::include_hidden(bool include) {
+void InputStreamScanner::include_hidden(bool include) {
     std::lock_guard<std::mutex> lock(gate_);
     include_hidden_ = include;
 }
 
-void StreamScanner::read_more() {
+void InputStreamScanner::read_more() {
     if (eof_) {
         return;
     }
@@ -402,8 +402,8 @@ void StreamScanner::read_more() {
     if (read > 0) {
         chunk.resize(static_cast<std::size_t>(read));
         buffer_ += chunk;
-        if (buffer_.size() > max_buffered_token_bytes_) {
-            throw std::runtime_error("scanner buffered token exceeds limit");
+        if (buffer_.size() > max_buffered_lexeme_bytes_) {
+            throw std::runtime_error("scanner buffered lexeme exceeds limit");
         }
     }
     if (input_->bad()) {
@@ -417,7 +417,7 @@ void StreamScanner::read_more() {
     }
 }
 
-std::pair<int, std::size_t> StreamScanner::match_buffered() {
+std::pair<int, std::size_t> InputStreamScanner::match_buffered() {
     int state = 0;
     int best_rule = scanner_states[static_cast<std::size_t>(state)].accept;
     std::size_t best_end = 0;
@@ -465,7 +465,7 @@ std::pair<int, std::size_t> StreamScanner::match_buffered() {
     return {best_rule, best_end};
 }
 
-bool StreamScanner::next(Lexeme& lexeme) {
+bool InputStreamScanner::next(Lexeme& lexeme) {
     std::lock_guard<std::mutex> lock(gate_);
     while (true) {
         if (buffer_.empty() && !eof_) {
@@ -505,7 +505,7 @@ bool StreamScanner::next(Lexeme& lexeme) {
     }
 }
 
-std::vector<Lexeme> StreamScanner::all() {
+std::vector<Lexeme> InputStreamScanner::all() {
     std::vector<Lexeme> output;
     Lexeme lexeme;
     while (next(lexeme)) {
@@ -1126,9 +1126,9 @@ func parserRuntime() string {
     return token_name(token);
 }
 
-class SourceCursor {
+class LexemeSourceCursor {
 public:
-    explicit SourceCursor(LexemeSource& source) : source_(source) {}
+    explicit LexemeSourceCursor(LexemeSource& source) : source_(source) {}
 
     std::string_view peek_symbol() {
         if (ready_) {
@@ -1292,12 +1292,12 @@ std::vector<ExpectedToken> expected_tokens(int state) {
     return out;
 }
 
-Lexeme error_lexeme(const SourceCursor& cursor) {
+Lexeme error_lexeme(const LexemeSourceCursor& cursor) {
     const auto source = cursor.diagnostic_lexeme();
     return Lexeme{Token::Error, {}, {}, source.start, source.start, source.start_line, source.start_column, source.start_line, source.start_column};
 }
 
-ParseDiagnostic make_diagnostic(int state, std::string_view unexpected, const SourceCursor& cursor) {
+ParseDiagnostic make_diagnostic(int state, std::string_view unexpected, const LexemeSourceCursor& cursor) {
     const auto source = cursor.diagnostic_lexeme();
     return ParseDiagnostic{
         state,
@@ -1500,7 +1500,7 @@ ParseResult Parser::parse_recovering(LexemeSource& source) const {
     states.reserve(64);
     values.reserve(64);
     states.push_back(0);
-    SourceCursor cursor(source);
+    LexemeSourceCursor cursor(source);
     int recovering = 0;
     std::ptrdiff_t active_diagnostic = -1;
     ParseResult result;

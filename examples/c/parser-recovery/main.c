@@ -145,12 +145,12 @@ static int recovery_parse_demo_source(const char *source, recovery_parse_result 
 {
     recovery_error error;
     recovery_scanner scanner;
-    recovery_lexeme_source token_source;
+    recovery_lexeme_source lexeme_source;
     error.message[0] = '\0';
     recovery_scanner_init(&scanner, source);
-    token_source.user = &scanner;
-    token_source.next = recovery_scanner_source_next;
-    if (!recovery_parse_recovering_source(&token_source, result, &error))
+    lexeme_source.user = &scanner;
+    lexeme_source.next = recovery_scanner_lexeme_source_next;
+    if (!recovery_parse_recovering_lexeme_source(&lexeme_source, result, &error))
     {
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
     }

@@ -6,11 +6,11 @@ import (
 )
 
 func TestParseBenchmarkLine(t *testing.T) {
-	row, ok := parseBenchmarkLine("BenchmarkCalcParse/ParseFromSource/TypedReducer-12         	     624	   1921843 ns/op	  16.07 MB/s	   8168420 tokens/s	     128 B/op	       2 allocs/op")
+	row, ok := parseBenchmarkLine("BenchmarkCalcParse/ParseFromStringScanner/TypedReducer-12         	     624	   1921843 ns/op	  16.07 MB/s	   8168420 tokens/s	     128 B/op	       2 allocs/op")
 	if !ok {
 		t.Fatal("benchmark line was not parsed")
 	}
-	if row.Name != "BenchmarkCalcParse/ParseFromSource/TypedReducer" {
+	if row.Name != "BenchmarkCalcParse/ParseFromStringScanner/TypedReducer" {
 		t.Fatalf("name = %q", row.Name)
 	}
 	if row.TimeNS != 1921843 {
@@ -31,7 +31,7 @@ func TestRenderMarkdown(t *testing.T) {
 		CPU:         "example cpu",
 		Command:     "go test -bench .",
 		Rows: []benchRow{{
-			Name:     "BenchmarkScanner/StreamingNext",
+			Name:     "BenchmarkScanner/StringScannerNext",
 			TimeNS:   1557907,
 			MBs:      "19.82",
 			TokensS:  "10079171",
@@ -42,8 +42,8 @@ func TestRenderMarkdown(t *testing.T) {
 	for _, want := range []string{
 		"# Go Benchmark Summary",
 		"- GOOS: linux",
-		"| `BenchmarkScanner/StreamingNext` | 1.558 ms/op | 19.82 | 10079171 | - | 64 | 1 |",
-		"`ParseFromSource` includes scanner/token-source work.",
+		"| `BenchmarkScanner/StringScannerNext` | 1.558 ms/op | 19.82 | 10079171 | - | 64 | 1 |",
+		"`ParseFromStringScanner` and `ParseFromReaderScanner` include scanner/lexeme-source work.",
 	} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("summary missing %q:\n%s", want, md)

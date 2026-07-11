@@ -27,7 +27,7 @@ The parser facade is the boundary an application would normally call:
 dsl_parse_result result;
 dsl_parse_result_init(&result);
 
-if (dsl_parse_source(source, &result)) {
+if (dsl_parse_lexeme_source(source, &result)) {
     /* result.document is caller-owned here. */
 }
 
@@ -36,7 +36,7 @@ dsl_parse_result_free(&result);
 
 Ownership rules:
 
-- The source text passed to `dsl_parse_source` remains caller-owned and must
+- The source text passed to `dsl_parse_lexeme_source` remains caller-owned and must
   stay alive until the call returns.
 - The generated scanner and parser state are stack-local inside
   `parser_facade.c`; there is no global mutable parser state.

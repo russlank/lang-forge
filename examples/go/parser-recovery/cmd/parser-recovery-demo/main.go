@@ -45,7 +45,7 @@ func main() {
 }
 
 func parseSource(source string) (recovery.ParseResult, error) {
-	return recovery.ParseRecoveringFromSource(recovery.NewScanner(source))
+	return recovery.ParseRecoveringFromLexemeSource(recovery.NewScanner(source))
 }
 
 func expectedDisplay(expected []recovery.ExpectedToken) string {

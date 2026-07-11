@@ -192,6 +192,21 @@ static calc_value calc_typed_divide(const calc_divide_reduction *ctx, void *user
 
 static calc_typed_reducer calc_make_direct_typed_reducer(calc_demo *demo)
 {
+    /*
+     * Direct typed reducer table for calc.lf.
+     *
+     * The generated parser calls these handlers when it reduces the matching
+     * grammar alternatives:
+     * - S : value=Expr {c: start}
+     * - Expr : left=Expr Plus right=Term {c: add}
+     * - Expr : left=Expr Minus right=Term {c: subtract}
+     * - Expr : value=Term {c: pass}
+     * - Term : left=Term Mul right=Factor {c: multiply}
+     * - Term : left=Term Div right=Factor {c: divide}
+     * - Factor : token=Number {c: number}
+     * - Factor : LParen value=Expr RParen {c: group}
+     * - Factor : Minus value=Factor {c: negate}
+     */
     static const calc_typed_reducer typed_template = {
         .start = calc_typed_start,
         .add = calc_typed_add,
@@ -286,16 +301,69 @@ static calc_value calc_reduce(const calc_reduction *ctx, void *user, calc_error 
     }
 }
 
-static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode, double *out, char *message, size_t message_size)
+typedef struct calc_string_stream
+{
+    const char *source;
+    size_t length;
+    size_t offset;
+    size_t chunk_size;
+    int fail_after_chunks;
+} calc_string_stream;
+
+static int calc_string_stream_read(void *user, char *buffer, size_t capacity, size_t *read, calc_error *error)
+{
+    calc_string_stream *stream = (calc_string_stream *)user;
+    size_t remaining = 0;
+    size_t requested = 0;
+    if (read != NULL)
+    {
+        *read = 0;
+    }
+    if (stream == NULL || buffer == NULL || read == NULL)
+    {
+        snprintf(error->message, sizeof(error->message), "stream reader arguments are required");
+        return 0;
+    }
+    if (stream->fail_after_chunks == 0)
+    {
+        snprintf(error->message, sizeof(error->message), "stream reader failed");
+        return 0;
+    }
+    if (stream->fail_after_chunks > 0)
+    {
+        stream->fail_after_chunks--;
+    }
+    if (stream->offset >= stream->length)
+    {
+        return 1;
+    }
+    remaining = stream->length - stream->offset;
+    requested = stream->chunk_size == 0 ? capacity : stream->chunk_size;
+    if (requested > capacity)
+    {
+        requested = capacity;
+    }
+    if (requested > remaining)
+    {
+        requested = remaining;
+    }
+    memcpy(buffer, stream->source + stream->offset, requested);
+    stream->offset += requested;
+    *read = requested;
+    return 1;
+}
+
+static int calc_eval_stream(calc_demo *demo, calc_stream_read_fn read, void *reader, size_t read_buffer_size, size_t max_buffered_lexeme_bytes, calc_reducer_mode mode, double *out, char *message, size_t message_size)
 {
     calc_error error;
-    calc_scanner scanner;
-    calc_lexeme_source token_source;
+    calc_stream_scanner scanner;
+    calc_lexeme_source lexeme_source;
     calc_value value = NULL;
+    int ok = 0;
     error.message[0] = '\0';
-    calc_scanner_init(&scanner, source);
-    token_source.user = &scanner;
-    token_source.next = calc_scanner_source_next;
+    calc_stream_scanner_init_ex(&scanner, read, reader, read_buffer_size, max_buffered_lexeme_bytes);
+    lexeme_source.user = &scanner;
+    lexeme_source.next = calc_stream_scanner_lexeme_source_next;
     if (mode == CALC_REDUCER_TYPED)
     {
         /*
@@ -304,9 +372,10 @@ static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode
          * handwritten handlers. No boxed ctx->values indexing is needed here.
          */
         calc_typed_reducer typed = calc_make_direct_typed_reducer(demo);
-        if (!calc_parse_value_source_typed(&token_source, &typed, &value, &error))
+        if (!calc_parse_value_lexeme_source_typed(&lexeme_source, &typed, &value, &error))
         {
-            return demo_set_error(message, message_size, "parse failed: %s", error.message);
+            demo_set_error(message, message_size, "parse failed: %s", error.message);
+            goto cleanup;
         }
     }
     else if (mode == CALC_REDUCER_BOXED_TO_TYPED)
@@ -317,17 +386,45 @@ static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode
          */
         calc_boxed_typed_reducer boxed = {0};
         calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, demo);
-        if (!calc_parse_value_source_typed(&token_source, &typed, &value, &error))
+        if (!calc_parse_value_lexeme_source_typed(&lexeme_source, &typed, &value, &error))
         {
-            return demo_set_error(message, message_size, "parse failed: %s", error.message);
+            demo_set_error(message, message_size, "parse failed: %s", error.message);
+            goto cleanup;
         }
     }
-    else if (!calc_parse_value_source(&token_source, calc_reduce, demo, &value, &error))
+    else if (!calc_parse_value_lexeme_source(&lexeme_source, calc_reduce, demo, &value, &error))
     {
-        return demo_set_error(message, message_size, "parse failed: %s", error.message);
+        demo_set_error(message, message_size, "parse failed: %s", error.message);
+        goto cleanup;
     }
     *out = calc_value_as_number(value);
-    return 1;
+    ok = 1;
+
+cleanup:
+    calc_stream_scanner_free(&scanner);
+    return ok;
+}
+
+static int calc_eval_with_limits(calc_demo *demo, const char *source, size_t read_buffer_size, size_t max_buffered_lexeme_bytes, calc_reducer_mode mode, double *out, char *message, size_t message_size)
+{
+    calc_string_stream stream;
+    stream.source = source;
+    stream.length = strlen(source);
+    stream.offset = 0;
+    stream.chunk_size = read_buffer_size == 0 ? 4096 : read_buffer_size;
+    stream.fail_after_chunks = -1;
+    return calc_eval_stream(demo, calc_string_stream_read, &stream, read_buffer_size, max_buffered_lexeme_bytes, mode, out, message, message_size);
+}
+
+static int calc_eval(calc_demo *demo, const char *source, calc_reducer_mode mode, double *out, char *message, size_t message_size)
+{
+    /*
+     * The demo drives the parser through the stream scanner even when the
+     * sample has already been read for reporting. Production code can replace
+     * calc_string_stream_read with FILE, stdin, pipe, editor-buffer, or virtual
+     * file callbacks while preserving the same calc_lexeme_source parser path.
+     */
+    return calc_eval_with_limits(demo, source, 16, 1048576, mode, out, message, message_size);
 }
 
 static int calc_close_enough(double actual, double expected)
@@ -353,6 +450,11 @@ static int calc_run_assertions(char *message, size_t message_size)
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "calculator assertion failed, got %.6f", value);
     }
+    if (!calc_eval_with_limits(&demo, "1 + 2 * (3 - 4.5)", 1, 1048576, CALC_REDUCER_TYPED, &value, message, message_size) || !calc_close_enough(value, -2.0))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "chunked stream assertion failed, got %.6f", value);
+    }
     if (!calc_eval(&demo, "7.5/2.5", CALC_REDUCER_BOXED, &value, message, message_size) || !calc_close_enough(value, 3.0))
     {
         demo_arena_free(&demo.arena);
@@ -377,6 +479,34 @@ static int calc_run_assertions(char *message, size_t message_size)
     {
         demo_arena_free(&demo.arena);
         return demo_set_error(message, message_size, "expected source parser failure");
+    }
+    if (calc_eval_with_limits(&demo, "123", 1, 2, CALC_REDUCER_TYPED, &value, message, message_size))
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "expected stream buffered-lexeme failure");
+    }
+    if (strstr(message, "buffered lexeme exceeds") == NULL)
+    {
+        demo_arena_free(&demo.arena);
+        return demo_set_error(message, message_size, "wrong stream buffered-lexeme error");
+    }
+    {
+        calc_string_stream failing;
+        failing.source = "1 + ";
+        failing.length = strlen(failing.source);
+        failing.offset = 0;
+        failing.chunk_size = 1;
+        failing.fail_after_chunks = 3;
+        if (calc_eval_stream(&demo, calc_string_stream_read, &failing, 1, 1048576, CALC_REDUCER_TYPED, &value, message, message_size))
+        {
+            demo_arena_free(&demo.arena);
+            return demo_set_error(message, message_size, "expected stream reader failure");
+        }
+        if (strstr(message, "stream reader failed") == NULL)
+        {
+            demo_arena_free(&demo.arena);
+            return demo_set_error(message, message_size, "wrong stream reader failure message");
+        }
     }
     demo_arena_free(&demo.arena);
     if (calc_tokenize("1@", &tokens, &count, &error))

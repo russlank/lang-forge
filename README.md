@@ -1,8 +1,12 @@
 # LangForge
 
-[![Latest Release](https://img.shields.io/badge/release-latest-blue)](https://github.com/russlank/lang-forge/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/russlank/lang-forge?label=release)](https://github.com/russlank/lang-forge/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-%23FFDD00.svg?&style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/russlank)
+![Target: Go](https://img.shields.io/badge/target-Go-00ADD8?logo=go&logoColor=white)
+![Target: C#](https://img.shields.io/badge/target-C%23-512BD4?logo=csharp&logoColor=white)
+![Target: C](https://img.shields.io/badge/target-C-A8B9CC?logo=c&logoColor=111111)
+![Target: C++](https://img.shields.io/badge/target-C%2B%2B-00599C?logo=cplusplus&logoColor=white)
 
 **LangForge is a scanner/parser generator for building DSLs, validators,
 transpilers, compilers, code generators, and language tooling from one readable
@@ -87,7 +91,7 @@ positions such as `ctx.Values[0]` and `ctx.Values[2]`.
 
 ```text
 source text
-  -> generated scanner / token source
+  -> generated scanner / lexeme source
   -> generated LR parser
   -> typed reducer
   -> AST / model / command / report
@@ -106,7 +110,7 @@ inspection.
 - LR parser modes: SLR(1), LALR(1), IELR(1), and canonical LR(1).
 - Named grammar values such as `left=Expr` and `right=Term`.
 - Typed reducer contexts/adapters instead of manual parser-stack indexing.
-- Pull-based token-source parsing for lazy scanner-to-parser pipelines.
+- Pull-based lexeme-source parsing for lazy scanner-to-parser pipelines.
 - Parser error recovery with expected-token diagnostics.
 - Deterministic `langforge.actions.json` action manifests.
 - Copyable mini-compiler, library-style DSL, and modern C#/C++ layered templates.
@@ -153,6 +157,7 @@ current development workspace uses `/usr/local/go/bin/go`.
 | See parser recovery | [examples/go/parser-recovery](examples/go/parser-recovery) |
 | See a renderer-style language | [examples/go/draw](examples/go/draw) |
 | Compare target languages | [examples](examples) |
+| Understand automata and generated tables | [doc/automata-and-tables.md](doc/automata-and-tables.md) |
 | Understand generated semantics | [doc/generated-code-and-semantics.md](doc/generated-code-and-semantics.md) |
 | Understand handwritten integration | [doc/handwritten-integration-guide.md](doc/handwritten-integration-guide.md) |
 
@@ -204,9 +209,10 @@ grammars can select other algorithms:
 - `%type canonical` for canonical LR(1).
 
 LR(0) item sets are part of the implementation and documentation, even when
-the selected parser table uses a lookahead-aware algorithm. See
-[Parser algorithms](doc/parser-algorithms.md) for worked examples, automata
-shape, conflict behavior, and when to choose each mode.
+the selected parser table uses a lookahead-aware algorithm. Start with
+[Automata and driving tables](doc/automata-and-tables.md) for visual boxes and
+tables, then read [Parser algorithms](doc/parser-algorithms.md) for worked
+examples, automata shape, conflict behavior, and when to choose each mode.
 
 ## Error Recovery And Diagnostics
 
@@ -392,7 +398,7 @@ layouts.
 - Example parity gates comparing grammar shape and action-manifest contracts
   across Go, C#, C, and C++.
 - Generated Go, C#, C, and C++ scanner/parser backends with UTF-8 checking,
-  reducer hooks, semantic action IDs/enums, and token-source parsing.
+  reducer hooks, semantic action IDs/enums, and lexeme-source parsing.
 - Validation for empty-matching lexer rules, token/nonterminal name collisions,
   parser conflicts, invalid Unicode scalar ranges, and unsupported scanner
   settings.
@@ -414,7 +420,7 @@ layouts.
 - Scanners default to checked UTF-8 and sparse Unicode scalar ranges for the
   in-process engine plus generated Go, C#, C, and C++ output. See
   [Scanner encoding architecture](doc/encoding.md).
-- Pull-based token sources are the preferred production API. Older collection
+- Pull-based lexeme sources are the preferred production API. Older collection
   APIs such as `Tokenize`, `All`, `Parse(tokens, ...)`, and target equivalents
   remain supported for tests, debugging, token reports, and simple examples.
 - Specs can use reducer callbacks with generated action IDs/enums across all
@@ -436,8 +442,6 @@ Reusable Codex skills for LangForge live under [skills](skills):
 
 - `langforge-spec-authoring` for `.lf` and legacy `.l`/`.y` grammar work.
 - `langforge-example-runner` for generated example projects and demo runs.
-- `langforge-project-steward` for reviews, hardening, and project-memory
-  updates when private notes are present.
 
 ## License
 

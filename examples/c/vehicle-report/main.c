@@ -124,24 +124,24 @@ static vehicle_report_value vehicle_reduce(const vehicle_report_reduction *ctx, 
     }
 }
 
-static int vehicle_parse_source(vehicle_demo *demo, const char *source, vehicle_reducer_mode mode, char *message, size_t message_size) {
+static int vehicle_parse_lexeme_source(vehicle_demo *demo, const char *source, vehicle_reducer_mode mode, char *message, size_t message_size) {
     vehicle_report_error error;
     vehicle_report_scanner scanner;
-    vehicle_report_lexeme_source token_source;
+    vehicle_report_lexeme_source lexeme_source;
     int parsed = 0;
     error.message[0] = '\0';
     if (!demo_text_append(&demo->report, "Vehicle report C generated-parser demo\n", message, message_size)) {
         return 0;
     }
     vehicle_report_scanner_init(&scanner, source);
-    token_source.user = &scanner;
-    token_source.next = vehicle_report_scanner_source_next;
+    lexeme_source.user = &scanner;
+    lexeme_source.next = vehicle_report_scanner_lexeme_source_next;
     if (mode == VEHICLE_REDUCER_TYPED) {
         vehicle_report_boxed_typed_reducer boxed = {0};
         vehicle_report_typed_reducer typed = vehicle_report_typed_reducer_from_boxed(&boxed, vehicle_reduce, demo);
-        parsed = vehicle_report_parse_value_source_typed(&token_source, &typed, NULL, &error);
+        parsed = vehicle_report_parse_value_lexeme_source_typed(&lexeme_source, &typed, NULL, &error);
     } else {
-        parsed = vehicle_report_parse_value_source(&token_source, vehicle_reduce, demo, NULL, &error);
+        parsed = vehicle_report_parse_value_lexeme_source(&lexeme_source, vehicle_reduce, demo, NULL, &error);
     }
     if (!parsed) {
         return demo_set_error(message, message_size, "parse failed: %s", error.message);
@@ -155,7 +155,7 @@ static int vehicle_run_assertions(const char *source, char *message, size_t mess
     vehicle_report_error error;
     vehicle_report_lexeme *tokens = NULL;
     size_t count = 0;
-    if (!vehicle_parse_source(&demo, source, VEHICLE_REDUCER_TYPED, message, message_size)) {
+    if (!vehicle_parse_lexeme_source(&demo, source, VEHICLE_REDUCER_TYPED, message, message_size)) {
         demo_text_free(&demo.report);
         demo_arena_free(&demo.arena);
         return 0;
@@ -167,7 +167,7 @@ static int vehicle_run_assertions(const char *source, char *message, size_t mess
     }
     demo_text_free(&demo.report);
     demo_arena_free(&demo.arena);
-    if (!vehicle_parse_source(&boxed_demo, source, VEHICLE_REDUCER_BOXED, message, message_size) ||
+    if (!vehicle_parse_lexeme_source(&boxed_demo, source, VEHICLE_REDUCER_BOXED, message, message_size) ||
         !boxed_demo.saw_model || !boxed_demo.saw_license || !boxed_demo.saw_distance ||
         boxed_demo.features != 4 || boxed_demo.repairs != 3) {
         demo_text_free(&boxed_demo.report);
@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
         demo_free_buffer(&source);
         return 1;
     }
-    if (!vehicle_parse_source(&demo, source.data, boxed_mode ? VEHICLE_REDUCER_BOXED : VEHICLE_REDUCER_TYPED, message, sizeof(message)) ||
+    if (!vehicle_parse_lexeme_source(&demo, source.data, boxed_mode ? VEHICLE_REDUCER_BOXED : VEHICLE_REDUCER_TYPED, message, sizeof(message)) ||
         !demo_write_text(log_path, demo.report.data, message, sizeof(message))) {
         fprintf(stderr, "%s\n", message);
         demo_free_buffer(&source);

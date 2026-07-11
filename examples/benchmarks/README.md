@@ -51,50 +51,68 @@ being debugged.
 
 Go benchmark names use this matrix-style vocabulary:
 
-- `BenchmarkScanner/StreamingNext`: repeatedly pulls tokens with
+- `BenchmarkScanner/StringScannerNext`: repeatedly pulls lexemes with
   `Scanner.Next`.
-- `BenchmarkScanner/MaterializeAll`: tokenizes the full source with
+- `BenchmarkScanner/StringScannerMaterializeAll`: tokenizes the full source with
   `Scanner.All`.
-- `BenchmarkCalcParse/ParseFromSource/TypedReducer`: parses source text with a
+- `BenchmarkScanner/ReaderScannerNext`: repeatedly pulls lexemes from an
+  `io.Reader`-backed scanner.
+- `BenchmarkCalcParse/ParseFromStringScanner/TypedReducer`: parses source text with a
   generated scanner feeding the parser directly, using typed reducer adapters.
-- `BenchmarkCalcParse/ParsePreTokenized/TypedReducer`: parses an existing token
-  slice prepared before the timed loop, using typed reducer adapters.
-- `BenchmarkCalcParse/ParseFromSource/BoxedReducer`: same source parser path,
+- `BenchmarkCalcParse/ParseFromReaderScanner/TypedReducer`: parses from a
+  reader-backed scanner, including reader construction and buffered reads,
+  using typed reducer adapters.
+- `BenchmarkCalcParse/ParsePreTokenized/TypedReducer`: parses an existing lexeme
+  collection prepared before the timed loop, using typed reducer adapters.
+- `BenchmarkCalcParse/ParseFromStringScanner/BoxedReducer`: same source parser path,
   but with a boxed reducer map.
+- `BenchmarkCalcParse/ParseFromReaderScanner/BoxedReducer`: same reader-backed parser
+  path, but with boxed reducer handlers.
 - `BenchmarkCalcParse/ParsePreTokenized/BoxedReducer`: parser/reducer cost over
-  an existing token slice with boxed reducer handlers.
-- `BenchmarkDrawParse/ParseFromSource/BuildAST`: parses a large DRAW source
+  an existing lexeme collection with boxed reducer handlers.
+- `BenchmarkDrawParse/ParseFromStringScanner/BuildAST`: parses a large DRAW source
   through the handwritten AST-building facade.
-- `BenchmarkRecoveryParse/ParseFromSource`: runs recovering parse diagnostics
+- `BenchmarkRecoveryParse/ParseFromStringScanner`: runs recovering parse diagnostics
   from source.
 - `BenchmarkRecoveryParse/ParsePreTokenized`: runs recovering parse diagnostics
-  over an existing token slice.
+  over an existing lexeme collection.
 
 C# BenchmarkDotNet classes follow the same model:
 
-- `ScannerBenchmarks.StreamingNext`
-- `ScannerBenchmarks.MaterializeAll`
-- `CalcParseBenchmarks.ParseFromSource_TypedReducer`
+- `ScannerBenchmarks.StringScannerNext`
+- `ScannerBenchmarks.StringScannerMaterializeAll`
+- `ScannerBenchmarks.TextReaderScannerNext`
+- `CalcParseBenchmarks.ParseFromStringScanner_TypedReducer`
+- `CalcParseBenchmarks.ParseFromTextReaderScanner_TypedReducer`
 - `CalcParseBenchmarks.ParsePreTokenized_TypedReducer`
-- `CalcParseBenchmarks.ParseFromSource_BoxedReducer`
+- `CalcParseBenchmarks.ParseFromStringScanner_BoxedReducer`
+- `CalcParseBenchmarks.ParseFromTextReaderScanner_BoxedReducer`
 - `CalcParseBenchmarks.ParsePreTokenized_BoxedReducer`
-- `DrawParseBenchmarks.ParseFromSource_BuildAst`
-- `RecoveryParseBenchmarks.ParseFromSource`
+- `DrawParseBenchmarks.ParseFromStringScanner_BuildAst`
+- `RecoveryParseBenchmarks.ParseFromStringScanner`
 - `RecoveryParseBenchmarks.ParsePreTokenized`
 
 Recognition-only parser benchmarks are intentionally left as TODOs until the
 generated APIs expose a clean no-reducer/no-AST path that does not let semantic
 work dominate the timing.
 
-## Source And Token Terminology
+## Source And Lexeme Terminology
 
-`ParseFromSource` includes scanner/token-source work in the timed operation:
+`ParseFromStringScanner` includes scanner/lexeme-source work in the timed operation:
 
 ```text
-source text -> generated scanner/token source -> parser -> reducer/facade
+source text -> generated scanner/lexeme source -> parser -> reducer/facade
 ```
 
-`ParsePreTokenized` materializes tokens before the timed loop:
+`ParseFromReaderScanner` and `ParseFromTextReaderScanner` use the same synchronous pull
+parser path, but the scanner fills its buffer from `io.Reader`/`TextReader`.
+Those benchmarks include reader construction plus buffered reads:
+
+```text
+reader/text reader -> generated reader-backed scanner -> parser -> reducer/facade
+```
+
+`ParsePreTokenized` materializes lexemes before the timed loop:
 
 ```text
 source text -> tokens outside benchmark
@@ -316,13 +334,13 @@ and DRAW large-source AST construction.
 
 ## Pre-Tokenized Parse Notes
 
-The Go `ParsePreTokenized` benchmarks use token slices prepared before the
+The Go `ParsePreTokenized` benchmarks use lexeme slices prepared before the
 timed loop. The generated collection API adapts that existing slice through a
-small pull-based token source, so it does not tokenize or copy the full slice in
+small pull-based lexeme source, so it does not tokenize or copy the full slice in
 the timed operation.
 
 On some machines or short runs, `ParsePreTokenized` can still appear slower
-than `ParseFromSource`. Treat that as a signal to rerun with stable settings
+than `ParseFromStringScanner`. Treat that as a signal to rerun with stable settings
 before drawing conclusions:
 
 ```sh

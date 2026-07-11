@@ -34,10 +34,15 @@ public sealed class MiniCompilerParser : IMiniCompilerParser
     /// <inheritdoc />
     public ParseResult<ProgramNode> Parse(string source)
     {
+        // Grammar-to-code map for readers:
+        // grammar.lf declares action labels such as {csharp: print} and
+        // {csharp: add}. ReducerFactory maps those generated SemanticAction
+        // values to typed handlers. This facade keeps that generated contract
+        // private and returns ProgramNode plus diagnostics to application code.
         try
         {
             var parser = new Parser(reducers);
-            var result = parser.ParseRecoveringSource(new Scanner(source));
+            var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
             if (!result.Accepted || result.Diagnostics.Count != 0)
             {
                 return ParseResult<ProgramNode>.Fail(DiagnosticFormatter.Format(result.Diagnostics), result.Value as ProgramNode);

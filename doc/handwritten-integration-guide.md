@@ -4,7 +4,7 @@ Document id: `lang-forge-handwritten-integration-guide-v1`
 
 Status: `active`
 
-Last updated: `2026-07-09`
+Last updated: `2026-07-10`
 
 Owner: `Project maintainers`
 
@@ -163,7 +163,7 @@ separate in code and diagnostics:
 
 ```text
 source text
-  -> scanner/token source
+  -> scanner/lexeme source
        lexical errors: invalid byte/rune, unmatched character, unterminated literal
   -> parser
        syntax diagnostics: unexpected token, expected-token set, recovery action
@@ -223,17 +223,23 @@ The preferred production path is source-based parsing:
 source text -> generated scanner.Next() -> generated parser -> reducers
 ```
 
-The parser pulls one token at a time from the scanner or token source. This
+The parser pulls one token at a time from the scanner or lexeme source. This
 avoids building a complete token list for normal use, and it keeps scanner
 errors in the same flow as parser and reducer errors.
 
 Generated scanners can start from in-memory source text or from target-native
-demand-fed input. Go exposes `NewScannerFromReader`; C# exposes
+demand-fed input. Go exposes `NewReaderScanner`; C# exposes
 `Scanner.FromTextReader` and `Scanner.FromStream`; C exposes
 `*_stream_scanner` with a read callback and `*_stream_scanner_free`; C++
-exposes `StreamScanner` over `std::istream`. This lets a facade pull source
+exposes `InputStreamScanner` over `std::istream`. This lets a facade pull source
 text on demand from files, stdin, virtual sources, or large inputs while the
-parser still sees the same token-source shape.
+parser still sees the same lexeme-source shape.
+
+For reusable libraries, make the reader/stream overload the production-facing
+entry point when the target ecosystem expects it. Keep string overloads as
+convenience wrappers, and keep token-list overloads for token inspection,
+debugging, tests, or callers that already own a token collection. The calc
+examples demonstrate this compactly for Go, C#, C, and C++.
 
 Token collections are still useful when you want to inspect, snapshot, filter,
 or test the token stream:
@@ -248,25 +254,25 @@ Use this rule of thumb:
 |---|---|
 | `Tokenize` / scanner `All` | You want to inspect or snapshot tokens before parsing. |
 | `Parse(tokens)` | You already have a token collection and only need syntax validation. |
-| `ParseFromSource(source)` | You only need syntax validation and want the parser to pull tokens lazily. |
+| `ParseFromLexemeSource(source)` | You only need syntax validation and want the parser to pull tokens lazily. |
 | `ParseValue(tokens)` | You already have tokens and want the final semantic value through the parser's configured reducer/default reducer path. |
-| `ParseValueFromSource(source)` | You want a final semantic value from a pull token source. |
+| `ParseValueFromLexemeSource(source)` | You want a final semantic value from a pull lexeme source. |
 | `ParseWithReducer(tokens, reducer)` | You already have tokens and need custom semantics; useful for tests and debugging. |
-| `ParseWithReducerFromSource(source, reducer)` | Preferred production reducer path for Go/C# convenience APIs. |
+| `ParseWithReducerFromLexemeSource(source, reducer)` | Preferred production reducer path for Go/C# convenience APIs. |
 | `ParseRecovering(tokens)` | You already have tokens and want multiple syntax diagnostics or a partial result. |
-| `ParseRecoveringFromSource(source)` | Preferred recovery path when reading directly from a scanner/source. |
+| `ParseRecoveringFromLexemeSource(source)` | Preferred recovery path when reading directly from a scanner/source. |
 
 Target naming follows each language:
 
-- Go uses `TokenSource`, `ParseFromSource`, `ParseValueFromSource`,
-  `ParseWithReducerFromSource`, and `ParseRecoveringFromSource`.
+- Go uses `LexemeSource`, `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
+  `ParseWithReducerFromLexemeSource`, and `ParseRecoveringFromLexemeSource`.
 - C# uses `ILexemeSource`, static convenience methods such as
-  `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducers)`, and
+  `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducers)`, and
   instance methods such as
-  `new Parser(reducers).ParseRecoveringSource(new Scanner(sourceText))`.
+  `new Parser(reducers).ParseRecoveringLexemeSource(new Scanner(sourceText))`.
 - C uses a `<prefix>_lexeme_source` callback struct and functions such as
-  `<prefix>_parse_source`, `<prefix>_parse_value_source_typed`, and
-  `<prefix>_parse_recovering_source`.
+  `<prefix>_parse_lexeme_source`, `<prefix>_parse_value_lexeme_source_typed`, and
+  `<prefix>_parse_recovering_lexeme_source`.
 - C++ uses `LexemeSource&` overloads such as `parse_value(scanner, reducers)`
   and `parse_recovering(scanner)`.
 
@@ -484,7 +490,7 @@ func New() *Parser {
 }
 
 func (p *Parser) Eval(source string) (float64, error) {
-	value, err := calc.ParseWithReducerFromSource(
+	value, err := calc.ParseWithReducerFromLexemeSource(
 		calc.NewScanner(source),
 		calc.ReducerFunc(semantics.Reduce),
 	)
@@ -504,7 +510,7 @@ when the generated package does not exist yet.
 Generated C# code exposes:
 
 - `new Scanner(source)` as an `ILexemeSource`;
-- `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducerMap)`;
+- `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducerMap)`;
 - `Scanner.Tokenize(source)` and `Parser.ParseWithReducer(tokens, reducerMap)`
   as compatibility/debugging helpers;
 - `SemanticAction` enum values;
@@ -576,7 +582,7 @@ public sealed class CalcParser : ICalcParser
 
     public double Evaluate(string source)
     {
-        return (double)Parser.ParseWithReducerFromSource(
+        return (double)Parser.ParseWithReducerFromLexemeSource(
             new Scanner(source),
             reducers)!;
     }
@@ -606,7 +612,7 @@ The concrete facade keeps generated scanner/parser details inside
 public ParseResult<ProgramNode> Parse(string source)
 {
     var parser = new Parser(reducers);
-    var result = parser.ParseRecoveringSource(new Scanner(source));
+    var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
     // Convert generated diagnostics/final values into domain ParseResult<T>.
 }
 ```
@@ -677,11 +683,11 @@ the generated API includes names such as:
 
 - `calc_tokenize`;
 - `calc_parse_value`;
-- `calc_parse_value_source`;
+- `calc_parse_value_lexeme_source`;
 - `calc_parse_value_typed`;
-- `calc_parse_value_source_typed`;
+- `calc_parse_value_lexeme_source_typed`;
 - `calc_lexeme_source`;
-- `calc_scanner_source_next`;
+- `calc_scanner_lexeme_source_next`;
 - `calc_reduction`;
 - `calc_typed_reducer`;
 - `calc_typed_reducer_from_boxed`;
@@ -760,11 +766,11 @@ int calc_eval_text(const char *source, double *out, char *message, size_t messag
 
     calc_scanner_init(&scanner, source);
     source_reader.user = &scanner;
-    source_reader.next = calc_scanner_source_next;
+    source_reader.next = calc_scanner_lexeme_source_next;
 
     calc_boxed_typed_reducer boxed = {0};
     calc_typed_reducer typed = calc_typed_reducer_from_boxed(&boxed, calc_reduce, &ctx);
-    if (!calc_parse_value_source_typed(&source_reader, &typed, &value, &error)) {
+    if (!calc_parse_value_lexeme_source_typed(&source_reader, &typed, &value, &error)) {
         snprintf(message, message_size, "parse failed: %s", error.message);
         app_arena_destroy(ctx.arena);
         return 0;
@@ -817,7 +823,7 @@ The important transfer is in the facade:
 dsl_parse_result result;
 dsl_parse_result_init(&result);
 
-if (dsl_parse_source(source, &result)) {
+if (dsl_parse_lexeme_source(source, &result)) {
     /*
      * result.document owns every AST node and copied token string created by
      * reducer actions. Application code may inspect it until free.
@@ -827,7 +833,7 @@ if (dsl_parse_source(source, &result)) {
 dsl_parse_result_free(&result);
 ```
 
-On failure, `dsl_parse_source` formats generated diagnostics or reducer errors
+On failure, `dsl_parse_lexeme_source` formats generated diagnostics or reducer errors
 into `result.message` and frees partial semantic values before returning. On
 success, `dsl_parse_result_free` releases the final document and all semantic
 memory. That pattern is usually clearer than asking each reducer branch to know
@@ -985,7 +991,7 @@ For a command-line tool, it is acceptable for `main` to call generated APIs
 directly:
 
 ```text
-read file -> Scanner.Next -> Parser.ParseWithReducerFromSource -> print report
+read file -> Scanner.Next -> Parser.ParseWithReducerFromLexemeSource -> print report
 ```
 
 For a library, keep generated types behind a stable boundary:
@@ -1023,7 +1029,7 @@ type QueryParser struct{}
 type PolicyParser struct{}
 
 func (QueryParser) Parse(source string) (*query.Model, error) {
-	value, err := querygen.ParseWithReducerFromSource(
+	value, err := querygen.ParseWithReducerFromLexemeSource(
 		querygen.NewScanner(source),
 		querygen.ReducerFunc(querysem.Reduce),
 	)
@@ -1034,7 +1040,7 @@ func (QueryParser) Parse(source string) (*query.Model, error) {
 }
 
 func (PolicyParser) Parse(source string) (*policy.Model, error) {
-	value, err := policygen.ParseWithReducerFromSource(
+	value, err := policygen.ParseWithReducerFromLexemeSource(
 		policygen.NewScanner(source),
 		policygen.ReducerFunc(policysem.Reduce),
 	)
@@ -1074,11 +1080,11 @@ Use distinct prefixes:
 Then generated names stay separate:
 
 ```c
-query_scanner_source_next(...);
-query_parse_value_source(...);
+query_scanner_lexeme_source_next(...);
+query_parse_value_lexeme_source(...);
 
-policy_scanner_source_next(...);
-policy_parse_value_source(...);
+policy_scanner_lexeme_source_next(...);
+policy_parse_value_lexeme_source(...);
 ```
 
 ### C++

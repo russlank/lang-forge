@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using CalcLexeme = LangForge.Examples.Calc.Generated.Lexeme;
@@ -39,14 +40,17 @@ internal static class BenchmarkWorkloads
             generatedAt = DateTimeOffset.UtcNow,
             workloads = new[]
             {
-                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.StreamingNext), CalcLargeSource, CalcLargeTokens.Count, "Streaming scanner.Next over the calc fixture."),
-                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.MaterializeAll), CalcLargeSource, CalcLargeTokens.Count, "Materializes all calc tokens."),
-                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromSource_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "Source parse includes scanner/token-source work and typed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.StringScannerNext), CalcLargeSource, CalcLargeTokens.Count, "Streaming scanner.Next over the calc fixture with an in-memory string scanner."),
+                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.StringScannerMaterializeAll), CalcLargeSource, CalcLargeTokens.Count, "Materializes all calc lexemes from an in-memory string scanner."),
+                WorkloadMetric.ForSource(nameof(ScannerBenchmarks), nameof(ScannerBenchmarks.TextReaderScannerNext), CalcLargeSource, CalcLargeTokens.Count, "Streaming scanner.Next from a TextReader-backed scanner."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromStringScanner_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "String-scanner parse includes scanner/lexeme-source work and typed reducer handlers."),
                 WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParsePreTokenized_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "Pre-tokenized parse uses tokens prepared outside the timed operation and typed reducer handlers."),
-                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromSource_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "Source parse includes scanner/token-source work and boxed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromStringScanner_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "String-scanner parse includes scanner/lexeme-source work and boxed reducer handlers."),
                 WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParsePreTokenized_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "Pre-tokenized parse uses tokens prepared outside the timed operation and boxed reducer handlers."),
-                WorkloadMetric.ForSource(nameof(DrawParseBenchmarks), nameof(DrawParseBenchmarks.ParseFromSource_BuildAst), DrawLargeSource, null, "Source parse through the DRAW handwritten AST-building facade."),
-                WorkloadMetric.ForSource(nameof(RecoveryParseBenchmarks), nameof(RecoveryParseBenchmarks.ParseFromSource), RecoveryLargeSource, RecoveryLargeTokens.Count, "Recovering source parse over malformed recovery fixture."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromTextReaderScanner_TypedReducer), CalcLargeSource, CalcLargeTokens.Count, "TextReader-backed scanner parse includes reader buffering, scanner/lexeme-source work, and typed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(CalcParseBenchmarks), nameof(CalcParseBenchmarks.ParseFromTextReaderScanner_BoxedReducer), CalcLargeSource, CalcLargeTokens.Count, "TextReader-backed scanner parse includes reader buffering, scanner/lexeme-source work, and boxed reducer handlers."),
+                WorkloadMetric.ForSource(nameof(DrawParseBenchmarks), nameof(DrawParseBenchmarks.ParseFromStringScanner_BuildAst), DrawLargeSource, null, "String-scanner parse through the DRAW handwritten AST-building facade."),
+                WorkloadMetric.ForSource(nameof(RecoveryParseBenchmarks), nameof(RecoveryParseBenchmarks.ParseFromStringScanner), RecoveryLargeSource, RecoveryLargeTokens.Count, "Recovering string-scanner parse over malformed recovery fixture."),
                 WorkloadMetric.ForSource(nameof(RecoveryParseBenchmarks), nameof(RecoveryParseBenchmarks.ParsePreTokenized), RecoveryLargeSource, RecoveryLargeTokens.Count, "Recovering parse over tokens prepared outside the timed operation."),
             },
         };
@@ -60,17 +64,18 @@ internal static class BenchmarkWorkloads
 
     public static void ValidateFixtures()
     {
-        _ = CalcParseFromSource(CalcTypedReducer);
+        _ = CalcParseFromStringScanner(CalcTypedReducer);
+        _ = CalcParseFromTextReaderScanner(CalcTypedReducer);
         _ = CalcParsePreTokenized(CalcBoxedReducer);
-        _ = DrawParseFromSource();
-        var diagnostics = RecoveryParseFromSource();
+        _ = DrawParseFromStringScanner();
+        var diagnostics = RecoveryParseFromStringScanner();
         if (diagnostics == 0)
         {
             throw new InvalidOperationException("recovery benchmark fixture should produce diagnostics");
         }
     }
 
-    public static int ScanStreamingNext()
+    public static int ScanStringScannerNext()
     {
         var scanner = new CalcScanner(CalcLargeSource);
         var count = 0;
@@ -81,33 +86,55 @@ internal static class BenchmarkWorkloads
         return count;
     }
 
-    public static int ScanMaterializeAll()
+    public static int ScanStringScannerMaterializeAll()
     {
         return CalcScanner.Tokenize(CalcLargeSource).Count;
     }
 
-    public static double CalcParseFromSource(CalcReducer reducer)
+    public static int ScanTextReaderScannerNext()
     {
-        // ParseFromSource includes tokenization in the measured operation:
-        // source text -> generated scanner/token source -> parser -> reducer.
-        return RequireDouble(CalcParser.ParseWithReducerFromSource(new CalcScanner(CalcLargeSource), reducer));
+        using var reader = new StringReader(CalcLargeSource);
+        using var scanner = CalcScanner.FromTextReader(reader);
+        var count = 0;
+        while (scanner.Next(out _))
+        {
+            count++;
+        }
+        return count;
+    }
+
+    public static double CalcParseFromStringScanner(CalcReducer reducer)
+    {
+        // ParseFromStringScanner includes scanning in the measured operation:
+        // source text -> generated string scanner -> parser lexeme source -> reducer.
+        return RequireDouble(CalcParser.ParseWithReducerFromLexemeSource(new CalcScanner(CalcLargeSource), reducer));
+    }
+
+    public static double CalcParseFromTextReaderScanner(CalcReducer reducer)
+    {
+        // ParseFromTextReaderScanner uses the same synchronous pull parser path, but
+        // the scanner fills its buffer from a TextReader. The benchmark includes
+        // reader construction, buffered reads, parsing, and reducer work.
+        using var reader = new StringReader(CalcLargeSource);
+        using var scanner = CalcScanner.FromTextReader(reader);
+        return RequireDouble(CalcParser.ParseWithReducerFromLexemeSource(scanner, reducer));
     }
 
     public static double CalcParsePreTokenized(CalcReducer reducer)
     {
         // ParsePreTokenized uses tokens materialized before the benchmark, so
-        // it measures parser/reducer cost over an existing token collection.
+        // it measures parser/reducer cost over an existing lexeme collection.
         return RequireDouble(CalcParser.ParseWithReducer(CalcLargeTokens, reducer));
     }
 
-    public static int DrawParseFromSource()
+    public static int DrawParseFromStringScanner()
     {
         return DrawParser.Parse(DrawLargeSource).Statements.Count;
     }
 
-    public static int RecoveryParseFromSource()
+    public static int RecoveryParseFromStringScanner()
     {
-        var result = RecoveryParser.ParseRecoveringFromSource(new RecoveryScanner(RecoveryLargeSource));
+        var result = RecoveryParser.ParseRecoveringFromLexemeSource(new RecoveryScanner(RecoveryLargeSource));
         RequireRecoveryResult(result);
         return result.Diagnostics.Count;
     }

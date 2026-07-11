@@ -19,11 +19,20 @@ shared valid fixtures under `examples/testdata`. For a smaller copyable starter
 project, use `examples/templates/go/mini-compiler`. For reusable parser
 library code, use `examples/templates/go/library-dsl`.
 
-Go examples prefer `ParseWithReducerFromSource(new Scanner(...), reducers)` or
-`ParseRecoveringFromSource(new Scanner(...))` in production paths. Token slices
-from `Tokenize` are kept for tests and inspection. Normal reducer failures
-return `error`; reusable examples keep generated packages behind parser
-facades and do not use `panic` for user-input failures.
+Go examples prefer `ParseWithReducerFromLexemeSource(calc.NewScanner(source), reducers)`
+or `ParseRecoveringFromLexemeSource(recovery.NewScanner(source))` for
+in-memory text, and `NewReaderScanner(reader, ...)` when reading from files,
+stdin, pipes, or virtual sources. Token slices from `Tokenize` are kept for
+tests and inspection. Normal reducer failures return `error`; reusable
+examples keep generated packages behind parser facades and do not use `panic`
+for user-input failures.
+
+Read the Go examples in this order when learning:
+
+1. `*.lf` for the grammar contract.
+2. `semantics/reducer.go` or `parser.go` for action-label handling.
+3. `cmd/*/main.go` for the thin demo entrypoint.
+4. `generated/` after `make generate` for scanner/parser table output.
 
 For the recommended handwritten Go reducer, parser facade, reusable library,
 and multi-parser shapes, read

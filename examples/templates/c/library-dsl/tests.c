@@ -16,7 +16,7 @@ static int test_successful_parse(char *message, size_t size) {
     const dsl_entry *third = NULL;
     dsl_parse_result_init(&result);
 
-    if (!dsl_parse_source(source, &result)) {
+    if (!dsl_parse_lexeme_source(source, &result)) {
         snprintf(message, size, "expected valid source, got: %.460s", result.message);
         dsl_parse_result_free(&result);
         return 0;
@@ -53,7 +53,7 @@ static int test_syntax_error(char *message, size_t size) {
     dsl_parse_result result;
     dsl_parse_result_init(&result);
 
-    if (dsl_parse_source("set retries = ;", &result)) {
+    if (dsl_parse_lexeme_source("set retries = ;", &result)) {
         dsl_parse_result_free(&result);
         return fail(message, size, "expected syntax error");
     }
@@ -71,7 +71,7 @@ static int test_reducer_error(char *message, size_t size) {
     dsl_parse_result result;
     dsl_parse_result_init(&result);
 
-    if (dsl_parse_source("set retries = 999999999999999999999999;", &result)) {
+    if (dsl_parse_lexeme_source("set retries = 999999999999999999999999;", &result)) {
         dsl_parse_result_free(&result);
         return fail(message, size, "expected reducer error");
     }
@@ -90,7 +90,7 @@ static int test_cleanup_is_idempotent(char *message, size_t size) {
     dsl_parse_result result;
     dsl_parse_result_init(&result);
 
-    if (!dsl_parse_source("enable audit;", &result)) {
+    if (!dsl_parse_lexeme_source("enable audit;", &result)) {
         snprintf(message, size, "expected cleanup fixture to parse: %.460s", result.message);
         dsl_parse_result_free(&result);
         return 0;

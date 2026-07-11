@@ -16,7 +16,7 @@ import (
 // declarations let the generated package expose typed contexts, so this layer
 // contains no positional reduction indexes or semantic value casts.
 func Parse(source string) (*Program, error) {
-	value, err := drawgenerated.ParseWithReducerFromSource(drawgenerated.NewScanner(source), drawReducers)
+	value, err := drawgenerated.ParseWithReducerFromLexemeSource(drawgenerated.NewScanner(source), drawReducers)
 	if err != nil {
 		return nil, err
 	}

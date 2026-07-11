@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -18,11 +19,7 @@ func main() {
 	logPath := flag.String("log", "", "optional report file")
 	flag.Parse()
 
-	source, err := os.ReadFile(*inputPath)
-	if err != nil {
-		exitf("read input: %v", err)
-	}
-	report, err := runCalcDemo(*inputPath, string(source))
+	report, err := runCalcDemoFile(*inputPath)
 	if err != nil {
 		exitf("%v", err)
 	}
@@ -36,7 +33,29 @@ func main() {
 }
 
 func runCalcDemo(name, source string) (string, error) {
-	value, err := calc.ParseWithReducerFromSource(calc.NewScanner(source), calc.ReducerFunc(calcsem.Reduce))
+	return runCalcDemoFromReaders(name, strings.NewReader(source), strings.NewReader(source), source)
+}
+
+func runCalcDemoFile(path string) (string, error) {
+	parseInput, err := os.Open(path)
+	if err != nil {
+		return "", fmt.Errorf("open input for parse: %w", err)
+	}
+	defer parseInput.Close()
+
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read input for report: %w", err)
+	}
+	return runCalcDemoFromReaders(path, parseInput, bytes.NewReader(source), string(source))
+}
+
+func runCalcDemoFromReaders(name string, parseInput io.Reader, tokenInput io.Reader, source string, options ...calc.ReaderScannerOption) (string, error) {
+	// Production-style parsing uses the reader-backed scanner. The parser pulls
+	// tokens lazily, so file, stdin, pipe, and virtual inputs do not need to be
+	// materialized just to drive parsing. The second reader is used only for the
+	// teaching report that prints the full token stream.
+	value, err := calc.ParseWithReducerFromLexemeSource(calc.NewReaderScanner(parseInput, options...), calc.ReducerFunc(calcsem.Reduce))
 	if err != nil {
 		return "", fmt.Errorf("parse %s: %w", name, err)
 	}
@@ -44,7 +63,7 @@ func runCalcDemo(name, source string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("parse %s: semantic result has type %T", name, value)
 	}
-	tokens, err := calc.Tokenize(source)
+	tokens, err := calc.TokenizeFromReader(tokenInput, options...)
 	if err != nil {
 		return "", fmt.Errorf("tokenize %s for report: %w", name, err)
 	}

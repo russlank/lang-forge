@@ -2,7 +2,7 @@
 
 Document id: `lang-forge-example-template-guide-v1`
 
-Last updated: 2026-07-04
+Last updated: 2026-07-10
 
 Scope: `Reusable example templates, shared testdata, and generated/handwritten boundaries`
 
@@ -136,7 +136,7 @@ stay outside generated code:
 |---|---|
 | Domain model or AST ownership | Go `model`, C# `Ast/`, C `ast.h/c`, C++ `include/.../ast.hpp` |
 | Reducer behavior | Generated typed contexts mapped to ordinary handwritten functions |
-| Parser public API | A facade such as `Parser`, `ILibraryDslParser`, `dsl_parse_source`, or `ParserFacade` |
+| Parser public API | A facade such as `Parser`, `ILibraryDslParser`, `dsl_parse_lexeme_source`, or `ParserFacade` |
 | Diagnostics policy | Generated diagnostics converted to messages meaningful to the domain |
 | Cleanup | C result/free functions, C++ `unique_ptr`/RAII, Go/C# ordinary ownership |
 | Runtime/compiler layer | Separate compiler, renderer, report writer, or mock VM code |
@@ -149,11 +149,16 @@ methods without depending on generated parser stack values.
 The normal production path in all templates is source-based parsing:
 
 ```text
-source text -> generated scanner/token source -> parser -> reducer -> AST/domain result
+source text or reader/stream -> generated scanner/lexeme source -> parser -> reducer -> AST/domain result
 ```
 
-Token-list parsing is still useful for tests, tutorials, and token inspection,
-but new reusable projects should prefer the scanner/source APIs.
+For small examples a string overload is convenient. For reusable libraries,
+prefer a facade overload that accepts the target's demand-fed input shape:
+Go `io.Reader`, C# `TextReader` or `Stream`, C read callbacks, and C++
+`std::istream`. Keep token-list parsing for tests, tutorials, and token
+inspection. The calc demo family shows the compact cross-target reader/stream
+pattern; the library templates show how to hide generated parser details
+behind a domain facade.
 
 Normal reducer failures should be returned or reported through the generated
 parser API, not through process-level failures. Go reducers return `error`, C
@@ -225,7 +230,7 @@ For real projects, prefer generated typed reducer contexts:
 - label grammar values by role, such as `left=Expr`, `right=Term`,
   `expr=Expr`, and `token=Number`;
 - use generated adapters such as Go `TypedAdd`, C# `TypedAdd`, C
-  `mini_compiler_parse_value_source_typed`, or C++ `typed_add`;
+  `mini_compiler_parse_value_lexeme_source_typed`, or C++ `typed_add`;
 - keep boxed `ctx.Values[index]` access only in migration shims or debugging
   code.
 - return reducer/semantic failures through the parser API. In Go, return
@@ -361,7 +366,7 @@ A good starter project usually has:
 
 - a `.lf` grammar;
 - a small model or AST module;
-- one parser adapter that feeds a generated scanner/token source into the
+- one parser adapter that feeds a generated scanner/lexeme source into the
   parser and wires reducers;
 - reducer helpers that turn generated values into domain values;
 - a compiler/interpreter/report layer that consumes the AST;

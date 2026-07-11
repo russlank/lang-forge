@@ -35,7 +35,7 @@ ParseResult<ProgramNode> result = parser.Parse(source);
 ```text
 source text
   -> generated Scanner
-  -> generated Parser.ParseRecoveringSource
+  -> generated Parser.ParseRecoveringLexemeSource
   -> generated typed reducer contexts
   -> Ast.ProgramNode
 ```

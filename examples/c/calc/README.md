@@ -19,6 +19,24 @@ The direct typed handlers still return `calc_value` pointers because C keeps
 semantic ownership explicit. This example stores returned numbers in the demo
 arena and releases them with `demo_arena_free`.
 
+The default evaluation path uses `calc_stream_scanner`, not the older
+string-only `calc_scanner`. `main.c` includes a small `calc_string_stream_read`
+callback so the same parser code can be copied to file, stdin, pipe,
+editor-buffer, or virtual-file inputs. The generated stream scanner owns copied
+visible-lexeme text while parsing; keep it alive until parse/reducer code has
+finished and always call `calc_stream_scanner_free`.
+
+Token collections are still useful for inspection and compatibility:
+
+```c
+calc_tokenize(source, &tokens, &count, &error);
+calc_parse(tokens, count, &error);
+```
+
+Use the collection path for tests, reports, or token debugging. Prefer
+`calc_stream_scanner_lexeme_source_next` with `calc_parse_value_lexeme_source_typed` in
+production facades that should pull input on demand.
+
 Run it from the repository root:
 
 ```sh

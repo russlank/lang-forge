@@ -87,7 +87,7 @@ static std::string build_report(const recovery::ParseResult& result) {
 }
 
 /// Preferred production-style path:
-/// source text -> generated scanner token source -> recovering parser.
+/// source text -> generated scanner lexeme source -> recovering parser.
 static recovery::ParseResult parse_source(std::string_view source) {
     recovery::Scanner scanner(source);
     return recovery::parse_recovering(scanner);

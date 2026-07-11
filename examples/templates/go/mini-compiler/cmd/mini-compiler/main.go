@@ -40,7 +40,7 @@ var reducers = minigen.ReducerMap{
 }
 
 func parse(source string) (minimodel.Program, error) {
-	value, err := minigen.ParseWithReducerFromSource(minigen.NewScanner(source), reducers)
+	value, err := minigen.ParseWithReducerFromLexemeSource(minigen.NewScanner(source), reducers)
 	if err != nil {
 		return minimodel.Program{}, err
 	}

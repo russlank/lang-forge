@@ -187,15 +187,15 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 	b.WriteString("type Lexeme struct {\n\tToken Token\n\tText string\n\tChannel string\n\tStart int\n\tEnd int\n\tStartLine int\n\tStartColumn int\n\tEndLine int\n\tEndColumn int\n}\n\n")
 	b.WriteString("// Scanner incrementally tokenizes an input string.\n//\n// Scanner methods are safe for concurrent use. Concurrent calls to Next share\n// one input cursor and therefore observe one serialized token stream.\n")
 	b.WriteString("type Scanner struct {\n\tmu sync.Mutex\n\tinput string\n\tpos int\n\tline int\n\tcolumn int\n\tincludeHidden bool\n}\n\n")
-	b.WriteString("// NewScanner creates a scanner for input.\n")
+	b.WriteString("// NewScanner creates a scanner for in-memory source text.\n")
 	b.WriteString("func NewScanner(input string) *Scanner { return &Scanner{input: input, line: 1, column: 1} }\n\n")
-	b.WriteString("// IncludeHidden controls whether channel tokens are returned.\n")
+	b.WriteString("// IncludeHidden controls whether channel lexemes are returned.\n")
 	b.WriteString("func (s *Scanner) IncludeHidden(include bool) { s.mu.Lock(); defer s.mu.Unlock(); s.includeHidden = include }\n\n")
-	b.WriteString("// Tokenize returns every visible token in input.\n")
+	b.WriteString("// Tokenize returns every visible lexeme in input.\n")
 	b.WriteString("func Tokenize(input string) ([]Lexeme, error) { return NewScanner(input).All() }\n\n")
-	b.WriteString("// All returns all tokens until end-of-input.\n")
+	b.WriteString("// All returns all visible lexemes until end-of-input.\n")
 	b.WriteString("func (s *Scanner) All() ([]Lexeme, error) {\n\tvar out []Lexeme\n\tfor {\n\t\tlexeme, ok, err := s.Next()\n\t\tif err != nil { return nil, err }\n\t\tif !ok { return out, nil }\n\t\tout = append(out, lexeme)\n\t}\n}\n\n")
-	b.WriteString("// Next returns the next visible token, or ok=false at end-of-input.\n")
+	b.WriteString("// Next returns the next visible lexeme, or ok=false at end-of-input.\n")
 	b.WriteString("func (s *Scanner) Next() (Lexeme, bool, error) {\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tfor s.pos < len(s.input) {\n\t\tstart, startLine, startColumn := s.pos, s.line, s.column\n\t\trule, end, err := matchAt(s.input, s.pos)\n\t\tif err != nil { return Lexeme{}, false, err }\n\t\tif rule <= 0 { return Lexeme{}, false, fmt.Errorf(\"no lexical rule matched byte %d near %q\", s.pos, preview(s.input, s.pos)) }\n\t\tif end == s.pos { return Lexeme{}, false, fmt.Errorf(\"lexer rule %d matched empty input at byte %d\", rule, s.pos) }\n\t\taction := ruleActions[rule]\n\t\tendLine, endColumn := advancePosition(s.input, s.pos, end, s.line, s.column)\n\t\tlex := Lexeme{Token: action.token, Text: s.input[start:end], Channel: action.channel, Start: start, End: end, StartLine: startLine, StartColumn: startColumn, EndLine: endLine, EndColumn: endColumn}\n\t\ts.pos, s.line, s.column = end, endLine, endColumn\n\t\tif action.skip { continue }\n\t\tif action.channel != \"\" && !s.includeHidden { continue }\n\t\treturn lex, true, nil\n\t}\n\treturn Lexeme{Token: TokenEOF, Start: s.pos, End: s.pos, StartLine: s.line, StartColumn: s.column, EndLine: s.line, EndColumn: s.column}, false, nil\n}\n\n")
 	b.WriteString(goReaderScannerRuntime())
 	b.WriteString("type scannerTransition struct { lo rune; hi rune; target int }\n")
@@ -232,40 +232,40 @@ func renderScanner(pkg string, source string, dfa *lex.DFA, tokens []string) str
 }
 
 func goReaderScannerRuntime() string {
-	return `const defaultScannerReadBufferSize = 4096
-const defaultScannerMaxBufferedTokenBytes = 1048576
+	return `const defaultReaderScannerBufferSize = 4096
+const defaultReaderScannerMaxBufferedLexemeBytes = 1048576
 
-// ScannerOption configures scanner constructors that pull source text from a reader.
-type ScannerOption func(*scannerOptions)
+// ReaderScannerOption configures scanner constructors that pull source text from a reader.
+type ReaderScannerOption func(*readerScannerOptions)
 
-type scannerOptions struct {
+type readerScannerOptions struct {
 	readBufferSize int
-	maxBufferedTokenBytes int
+	maxBufferedLexemeBytes int
 }
 
-func defaultScannerOptions() scannerOptions {
-	return scannerOptions{readBufferSize: defaultScannerReadBufferSize, maxBufferedTokenBytes: defaultScannerMaxBufferedTokenBytes}
+func defaultReaderScannerOptions() readerScannerOptions {
+	return readerScannerOptions{readBufferSize: defaultReaderScannerBufferSize, maxBufferedLexemeBytes: defaultReaderScannerMaxBufferedLexemeBytes}
 }
 
-// WithScannerReadBufferSize changes the temporary read buffer size used by NewScannerFromReader.
-func WithScannerReadBufferSize(size int) ScannerOption {
-	return func(options *scannerOptions) {
+// WithReaderScannerBufferSize changes the temporary read buffer size used by NewReaderScanner.
+func WithReaderScannerBufferSize(size int) ReaderScannerOption {
+	return func(options *readerScannerOptions) {
 		if size > 0 { options.readBufferSize = size }
 	}
 }
 
-// WithMaxBufferedTokenBytes limits how many bytes a reader-backed scanner may buffer while deciding one token.
-func WithMaxBufferedTokenBytes(size int) ScannerOption {
-	return func(options *scannerOptions) {
-		if size > 0 { options.maxBufferedTokenBytes = size }
+// WithMaxBufferedLexemeBytes limits how many bytes a reader-backed scanner may buffer while deciding one lexeme.
+func WithMaxBufferedLexemeBytes(size int) ReaderScannerOption {
+	return func(options *readerScannerOptions) {
+		if size > 0 { options.maxBufferedLexemeBytes = size }
 	}
 }
 
 // ReaderScanner tokenizes UTF-8 source text pulled synchronously from an io.Reader.
 //
-// The parser still pulls lexemes through TokenSource. ReaderScanner is the scanner-side
+// The parser still pulls lexemes through LexemeSource. ReaderScanner is the scanner-side
 // input adapter for files, stdin, pipes, and other readers. It reads more source text
-// only when the DFA needs another rune to decide the current longest-match token.
+// only when the DFA needs another rune to decide the current longest-match lexeme.
 type ReaderScanner struct {
 	mu sync.Mutex
 	reader io.Reader
@@ -277,39 +277,39 @@ type ReaderScanner struct {
 	eof bool
 	pendingErr error
 	readBuffer []byte
-	maxBufferedTokenBytes int
+	maxBufferedLexemeBytes int
 }
 
-// NewScannerFromReader creates a scanner that pulls source text from reader on demand.
-func NewScannerFromReader(reader io.Reader, options ...ScannerOption) *ReaderScanner {
-	config := defaultScannerOptions()
+// NewReaderScanner creates a scanner that pulls source text from reader on demand.
+func NewReaderScanner(reader io.Reader, options ...ReaderScannerOption) *ReaderScanner {
+	config := defaultReaderScannerOptions()
 	for _, option := range options {
 		if option != nil { option(&config) }
 	}
-	if config.readBufferSize <= 0 { config.readBufferSize = defaultScannerReadBufferSize }
-	if config.maxBufferedTokenBytes <= 0 { config.maxBufferedTokenBytes = defaultScannerMaxBufferedTokenBytes }
+	if config.readBufferSize <= 0 { config.readBufferSize = defaultReaderScannerBufferSize }
+	if config.maxBufferedLexemeBytes <= 0 { config.maxBufferedLexemeBytes = defaultReaderScannerMaxBufferedLexemeBytes }
 	return &ReaderScanner{
 		reader: reader,
 		line: 1,
 		column: 1,
 		readBuffer: make([]byte, config.readBufferSize),
-		maxBufferedTokenBytes: config.maxBufferedTokenBytes,
+		maxBufferedLexemeBytes: config.maxBufferedLexemeBytes,
 	}
 }
 
-// TokenizeReader returns every visible token read from reader.
-func TokenizeReader(reader io.Reader, options ...ScannerOption) ([]Lexeme, error) {
-	return NewScannerFromReader(reader, options...).All()
+// TokenizeFromReader returns every visible lexeme read from reader.
+func TokenizeFromReader(reader io.Reader, options ...ReaderScannerOption) ([]Lexeme, error) {
+	return NewReaderScanner(reader, options...).All()
 }
 
-// IncludeHidden controls whether channel tokens are returned.
+// IncludeHidden controls whether channel lexemes are returned.
 func (s *ReaderScanner) IncludeHidden(include bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.includeHidden = include
 }
 
-// All returns all tokens until end-of-input.
+// All returns all visible lexemes until end-of-input.
 func (s *ReaderScanner) All() ([]Lexeme, error) {
 	var out []Lexeme
 	for {
@@ -320,7 +320,7 @@ func (s *ReaderScanner) All() ([]Lexeme, error) {
 	}
 }
 
-// Next returns the next visible token, or ok=false at end-of-input.
+// Next returns the next visible lexeme, or ok=false at end-of-input.
 func (s *ReaderScanner) Next() (Lexeme, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -359,8 +359,8 @@ func (s *ReaderScanner) readMore() error {
 	n, err := s.reader.Read(s.readBuffer)
 	if n > 0 {
 		s.buffer += string(s.readBuffer[:n])
-		if len(s.buffer) > s.maxBufferedTokenBytes {
-			return fmt.Errorf("scanner buffered token exceeds %d bytes", s.maxBufferedTokenBytes)
+		if len(s.buffer) > s.maxBufferedLexemeBytes {
+			return fmt.Errorf("scanner buffered lexeme exceeds %d bytes", s.maxBufferedLexemeBytes)
 		}
 	}
 	if err != nil {
@@ -672,14 +672,14 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("type Option func(*Parser)\n\n")
 	b.WriteString("// WithReducer installs a semantic reducer for target-tagged grammar actions.\n")
 	b.WriteString("func WithReducer(reducer Reducer) Option { return func(p *Parser) { p.reducer = reducer } }\n\n")
-	b.WriteString("// NewParser creates a parser instance.\n")
+	b.WriteString("// NewParser creates a parser instance configured by options.\n")
 	b.WriteString("func NewParser(options ...Option) *Parser {\n\tp := &Parser{}\n\tfor _, option := range options { option(p) }\n\treturn p\n}\n\n")
-	b.WriteString(`// TokenSource is the synchronous pull interface consumed by generated parsers.
+	b.WriteString(`// LexemeSource is the synchronous pull interface consumed by generated parsers.
 //
 // Next returns a visible grammar lexeme and true, or false when the source
 // naturally reaches the end of input. A source may also return one explicit
 // TokenEOF lexeme with ok=true; tokens returned after explicit EOF are errors.
-type TokenSource interface { Next() (Lexeme, bool, error) }
+type LexemeSource interface { Next() (Lexeme, bool, error) }
 
 type lexemeSliceSource struct {
 	input []Lexeme
@@ -697,8 +697,8 @@ func (s *lexemeSliceSource) Next() (Lexeme, bool, error) {
 	return lexeme, true, nil
 }
 
-type parserTokenCursor struct {
-	source TokenSource
+type parserLexemeCursor struct {
+	source LexemeSource
 	lookahead Lexeme
 	symbol string
 	ready bool
@@ -707,12 +707,12 @@ type parserTokenCursor struct {
 	haveLast bool
 }
 
-func newParserTokenCursor(source TokenSource) (*parserTokenCursor, error) {
-	if source == nil { return nil, fmt.Errorf("nil token source") }
-	return &parserTokenCursor{source: source}, nil
+func newParserLexemeCursor(source LexemeSource) (*parserLexemeCursor, error) {
+	if source == nil { return nil, fmt.Errorf("nil lexeme source") }
+	return &parserLexemeCursor{source: source}, nil
 }
 
-func (c *parserTokenCursor) peekSymbol() (string, error) {
+func (c *parserLexemeCursor) peekSymbol() (string, error) {
 	if c.ready { return c.symbol, nil }
 	if c.sawEOF {
 		c.lookahead = c.eofLexeme()
@@ -734,7 +734,7 @@ func (c *parserTokenCursor) peekSymbol() (string, error) {
 		extra, more, err := c.source.Next()
 		if err != nil { return "", err }
 		if more {
-			return "", fmt.Errorf("token after EOF in token source: %s at %d:%d", terminalName(extra.Token), extra.StartLine, extra.StartColumn)
+			return "", fmt.Errorf("token after EOF in lexeme source: %s at %d:%d", terminalName(extra.Token), extra.StartLine, extra.StartColumn)
 		}
 		c.lookahead = lexeme
 		c.symbol = "$"
@@ -750,7 +750,7 @@ func (c *parserTokenCursor) peekSymbol() (string, error) {
 	return c.symbol, nil
 }
 
-func (c *parserTokenCursor) advance() (Lexeme, error) {
+func (c *parserLexemeCursor) advance() (Lexeme, error) {
 	symbol, err := c.peekSymbol()
 	if err != nil { return Lexeme{}, err }
 	if symbol == "$" { return Lexeme{}, fmt.Errorf("shift past end of input") }
@@ -759,19 +759,19 @@ func (c *parserTokenCursor) advance() (Lexeme, error) {
 	return lexeme, nil
 }
 
-func (c *parserTokenCursor) diagnosticLexeme() Lexeme {
+func (c *parserLexemeCursor) diagnosticLexeme() Lexeme {
 	if c.ready { return c.lookahead }
 	return c.eofLexeme()
 }
 
-func (c *parserTokenCursor) eofLexeme() Lexeme {
+func (c *parserLexemeCursor) eofLexeme() Lexeme {
 	if c.haveLast {
 		return Lexeme{Token: TokenEOF, Start: c.last.End, End: c.last.End, StartLine: c.last.EndLine, StartColumn: c.last.EndColumn, EndLine: c.last.EndLine, EndColumn: c.last.EndColumn}
 	}
 	return Lexeme{Token: TokenEOF, StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 1}
 }
 
-func (c *parserTokenCursor) normalizeEOFLexeme(lexeme Lexeme) Lexeme {
+func (c *parserLexemeCursor) normalizeEOFLexeme(lexeme Lexeme) Lexeme {
 	fallback := c.eofLexeme()
 	if lexeme.StartLine <= 0 { lexeme.StartLine = fallback.StartLine }
 	if lexeme.StartColumn <= 0 { lexeme.StartColumn = fallback.StartColumn }
@@ -784,53 +784,55 @@ func (c *parserTokenCursor) normalizeEOFLexeme(lexeme Lexeme) Lexeme {
 	return lexeme
 }
 
-// Parse recognizes input with a new parser instance.
+// Parse recognizes input with a parser configured by default options.
 func Parse(input []Lexeme) error { return NewParser().Parse(input) }
 
-// ParseFromSource recognizes tokens pulled from source with a new parser instance.
-func ParseFromSource(source TokenSource) error { return NewParser().ParseFromSource(source) }
+// ParseFromLexemeSource recognizes lexemes pulled from source with a parser configured by default options.
+func ParseFromLexemeSource(source LexemeSource) error { return NewParser().ParseFromLexemeSource(source) }
 
 // ParseValue recognizes input and returns the final reduced semantic value.
 func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }
 
-// ParseValueFromSource recognizes tokens pulled from source and returns the final reduced semantic value.
-func ParseValueFromSource(source TokenSource) (Value, error) { return NewParser().ParseValueFromSource(source) }
+// ParseValueFromLexemeSource recognizes lexemes pulled from source and returns the final reduced semantic value.
+func ParseValueFromLexemeSource(source LexemeSource) (Value, error) {
+	return NewParser().ParseValueFromLexemeSource(source)
+}
 
 // ParseRecovering recognizes input and returns all syntax diagnostics.
 func ParseRecovering(input []Lexeme) (ParseResult, error) { return NewParser().ParseRecovering(input) }
 
-// ParseRecoveringFromSource recognizes tokens pulled from source and returns all syntax diagnostics.
-func ParseRecoveringFromSource(source TokenSource) (ParseResult, error) {
-	return NewParser().ParseRecoveringFromSource(source)
+// ParseRecoveringFromLexemeSource recognizes lexemes pulled from source and returns all syntax diagnostics.
+func ParseRecoveringFromLexemeSource(source LexemeSource) (ParseResult, error) {
+	return NewParser().ParseRecoveringFromLexemeSource(source)
 }
 
 // ParseWithReducer recognizes input using reducer for target-tagged grammar actions.
 func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {
-	return ParseWithReducerFromSource(newLexemeSliceSource(input), reducer)
+	return ParseWithReducerFromLexemeSource(newLexemeSliceSource(input), reducer)
 }
 
-// ParseWithReducerFromSource recognizes tokens pulled from source using reducer for target-tagged grammar actions.
-func ParseWithReducerFromSource(source TokenSource, reducer Reducer) (Value, error) {
-	return NewParser(WithReducer(reducer)).ParseValueFromSource(source)
+// ParseWithReducerFromLexemeSource recognizes lexemes pulled from source using reducer for target-tagged grammar actions.
+func ParseWithReducerFromLexemeSource(source LexemeSource, reducer Reducer) (Value, error) {
+	return NewParser(WithReducer(reducer)).ParseValueFromLexemeSource(source)
 }
 
 // Parse recognizes input using this parser instance.
 func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }
 
-// ParseFromSource recognizes tokens pulled from source using this parser instance.
-func (p *Parser) ParseFromSource(source TokenSource) error {
-	_, err := p.ParseValueFromSource(source)
+// ParseFromLexemeSource recognizes lexemes pulled from source using this parser instance.
+func (p *Parser) ParseFromLexemeSource(source LexemeSource) error {
+	_, err := p.ParseValueFromLexemeSource(source)
 	return err
 }
 
 // ParseValue recognizes input using this parser instance and returns the final semantic value.
 func (p *Parser) ParseValue(input []Lexeme) (Value, error) {
-	return p.ParseValueFromSource(newLexemeSliceSource(input))
+	return p.ParseValueFromLexemeSource(newLexemeSliceSource(input))
 }
 
-// ParseValueFromSource recognizes tokens pulled from source using this parser instance.
-func (p *Parser) ParseValueFromSource(source TokenSource) (Value, error) {
-	result, err := p.ParseRecoveringFromSource(source)
+// ParseValueFromLexemeSource recognizes lexemes pulled from source using this parser instance.
+func (p *Parser) ParseValueFromLexemeSource(source LexemeSource) (Value, error) {
+	result, err := p.ParseRecoveringFromLexemeSource(source)
 	if err != nil { return result.Value, err }
 	if len(result.Diagnostics) > 0 { return result.Value, &ParseError{Diagnostics: result.Diagnostics} }
 	return result.Value, nil
@@ -838,18 +840,18 @@ func (p *Parser) ParseValueFromSource(source TokenSource) (Value, error) {
 
 // ParseRecovering performs grammar-directed recovery and returns every syntax diagnostic.
 func (p *Parser) ParseRecovering(input []Lexeme) (ParseResult, error) {
-	return p.ParseRecoveringFromSource(newLexemeSliceSource(input))
+	return p.ParseRecoveringFromLexemeSource(newLexemeSliceSource(input))
 }
 
-// ParseRecoveringFromSource performs grammar-directed recovery over a pull token source.
-func (p *Parser) ParseRecoveringFromSource(source TokenSource) (ParseResult, error) {
+// ParseRecoveringFromLexemeSource performs grammar-directed recovery over a pull lexeme source.
+func (p *Parser) ParseRecoveringFromLexemeSource(source LexemeSource) (ParseResult, error) {
 	result := ParseResult{}
 	if p.reducer != nil {
 		if validator, ok := p.reducer.(interface{ ValidateCoverage() error }); ok {
 			if err := validator.ValidateCoverage(); err != nil { return result, err }
 		}
 	}
-	cursor, err := newParserTokenCursor(source)
+	cursor, err := newParserLexemeCursor(source)
 	if err != nil { return result, err }
 	states := []int{0}
 	values := []Value{}
@@ -939,8 +941,8 @@ func (p *Parser) ParseRecoveringFromSource(source TokenSource) (ParseResult, err
 	}
 	b.WriteString("func defaultReduce(values []Value) Value {\n\tswitch len(values) {\n\tcase 0:\n\t\treturn nil\n\tcase 1:\n\t\treturn values[0]\n\tdefault:\n\t\treturn append([]Value(nil), values...)\n\t}\n}\n\n")
 	b.WriteString("func parserCurrentValue(values []Value) Value {\n\tif len(values) == 0 { return nil }\n\treturn values[len(values)-1]\n}\n\n")
-	b.WriteString("func newParseDiagnostic(state int, unexpected string, cursor *parserTokenCursor) ParseDiagnostic {\n\tlexeme := cursor.diagnosticLexeme()\n\texpected := append([]ExpectedToken(nil), parserExpected[state]...)\n\tfor index := range expected { expected[index].Members = append([]string(nil), expected[index].Members...) }\n\treturn ParseDiagnostic{State: state, Unexpected: unexpected, UnexpectedDisplay: parserUnexpectedDisplay(unexpected), Expected: expected, Start: lexeme.Start, End: lexeme.End, StartLine: lexeme.StartLine, StartColumn: lexeme.StartColumn, EndLine: lexeme.EndLine, EndColumn: lexeme.EndColumn}\n}\n\n")
-	b.WriteString("func parserErrorLexeme(cursor *parserTokenCursor) Lexeme {\n\tlexeme := cursor.diagnosticLexeme()\n\tlexeme.Token = TokenError\n\tlexeme.Text = \"\"\n\tlexeme.Channel = \"\"\n\tlexeme.End = lexeme.Start\n\tlexeme.EndLine = lexeme.StartLine\n\tlexeme.EndColumn = lexeme.StartColumn\n\treturn lexeme\n}\n\n")
+	b.WriteString("func newParseDiagnostic(state int, unexpected string, cursor *parserLexemeCursor) ParseDiagnostic {\n\tlexeme := cursor.diagnosticLexeme()\n\texpected := append([]ExpectedToken(nil), parserExpected[state]...)\n\tfor index := range expected { expected[index].Members = append([]string(nil), expected[index].Members...) }\n\treturn ParseDiagnostic{State: state, Unexpected: unexpected, UnexpectedDisplay: parserUnexpectedDisplay(unexpected), Expected: expected, Start: lexeme.Start, End: lexeme.End, StartLine: lexeme.StartLine, StartColumn: lexeme.StartColumn, EndLine: lexeme.EndLine, EndColumn: lexeme.EndColumn}\n}\n\n")
+	b.WriteString("func parserErrorLexeme(cursor *parserLexemeCursor) Lexeme {\n\tlexeme := cursor.diagnosticLexeme()\n\tlexeme.Token = TokenError\n\tlexeme.Text = \"\"\n\tlexeme.Channel = \"\"\n\tlexeme.End = lexeme.Start\n\tlexeme.EndLine = lexeme.StartLine\n\tlexeme.EndColumn = lexeme.StartColumn\n\treturn lexeme\n}\n\n")
 	b.WriteString("func parserUnexpectedDisplay(symbol string) string {\n\tif symbol == \"$\" { return \"end of input\" }\n\tif display, ok := parserTokenAliases[symbol]; ok { return display }\n\treturn symbol\n}\n\n")
 	b.WriteString("func terminalName(tok Token) string {\n\tswitch tok {\n\tcase TokenEOF:\n\t\treturn \"$\"\n")
 	for _, tok := range tokens {
@@ -1018,7 +1020,7 @@ func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, 
 		suffix := strings.TrimPrefix(constant, "SemanticAction")
 		contextType := suffix + "Reduction"
 		handlerType := suffix + "Handler"
-		constructor := "New" + contextType
+		converter := contextType + "From"
 		adapter := "Typed" + suffix
 		fields := typedFields(semanticAction.Rules[0])
 
@@ -1028,8 +1030,8 @@ func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, 
 			b.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, field.Type))
 		}
 		b.WriteString("}\n\n")
-		b.WriteString(fmt.Sprintf("// %s validates and converts an untyped reduction context.\n", constructor))
-		b.WriteString(fmt.Sprintf("func %s(ctx Reduction) (%s, error) {\n", constructor, contextType))
+		b.WriteString(fmt.Sprintf("// %s validates and converts an untyped reduction context.\n", converter))
+		b.WriteString(fmt.Sprintf("func %s(ctx Reduction) (%s, error) {\n", converter, contextType))
 		b.WriteString(fmt.Sprintf("\tif ctx.ActionID != %s { return %s{}, fmt.Errorf(\"typed context %s requires action %%s, got %%s\", %s, ctx.ActionID) }\n", constant, contextType, contextType, constant))
 		b.WriteString(fmt.Sprintf("\tresult := %s{Reduction: ctx}\n", contextType))
 		for _, field := range fields {
@@ -1042,7 +1044,7 @@ func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, 
 		b.WriteString(fmt.Sprintf("type %s func(%s) (%s, error)\n\n", handlerType, contextType, semanticAction.ReturnType))
 		b.WriteString(fmt.Sprintf("// %s adapts a typed handler to ReductionHandler.\n", adapter))
 		b.WriteString(fmt.Sprintf("func %s(handler %s) ReductionHandler {\n", adapter, handlerType))
-		b.WriteString(fmt.Sprintf("\treturn func(ctx Reduction) (Value, error) {\n\t\ttyped, err := %s(ctx)\n\t\tif err != nil { return nil, err }\n\t\treturn handler(typed)\n\t}\n}\n\n", constructor))
+		b.WriteString(fmt.Sprintf("\treturn func(ctx Reduction) (Value, error) {\n\t\ttyped, err := %s(ctx)\n\t\tif err != nil { return nil, err }\n\t\treturn handler(typed)\n\t}\n}\n\n", converter))
 	}
 }
 

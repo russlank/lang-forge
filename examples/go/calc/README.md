@@ -14,14 +14,27 @@ make run
 ```
 
 The target validates `calc.lf`, generates a Go scanner/parser under
-`generated`, builds `dist/calc-demo`, parses `input.calc` through a generated
-scanner token source, evaluates the expression through rule-reduction actions,
-and writes the same report to `dist/calc-demo.log`. The demo also tokenizes the
-input afterward only to print the teaching token stream.
+`generated`, builds `dist/calc-demo`, parses `input.calc` through
+`NewReaderScanner`, evaluates the expression through rule-reduction
+actions, and writes the same report to `dist/calc-demo.log`. The parser pulls
+tokens lazily from the reader-backed scanner. The demo also calls
+`TokenizeFromReader` afterward only to print the teaching token stream; real
+facades do not need to materialize tokens unless callers want to inspect them.
 
 The grammar declares a reducer-mode semantic import for
 `examples/go/calc/semantics`; the demo passes that handwritten package to the
-generated parser with `ParseWithReducerFromSource`.
+generated parser with `ParseWithReducerFromLexemeSource`.
+
+The same generated parser still supports the older convenience shape:
+
+```go
+tokens, err := calc.Tokenize(source)
+value, err := calc.ParseWithReducer(tokens, reducer)
+```
+
+Use that collection path for token inspection, debugging, or tests. Prefer
+`NewReaderScanner` for files, stdin, pipes, virtual sources, or large
+inputs where loading the whole source string first is unnecessary.
 
 In reducer mode, action blocks such as `{go: add}` and `{go: subtract}` are
 labels, not generated arithmetic code. LangForge stores the label on the
@@ -34,7 +47,7 @@ fields (`ctx.Left`, `ctx.Right`) rather than positional indexes and casts.
 
 The generated `ReducerMap` is keyed by constants such as
 `SemanticActionAdd` and `SemanticActionSubtract`. Its coverage is validated
-before `ParseWithReducerFromSource` starts parsing, so adding a grammar action
+before `ParseWithReducerFromLexemeSource` starts parsing, so adding a grammar action
 without a handler fails immediately. There is still no calculator-specific
 arithmetic hard coded in LangForge.
 

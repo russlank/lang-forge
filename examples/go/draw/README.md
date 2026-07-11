@@ -22,7 +22,7 @@ handwritten example code:
 | `draw.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
 | `model/` | Dependency-only AST types shared by generated contexts and handwritten code |
-| `parser_adapter.go` | Handwritten adapter that calls `ParseWithReducerFromSource` and builds the AST |
+| `parser_adapter.go` | Handwritten adapter that calls `ParseWithReducerFromLexemeSource` and builds the AST |
 | `render.go` | Handwritten renderer that turns the AST into pixels |
 | `cmd/draw-demo` | Handwritten command-line demo |
 

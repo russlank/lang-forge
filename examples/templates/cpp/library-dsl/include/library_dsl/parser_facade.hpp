@@ -24,7 +24,7 @@ class ParserFacade {
 public:
     ParserFacade();
 
-    /// Parses source through the generated scanner token source.
+    /// Parses source through the generated scanner lexeme source.
     ParseResult parse(std::string_view source) const;
 
     /// Compatibility/debug path for callers that already materialized tokens.

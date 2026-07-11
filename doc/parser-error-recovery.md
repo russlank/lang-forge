@@ -95,7 +95,7 @@ Prefer source-based recovery in production. The parser pulls tokens from the
 generated scanner as needed:
 
 ```text
-source text -> scanner.Next() -> ParseRecoveringFromSource / parse_recovering(source)
+source text -> scanner.Next() -> ParseRecoveringFromLexemeSource / parse_recovering(source)
 ```
 
 Token-collection recovery remains useful when a test or tool needs to inspect
@@ -108,7 +108,7 @@ source text -> Tokenize/All -> inspect tokens -> ParseRecovering(tokens)
 Go:
 
 ```go
-result, err := generated.ParseRecoveringFromSource(generated.NewScanner(source))
+result, err := generated.ParseRecoveringFromLexemeSource(generated.NewScanner(source))
 if err != nil {
     // Internal parser or semantic reducer failure.
 }
@@ -120,7 +120,7 @@ for _, diagnostic := range result.Diagnostics {
 C#:
 
 ```csharp
-ParseResult result = Parser.ParseRecoveringFromSource(new Scanner(source));
+ParseResult result = Parser.ParseRecoveringFromLexemeSource(new Scanner(source));
 ```
 
 C++:
@@ -139,9 +139,9 @@ recovery_parse_result result;
 
 recovery_scanner_init(&scanner, input);
 source.user = &scanner;
-source.next = recovery_scanner_source_next;
+source.next = recovery_scanner_lexeme_source_next;
 recovery_parse_result_init(&result);
-if (recovery_parse_recovering_source(&source, &result, &error)) {
+if (recovery_parse_recovering_lexeme_source(&source, &result, &error)) {
     /* Inspect result.diagnostics and result.accepted. */
 }
 recovery_parse_result_free(&result);

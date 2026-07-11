@@ -4,7 +4,7 @@ Document id: `lang-forge-learning-path-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-11`
 
 Owner: `Project maintainers`
 
@@ -60,8 +60,10 @@ If a term is unfamiliar, keep [Glossary](glossary.md) open nearby.
 
 ### 2. Learn The Compiler Pipeline
 
-Read [Compiler Pipeline](compiler-pipeline.md). It explains how source text
-moves through these stages:
+Read [Automata And Driving Tables](automata-and-tables.md), then
+[Compiler Pipeline](compiler-pipeline.md). The first page gives a visual map of
+scanner boxes, parser boxes, and generated tables. The second explains how
+source text moves through these stages:
 
 ```text
 .lf or .l/.y
@@ -74,7 +76,8 @@ moves through these stages:
 ```
 
 Goal: connect repository packages such as `internal/spec`, `internal/lex`, and
-`internal/parse` to the compiler concepts they implement.
+`internal/parse` to the compiler concepts they implement, without treating the
+generated tables as black boxes.
 
 ### 3. Inspect The Tables
 
@@ -198,6 +201,7 @@ fixtures can be used without turning them into a compatibility promise.
 |---|---|---|---|
 | Vocabulary | [Glossary](glossary.md) | names across packages | all examples |
 | Spec syntax | [Specification](specification.md) | `internal/spec` | `examples/go/calc/calc.lf` |
+| Automata and driving tables | [Automata And Driving Tables](automata-and-tables.md) | generated scanner/parser tables | calc inspect output |
 | Lexer automata | [Compiler Pipeline](compiler-pipeline.md) | `internal/lex` | calc lexer rules |
 | Parser tables | [Parser Algorithms](parser-algorithms.md) | `internal/parse` | parser algorithm fixtures |
 | Generated Go | [Usage](usage.md) | `internal/codegen/golang` | `examples/go/calc` |

@@ -151,7 +151,7 @@ func renderMarkdown(r report) string {
 			orDash(row.AllocsOp))
 	}
 	b.WriteString("\n")
-	b.WriteString("`ParseFromSource` includes scanner/token-source work. `ParsePreTokenized` uses a token collection prepared before the timed loop.\n\n")
+	b.WriteString("`ParseFromStringScanner` and `ParseFromReaderScanner` include scanner/lexeme-source work. `ParsePreTokenized` uses a lexeme collection prepared before the timed loop.\n\n")
 	b.WriteString("Use `benchstat` with repeated runs before drawing conclusions; single-sample quick mode is for smoke and performance sanity checks.\n")
 	return b.String()
 }

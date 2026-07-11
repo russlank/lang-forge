@@ -4,7 +4,7 @@ Document id: `lang-forge-compiler-pipeline-v1`
 
 Status: `active`
 
-Last updated: `2026-06-18`
+Last updated: `2026-07-11`
 
 Owner: `Project maintainers`
 
@@ -15,7 +15,9 @@ It is intentionally practical: each stage names the concept, the repository
 package, the useful commands, and the quality checks that keep the stage
 reliable.
 
-For terminology, keep [Glossary](glossary.md) nearby.
+For terminology, keep [Glossary](glossary.md) nearby. For visual diagrams of
+the scanner and parser boxes described here, read
+[Automata And Driving Tables](automata-and-tables.md).
 
 ## Big Picture
 
@@ -35,6 +37,36 @@ source specification
 LangForge separates the language-independent compiler algorithms from target
 code generation. This keeps scanner and parser behavior consistent across the
 current Go, C#, C, and C++ backends.
+
+The generated code is table-driven. The scanner runtime walks DFA transition
+tables. The parser runtime walks LR ACTION/GOTO tables. The handwritten
+semantic layer runs only when the parser reduces a rule that has a target action
+label.
+
+```mermaid
+flowchart TB
+    Source["source text"]
+    Scanner["generated scanner runtime"]
+    ScannerTables["DFA scanner tables"]
+    Parser["generated parser runtime"]
+    ParserTables["LR ACTION/GOTO tables"]
+    Reducer["handwritten reducer"]
+    Domain["AST / IR / result"]
+
+    Source --> Scanner
+    Scanner -. consults .-> ScannerTables
+    Scanner --> Parser
+    Parser -. consults .-> ParserTables
+    Parser --> Reducer
+    Reducer --> Domain
+```
+
+If Mermaid is not rendered, read the diagram as:
+
+```text
+source text -> scanner consults DFA tables -> parser consults ACTION/GOTO
+tables -> reducer builds domain values
+```
 
 ## Stage 1: Source Specification
 
@@ -269,9 +301,9 @@ Current Go generation writes:
 - `langforge.manifest.json`.
 
 The generated parser is a table-driven recognizer with an optional semantic
-reducer. Source APIs pull visible tokens from a scanner or token source.
-Calling `ParseFromSource` validates syntax, while `ParseValueFromSource` or
-`ParseWithReducerFromSource` also carries a semantic value stack and dispatches
+reducer. Source APIs pull visible tokens from a scanner or lexeme source.
+Calling `ParseFromLexemeSource` validates syntax, while `ParseValueFromLexemeSource` or
+`ParseWithReducerFromLexemeSource` also carries a semantic value stack and dispatches
 target-tagged rule actions to user code. Token collection APIs such as
 `Tokenize` and `Parse(tokens, ...)` remain available for debugging and
 compatibility.

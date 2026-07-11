@@ -61,7 +61,7 @@ internal static class Program
         Check(new FileInfo(outputPath).Length > 1000, "expected non-empty PNG output");
 
         var parser = new Parser(DrawParser.CreateReducers());
-        Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
+        Parallel.For(0, 8, _ => parser.ParseValueLexemeSource(new Scanner(source)));
 
         try
         {
@@ -74,7 +74,7 @@ internal static class Program
 
         try
         {
-            Parser.ParseFromSource(new Scanner("draw ;"));
+            Parser.ParseFromLexemeSource(new Scanner("draw ;"));
             throw new InvalidOperationException("expected parser failure");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("parse error", StringComparison.Ordinal))

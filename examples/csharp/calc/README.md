@@ -15,6 +15,22 @@ maps those enum values to generated typed reducer adapters such as
 `AddReduction` record with named properties like `Left` and `Right`, so grammar
 changes are easier to review than positional `object?` casts.
 
+The demo uses the generated reader/stream scanner APIs for the production path:
+`Scanner.FromStream` reads `input.calc` on demand, and
+`Parser.ParseWithReducerFromLexemeSource` pulls tokens from that scanner. The
+assertion suite also exercises `Scanner.FromTextReader`, one-character read
+buffers, reader failures, and buffered-lexeme limits. The collection APIs remain
+available for debugging:
+
+```csharp
+var tokens = Scanner.Tokenize(sourceText);
+var value = Parser.ParseWithReducer(tokens, reducers);
+```
+
+Use the collection path when you want to inspect or snapshot tokens. Prefer
+`FromTextReader` or `FromStream` inside reusable facades that parse files,
+stdin, pipes, editor buffers, or other demand-fed inputs.
+
 Run:
 
 ```sh

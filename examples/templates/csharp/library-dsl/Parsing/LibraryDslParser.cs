@@ -4,14 +4,32 @@ using LangForge.Examples.Templates.LibraryDsl.Semantics;
 
 namespace LangForge.Examples.Templates.LibraryDsl.Parsing;
 
-/// <summary>Stable parser API for applications that consume the library DSL.</summary>
+/// <summary>
+/// Stable parser API for applications that consume the library DSL.
+/// </summary>
+/// <remarks>
+/// Application code should depend on this interface instead of generated
+/// parser classes. That keeps regenerated scanner/parser tables behind one
+/// small facade and leaves the public API expressed in domain types.
+/// </remarks>
 public interface ILibraryDslParser
 {
-    /// <summary>Parses source through the generated scanner token source.</summary>
+    /// <summary>
+    /// Parses source text through the generated scanner lexeme source.
+    /// </summary>
+    /// <param name="source">DSL source text owned by the caller.</param>
+    /// <returns>A domain-level result containing a document, diagnostics, or a partial document.</returns>
     ParseResult<Document> Parse(string source);
 }
 
-/// <summary>Concrete parser facade that hides generated reducer and parser details.</summary>
+/// <summary>
+/// Concrete parser facade that hides generated reducer and parser details.
+/// </summary>
+/// <remarks>
+/// This class owns pure reducer wiring and creates a fresh generated parser
+/// state for each parse call. The generated scanner/parser still do the syntax
+/// work; this facade translates their output into <see cref="ParseResult{T}" />.
+/// </remarks>
 public sealed class LibraryDslParser : ILibraryDslParser
 {
     private readonly ReducerMap reducers;
@@ -28,7 +46,7 @@ public sealed class LibraryDslParser : ILibraryDslParser
         try
         {
             var parser = new Parser(reducers);
-            var result = parser.ParseRecoveringSource(new Scanner(source));
+            var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
             if (!result.Accepted || result.Diagnostics.Count != 0)
             {
                 return ParseResult<Document>.Fail(DiagnosticFormatter.Format(result.Diagnostics), result.Value as Document);
@@ -43,7 +61,16 @@ public sealed class LibraryDslParser : ILibraryDslParser
         }
     }
 
-    /// <summary>Compatibility/debug path for callers that have already tokenized input.</summary>
+    /// <summary>
+    /// Compatibility/debug path for callers that have already tokenized input.
+    /// </summary>
+    /// <param name="tokens">A token collection produced by the generated scanner.</param>
+    /// <returns>A domain-level result equivalent to <see cref="Parse(string)" />.</returns>
+    /// <remarks>
+    /// Prefer <see cref="Parse(string)" /> for production code. Token
+    /// collections are useful when tests or tools need to inspect the scanner
+    /// output before parsing.
+    /// </remarks>
     public ParseResult<Document> ParseTokens(IReadOnlyList<Lexeme> tokens)
     {
         try

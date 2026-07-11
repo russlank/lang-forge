@@ -4,7 +4,7 @@ Document id: `lang-forge-examples-v1`
 
 Status: `active`
 
-Last updated: `2026-07-03`
+Last updated: `2026-07-10`
 
 Owner: `Project maintainers`
 
@@ -93,11 +93,17 @@ make -C examples/go/calc run
 ```
 
 The runnable demo reads [examples/go/calc/input.calc](../examples/go/calc/input.calc),
-regenerates the scanner/parser, builds `dist/calc-demo`, parses through the
-generated scanner token source, evaluates the expression through generated
-reduction hooks, and writes the same report to
+regenerates the scanner/parser, builds `dist/calc-demo`, parses through
+`NewReaderScanner`, evaluates the expression through generated reduction
+hooks, and writes the same report to
 `examples/go/calc/dist/calc-demo.log`. It also tokenizes afterward to print a
 teaching token stream in the report.
+
+The calc family is the compact cross-target demonstration of streamed scanner
+input. Go uses `io.Reader`, C# uses `TextReader`/`Stream`, C uses a read
+callback with `*_stream_scanner`, and C++ uses `InputStreamScanner` over
+`std::istream`. Token-list parsing remains in the examples for tests,
+compatibility, and token inspection.
 
 The calc example also demonstrates reducer-mode handwritten package references:
 `calc.lf` declares a `%semantic go import` and the demo wires that package as
@@ -112,7 +118,7 @@ to arithmetic behavior.
 The sample expression is:
 
 ```text
-1+2*(3-4)
+1 + 2 * (3 - 4.5)
 ```
 
 The example also supports direct generated-code testing:
@@ -291,7 +297,7 @@ The examples are meant to be read in increasing complexity:
 | 10 | `examples/csharp/*` | The same example set generated for C# with `.g.cs` output, reducer enums, .NET build/run checks, and mock reports |
 | 11 | `examples/c/*` | The same example set generated for C with conventional `.h`/`.c` files, reducer function pointers, and C-friendly reports/artifacts |
 | 12 | `examples/cpp/*` | The same example set generated for C++17 with `enum class` actions, `ReducerMap`, and static table lookup |
-| 13 | `examples/benchmarks` | Optional scanner/parser performance examples for throughput, allocation, source parsing, token slices, reducer dispatch, and recovery overhead |
+| 13 | `examples/benchmarks` | Optional scanner/parser performance examples for throughput, allocation, source parsing, lexeme slices, reducer dispatch, and recovery overhead |
 | 14 | `testdata/ucdt` | Legacy split `.l`/`.y` inspiration fixtures and regression checks |
 
 For starter-project guidance rather than a demo tour, read
@@ -322,7 +328,7 @@ make examples-benchmarks-report BENCH_COUNT=10 BENCH_TIME=1s
 The Go suite uses `go test -bench` and `-benchmem`. The C# suite uses
 BenchmarkDotNet with memory diagnostics and writes artifacts under
 `dist/benchmarks/csharp`. Both use the same vocabulary:
-`ParseFromSource` includes scanner/token-source work, while
+`ParseFromLexemeSource` includes scanner/lexeme-source work, while
 `ParsePreTokenized` parses tokens prepared before the timed loop.
 The default path is quick mode. Use repeated Go runs through `BENCH_COUNT=5`
 or `10`, and use `CSHARP_BENCH_JOB=medium` or `default`, before drawing

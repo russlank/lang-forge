@@ -8,7 +8,7 @@ var reducers = CreateReducers();
 
 static Script ParseScript(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromSource(new Scanner(source), reducers);
+    var value = Parser.ParseWithReducerFromLexemeSource(new Scanner(source), reducers);
     return value is Script script
         ? script
         : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of Script");
@@ -138,7 +138,7 @@ static void RunAssertions(string source, ReducerMap reducers)
     Check(script.Commands.Any(command => command.Kind == "runobjectsjob"), "expected runobjectsjob command");
 
     var parser = new Parser(reducers);
-    Parallel.For(0, 8, _ => parser.ParseValueSource(new Scanner(source)));
+    Parallel.For(0, 8, _ => parser.ParseValueLexemeSource(new Scanner(source)));
 
     try
     {
@@ -151,7 +151,7 @@ static void RunAssertions(string source, ReducerMap reducers)
 
     try
     {
-        Parser.ParseFromSource(new Scanner("begin end"));
+        Parser.ParseFromLexemeSource(new Scanner("begin end"));
         throw new InvalidOperationException("expected parser failure");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

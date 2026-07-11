@@ -277,7 +277,7 @@ Generated Go packages are independent, so one program can import several of
 them with aliases:
 
 ```go
-queryAST, err := queryparser.ParseWithReducerFromSource(
+queryAST, err := queryparser.ParseWithReducerFromLexemeSource(
 	queryparser.NewScanner(querySource),
 	queryparser.ReducerFunc(query.Reduce),
 )
@@ -285,7 +285,7 @@ if err != nil {
 	return err
 }
 
-policyAST, err := policyparser.ParseWithReducerFromSource(
+policyAST, err := policyparser.ParseWithReducerFromLexemeSource(
 	policyparser.NewScanner(policySource),
 	policyparser.ReducerFunc(policy.Reduce),
 )

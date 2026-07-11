@@ -7,10 +7,13 @@ namespace LangForge.Examples.Benchmarks.CSharp;
 public class ScannerBenchmarks
 {
     [Benchmark]
-    public int StreamingNext() => BenchmarkWorkloads.ScanStreamingNext();
+    public int StringScannerNext() => BenchmarkWorkloads.ScanStringScannerNext();
 
     [Benchmark]
-    public int MaterializeAll() => BenchmarkWorkloads.ScanMaterializeAll();
+    public int StringScannerMaterializeAll() => BenchmarkWorkloads.ScanStringScannerMaterializeAll();
+
+    [Benchmark]
+    public int TextReaderScannerNext() => BenchmarkWorkloads.ScanTextReaderScannerNext();
 }
 
 /// <summary>Benchmarks source parsing versus pre-tokenized parsing and typed versus boxed reducers.</summary>
@@ -18,16 +21,22 @@ public class ScannerBenchmarks
 public class CalcParseBenchmarks
 {
     [Benchmark]
-    public double ParseFromSource_TypedReducer() => BenchmarkWorkloads.CalcParseFromSource(BenchmarkWorkloads.CalcTypedReducer);
+    public double ParseFromStringScanner_TypedReducer() => BenchmarkWorkloads.CalcParseFromStringScanner(BenchmarkWorkloads.CalcTypedReducer);
 
     [Benchmark]
     public double ParsePreTokenized_TypedReducer() => BenchmarkWorkloads.CalcParsePreTokenized(BenchmarkWorkloads.CalcTypedReducer);
 
     [Benchmark]
-    public double ParseFromSource_BoxedReducer() => BenchmarkWorkloads.CalcParseFromSource(BenchmarkWorkloads.CalcBoxedReducer);
+    public double ParseFromStringScanner_BoxedReducer() => BenchmarkWorkloads.CalcParseFromStringScanner(BenchmarkWorkloads.CalcBoxedReducer);
 
     [Benchmark]
     public double ParsePreTokenized_BoxedReducer() => BenchmarkWorkloads.CalcParsePreTokenized(BenchmarkWorkloads.CalcBoxedReducer);
+
+    [Benchmark]
+    public double ParseFromTextReaderScanner_TypedReducer() => BenchmarkWorkloads.CalcParseFromTextReaderScanner(BenchmarkWorkloads.CalcTypedReducer);
+
+    [Benchmark]
+    public double ParseFromTextReaderScanner_BoxedReducer() => BenchmarkWorkloads.CalcParseFromTextReaderScanner(BenchmarkWorkloads.CalcBoxedReducer);
 }
 
 /// <summary>Benchmarks DRAW parsing through the handwritten AST-building facade.</summary>
@@ -35,7 +44,7 @@ public class CalcParseBenchmarks
 public class DrawParseBenchmarks
 {
     [Benchmark]
-    public int ParseFromSource_BuildAst() => BenchmarkWorkloads.DrawParseFromSource();
+    public int ParseFromStringScanner_BuildAst() => BenchmarkWorkloads.DrawParseFromStringScanner();
 }
 
 /// <summary>Benchmarks recovering parser runs with source and pre-tokenized inputs.</summary>
@@ -43,7 +52,7 @@ public class DrawParseBenchmarks
 public class RecoveryParseBenchmarks
 {
     [Benchmark]
-    public int ParseFromSource() => BenchmarkWorkloads.RecoveryParseFromSource();
+    public int ParseFromStringScanner() => BenchmarkWorkloads.RecoveryParseFromStringScanner();
 
     [Benchmark]
     public int ParsePreTokenized() => BenchmarkWorkloads.RecoveryParsePreTokenized();

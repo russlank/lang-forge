@@ -242,15 +242,15 @@ static mini_compiler_typed_reducer make_typed_reducer(context *state) {
 static program *parse_source(context *state, const char *source, char *message, size_t message_size) {
     mini_compiler_error error;
     mini_compiler_scanner scanner;
-    mini_compiler_lexeme_source token_source;
+    mini_compiler_lexeme_source lexeme_source;
     mini_compiler_typed_reducer reducer;
     mini_compiler_value value = NULL;
     error.message[0] = '\0';
     mini_compiler_scanner_init(&scanner, source);
-    token_source.user = &scanner;
-    token_source.next = mini_compiler_scanner_source_next;
+    lexeme_source.user = &scanner;
+    lexeme_source.next = mini_compiler_scanner_lexeme_source_next;
     reducer = make_typed_reducer(state);
-    if (!mini_compiler_parse_value_source_typed(&token_source, &reducer, &value, &error)) {
+    if (!mini_compiler_parse_value_lexeme_source_typed(&lexeme_source, &reducer, &value, &error)) {
         snprintf(message, message_size, "parse failed: %s", error.message);
         return NULL;
     }

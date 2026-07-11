@@ -29,6 +29,10 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
      ;
 ```
 
+Use `%target go`, `%target csharp`, `%target c`, or `%target cpp` for current
+generated backends. The CLI also accepts `--target c++` as a C++ alias, but
+examples and manifests use `cpp` consistently.
+
 ## Lexer Patterns
 
 - Use definitions for repeated character classes and token families.
@@ -60,6 +64,9 @@ Rule : left=TokenA right=TokenB {go: rule.pair}
 - Use target-tagged reducer labels such as `{go: add}`, `{csharp: add}`,
   `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
   generated `SemanticAction` values with `ReducerMap`.
+- Keep action-label text portable across targets when examples are equivalent;
+  generators preserve the original label in `langforge.actions.json` and
+  produce target-safe identifiers for C and C++.
 - Declare `%semantic <target> type Nonterminal TargetType` when a nonterminal
   has a real domain value. Go, C#, C, and C++ emit typed reducer
   contexts/adapters for eligible actions; all targets record the declared types
@@ -84,6 +91,26 @@ For every non-trivial production, line up:
   typed-handler pointers in C;
 - explicit `--boxed` smoke coverage when an example keeps the compatibility
   reducer path.
+
+Scanner input shape is part of the handwritten facade, not the grammar. New
+examples should usually parse through the generated lexeme-source parser and
+choose the target-native input adapter in handwritten code: Go
+`NewReaderScanner`, C# `Scanner.FromTextReader` or `Scanner.FromStream`, C
+`*_stream_scanner` plus a read callback, or C++ `InputStreamScanner`. Keep
+`Tokenize`/token-list parsing when a test or teaching report needs to inspect
+tokens before parsing.
+
+The generated parser APIs are source-first and collection-compatible:
+
+- Go: `ParseWithReducerFromLexemeSource`, `ParseValueFromLexemeSource`, and
+  `ParseRecoveringFromLexemeSource`.
+- C#: `Parser.ParseWithReducerFromLexemeSource`,
+  `Parser.ParseValueFromLexemeSource`, and
+  `Parser.ParseRecoveringFromLexemeSource`.
+- C: `*_parse_value_lexeme_source`, `*_parse_value_lexeme_source_typed`, and
+  `*_parse_recovering_lexeme_source`.
+- C++: `ParseValueFromLexemeSource`, typed reducer helpers, and recovery
+  overloads exposed through the generated namespace.
 
 ## Legacy Split Inputs
 

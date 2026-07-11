@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "cannot read %s\n", input_path);
         return 1;
     }
-    if (!dsl_parse_source(source, &parsed)) {
+    if (!dsl_parse_lexeme_source(source, &parsed)) {
         fprintf(stderr, "%s\n", parsed.message);
         free(source);
         dsl_parse_result_free(&parsed);

@@ -27,7 +27,7 @@ void dsl_parse_result_init(dsl_parse_result *result);
  */
 void dsl_parse_result_free(dsl_parse_result *result);
 /*
- * Parses source through the generated scanner token source and typed reducer.
+ * Parses source through the generated scanner lexeme source and typed reducer.
  *
  * Ownership rules:
  * - source remains caller-owned and must outlive the call;
@@ -36,6 +36,6 @@ void dsl_parse_result_free(dsl_parse_result *result);
  * - on success, result->document owns all AST nodes and copied token text;
  * - callers release successful results with dsl_parse_result_free.
  */
-int dsl_parse_source(const char *source, dsl_parse_result *result);
+int dsl_parse_lexeme_source(const char *source, dsl_parse_result *result);
 
 #endif

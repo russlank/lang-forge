@@ -8,7 +8,7 @@ lowering, runtime execution, diagnostics, and file IO.
 The grammar declares C semantic result types for the AST pointers. The generated
 `parser_typed.h` header provides contexts such as
 `mini_compiler_add_reduction`, where named grammar labels become fields like
-`left` and `right`. `main.c` calls `mini_compiler_parse_value_source_typed` so
+`left` and `right`. `main.c` calls `mini_compiler_parse_value_lexeme_source_typed` so
 new projects start from the typed reducer API.
 
 Reducer failures are reported by filling `mini_compiler_error` and returning

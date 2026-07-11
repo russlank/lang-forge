@@ -4,7 +4,7 @@ Document id: `lang-forge-parser-algorithms-v1`
 
 Status: `active`
 
-Last updated: `2026-07-01`
+Last updated: `2026-07-11`
 
 Owner: `Project maintainers`
 
@@ -27,8 +27,10 @@ is the stronger deterministic mode to try when LALR reports a conflict that
 canonical LR(1) can avoid.
 
 For the broader stage-by-stage compiler flow, read
-[Compiler Pipeline](compiler-pipeline.md). For a beginner-oriented sequence of
-examples, read [Learning Path](learning-path.md).
+[Compiler Pipeline](compiler-pipeline.md). For visual diagrams of scanner and
+parser driving tables before the LR details, read
+[Automata And Driving Tables](automata-and-tables.md). For a
+beginner-oriented sequence of examples, read [Learning Path](learning-path.md).
 
 ## Grammar Shape
 

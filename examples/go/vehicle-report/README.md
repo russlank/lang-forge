@@ -20,7 +20,7 @@ handwritten example code:
 | `vehicle.lf` | Source grammar for scanner and parser generation |
 | `generated/` | Recreated scanner/parser package, ignored by Git |
 | `model/` | Cycle-free vehicle model shared by generated typed contexts and handwritten code |
-| `parser.go` | Handwritten adapter that calls `ParseWithReducerFromSource` and builds the AST |
+| `parser.go` | Handwritten adapter that calls `ParseWithReducerFromLexemeSource` and builds the AST |
 | `ast.go` | Public aliases for the vehicle, feature, and repair model |
 | `report.go` | Handwritten report/XML-like rendering |
 | `cmd/vehicle-report-demo` | Handwritten command-line demo |

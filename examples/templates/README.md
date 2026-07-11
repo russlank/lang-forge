@@ -75,3 +75,9 @@ Each template uses the current recommended LangForge reducer style:
   rule/action/field context rather than handled with panic-style helpers;
 - `langforge.actions.json` records the typed action contract for review and
   tooling.
+
+For reusable projects, prefer facade overloads that can parse from
+target-native demand-fed inputs: Go `io.Reader`, C# `TextReader`/`Stream`, C
+read callbacks with `*_stream_scanner`, and C++ `std::istream` with
+`InputStreamScanner`. Keep string overloads as convenience wrappers and token-list
+overloads for tests, token inspection, and debugging.

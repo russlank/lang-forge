@@ -26,7 +26,8 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
    `%semantic <target> type Nonterminal Type` when reducers should have a
    typed contract; add `%semantic <target> import` for handwritten semantic
    dependencies; and use `%semantic go mode inline` only for intentional
-   target-specific generated Go snippets.
+   target-specific generated Go snippets. Supported generation targets are Go,
+   C#, C, and C++ (`go`, `csharp`, `c`, and `cpp`/`c++`).
 6. Validate with the source runner first:
 
 ```sh
@@ -43,7 +44,8 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
 8. If generating target output, write it to the example/tool-local generated
    directory (`generated/` for Go, C, and C++; `Generated/` for C#) and keep
    generated output out of committed source unless the task explicitly asks for
-   a golden fixture.
+   a golden fixture. Generated outputs use conventional filenames: Go `.go`,
+   C# `*.g.cs`, C `.h`/`.c`, and C++ `.hpp`/`.cpp`.
 9. Use generated `langforge.actions.json` as the cross-target semantic
    contract. Go, C#, C, and C++ can generate typed reducer contexts/adapters;
    Go, C#, and C++ validate reducer-map coverage, and C validates required

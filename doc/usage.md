@@ -4,7 +4,7 @@ Document id: `lang-forge-usage-v1`
 
 Status: `active`
 
-Last updated: `2026-07-09`
+Last updated: `2026-07-10`
 
 Owner: `Project maintainers`
 
@@ -245,11 +245,11 @@ expects visible grammar tokens.
 
 The preferred production path is source-based parsing: construct a scanner and
 pass it directly to the parser. The parser pulls one lexeme at a time from the
-scanner or token source instead of requiring the caller to build a full token
+scanner or lexeme source instead of requiring the caller to build a full token
 slice first.
 
 ```go
-value, err := calc.ParseWithReducerFromSource(
+value, err := calc.ParseWithReducerFromLexemeSource(
 	calc.NewScanner(source),
 	calc.ReducerFunc(calcsem.Reduce),
 )
@@ -293,31 +293,38 @@ parsing; it does not introduce goroutines, channels, async tasks, or queues.
 Error behavior is the same parser contract with a different input shape.
 Scanner/source failures surface when the parser pulls the failing token.
 Syntax failures are reported by `Parse`/`ParseValue` style APIs as normal parse
-errors. `ParseRecoveringFromSource` and equivalent recovery APIs return
+errors. `ParseRecoveringFromLexemeSource` and equivalent recovery APIs return
 structured syntax diagnostics and an accepted flag. Reducer failures still
 propagate through the target's normal error mechanism.
 
 | Target | Source value/reducer path | Source recovery path | Token collection path |
 | --- | --- | --- | --- |
-| Go | `ParseWithReducerFromSource(NewScanner(source), reducer)` or `ParseValueFromSource(NewScanner(source))` | `ParseRecoveringFromSource(NewScanner(source))` | `Tokenize(source)` or `Scanner.All()`, then `Parse(tokens)` / `ParseWithReducer(tokens, reducer)` |
-| C# | `Parser.ParseWithReducerFromSource(new Scanner(source), reducers)` or `Parser.ParseValueFromSource(new Scanner(source))` | `Parser.ParseRecoveringFromSource(new Scanner(source))` or instance `ParseRecoveringSource(...)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
-| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_source` or `*_parse_value_source_typed` | `*_parse_recovering_source` | `*_tokenize`, then `*_parse_value` / `*_parse_value_typed` / `*_parse_recovering` |
+| Go | `ParseWithReducerFromLexemeSource(NewScanner(source), reducer)` or `ParseValueFromLexemeSource(NewScanner(source))` | `ParseRecoveringFromLexemeSource(NewScanner(source))` | `Tokenize(source)` or `Scanner.All()`, then `Parse(tokens)` / `ParseWithReducer(tokens, reducer)` |
+| C# | `Parser.ParseWithReducerFromLexemeSource(new Scanner(source), reducers)` or `Parser.ParseValueFromLexemeSource(new Scanner(source))` | `Parser.ParseRecoveringFromLexemeSource(new Scanner(source))` or instance `ParseRecoveringLexemeSource(...)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
+| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_lexeme_source` or `*_parse_value_lexeme_source_typed` | `*_parse_recovering_lexeme_source` | `*_tokenize`, then `*_parse_value` / `*_parse_value_typed` / `*_parse_recovering` |
 | C++ | construct `Generated::Scanner scanner(sourceText)`, then call `parse_value(scanner, reducers)` | `parse_recovering(scanner)` | `tokenize(sourceText)`, then `parse_value(tokens, reducers)` / `parse_recovering(tokens)` |
 
 | Target | In-memory scanner input | Reader/stream-backed scanner input |
 | --- | --- | --- |
-| Go | `NewScanner(source)` | `NewScannerFromReader(reader, WithScannerReadBufferSize(...), WithMaxBufferedTokenBytes(...))`; `TokenizeReader(reader)` |
+| Go | `NewScanner(source)` | `NewReaderScanner(reader, WithReaderScannerBufferSize(...), WithMaxBufferedLexemeBytes(...))`; `TokenizeFromReader(reader)` |
 | C# | `new Scanner(source)` | `Scanner.FromTextReader(reader, options)`; `Scanner.FromStream(stream, encoding, options)`; `Scanner.Tokenize(reader, options)` |
 | C | `*_scanner_init(&scanner, source)` | `*_stream_scanner_init(_ex)`, a `*_stream_read_fn`, `*_stream_scanner_next`, and `*_stream_scanner_free` |
-| C++ | `Scanner scanner(sourceText)` | `StreamScanner scanner(inputStream, readBufferSize, maxBufferedTokenBytes)` |
+| C++ | `Scanner scanner(sourceText)` | `InputStreamScanner scanner(inputStream, readBufferSize, maxBufferedLexemeBytes)` |
 
-C and C++ stream-backed scanners own copied visible-token text because lexemes
+C and C++ stream-backed scanners own copied visible-lexeme text because lexemes
 cannot borrow safely from a moving chunk buffer. Keep the stream scanner alive
 while parser/reducer code reads those lexeme text views, and call the generated
 C `*_stream_scanner_free` function when parsing is finished.
 For C#, dispose the `ReaderScanner` returned by `Scanner.FromStream` when the
 facade is done parsing; `Scanner.FromTextReader` leaves the caller-owned reader
 open.
+
+The calc examples show the same pattern in all supported targets:
+`examples/go/calc` uses `NewReaderScanner`, `examples/csharp/calc` uses
+`Scanner.FromStream`/`Scanner.FromTextReader`, `examples/c/calc` uses
+`*_stream_scanner` plus a read callback, and `examples/cpp/calc` uses
+`InputStreamScanner` over `std::istream`. Each one keeps token-collection APIs only
+for tests, compatibility, or teaching reports.
 
 Generated parsers can be used in two semantic styles:
 

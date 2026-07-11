@@ -162,12 +162,12 @@ func renderScannerHeader(prefix string, source string) string {
 	b.WriteString("typedef struct " + prefix + "_lexeme {\n    " + prefix + "_token token;\n    const char *text;\n    size_t length;\n    const char *channel;\n    size_t start;\n    size_t end;\n    int start_line;\n    int start_column;\n    int end_line;\n    int end_column;\n} " + prefix + "_lexeme;\n\n")
 	b.WriteString("typedef struct " + prefix + "_scanner {\n    const char *input;\n    size_t length;\n    size_t pos;\n    int line;\n    int column;\n    int include_hidden;\n} " + prefix + "_scanner;\n\n")
 	b.WriteString("typedef int (*" + prefix + "_stream_read_fn)(void *user, char *buffer, size_t capacity, size_t *read, " + prefix + "_error *error);\n\n")
-	b.WriteString("typedef struct " + prefix + "_stream_scanner {\n    " + prefix + "_stream_read_fn read;\n    void *user;\n    char *buffer;\n    size_t length;\n    size_t capacity;\n    size_t base;\n    int line;\n    int column;\n    int include_hidden;\n    int eof;\n    size_t read_buffer_size;\n    size_t max_buffered_token_bytes;\n    char **owned_texts;\n    size_t owned_count;\n    size_t owned_capacity;\n} " + prefix + "_stream_scanner;\n\n")
+	b.WriteString("typedef struct " + prefix + "_stream_scanner {\n    " + prefix + "_stream_read_fn read;\n    void *user;\n    char *buffer;\n    size_t length;\n    size_t capacity;\n    size_t base;\n    int line;\n    int column;\n    int include_hidden;\n    int eof;\n    size_t read_buffer_size;\n    size_t max_buffered_lexeme_bytes;\n    char **owned_texts;\n    size_t owned_count;\n    size_t owned_capacity;\n} " + prefix + "_stream_scanner;\n\n")
 	b.WriteString("void " + prefix + "_scanner_init(" + prefix + "_scanner *scanner, const char *input);\n")
 	b.WriteString("void " + prefix + "_scanner_include_hidden(" + prefix + "_scanner *scanner, int include_hidden);\n")
 	b.WriteString("int " + prefix + "_scanner_next(" + prefix + "_scanner *scanner, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_stream_scanner_init(" + prefix + "_stream_scanner *scanner, " + prefix + "_stream_read_fn read, void *user);\n")
-	b.WriteString("void " + prefix + "_stream_scanner_init_ex(" + prefix + "_stream_scanner *scanner, " + prefix + "_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_token_bytes);\n")
+	b.WriteString("void " + prefix + "_stream_scanner_init_ex(" + prefix + "_stream_scanner *scanner, " + prefix + "_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_lexeme_bytes);\n")
 	b.WriteString("void " + prefix + "_stream_scanner_include_hidden(" + prefix + "_stream_scanner *scanner, int include_hidden);\n")
 	b.WriteString("int " + prefix + "_stream_scanner_next(" + prefix + "_stream_scanner *scanner, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_stream_scanner_free(" + prefix + "_stream_scanner *scanner);\n")
@@ -464,7 +464,7 @@ static int lf_stream_read_more(` + prefix + `_stream_scanner *scanner, ` + prefi
     if (scanner->eof) { return 1; }
     if (scanner->read == NULL) { lf_set_error(error, "stream scanner read callback is required"); return 0; }
     if (scanner->read_buffer_size == 0) { scanner->read_buffer_size = 4096; }
-    if (scanner->max_buffered_token_bytes == 0) { scanner->max_buffered_token_bytes = 1048576; }
+    if (scanner->max_buffered_lexeme_bytes == 0) { scanner->max_buffered_lexeme_bytes = 1048576; }
     if (!lf_stream_ensure_capacity(scanner, scanner->length + scanner->read_buffer_size, error)) { return 0; }
     size_t read = 0;
     if (!scanner->read(scanner->user, scanner->buffer + scanner->length, scanner->read_buffer_size, &read, error)) {
@@ -479,8 +479,8 @@ static int lf_stream_read_more(` + prefix + `_stream_scanner *scanner, ` + prefi
         return 1;
     }
     scanner->length += read;
-    if (scanner->length > scanner->max_buffered_token_bytes) {
-        lf_set_error(error, "scanner buffered token exceeds limit");
+    if (scanner->length > scanner->max_buffered_lexeme_bytes) {
+        lf_set_error(error, "scanner buffered lexeme exceeds limit");
         return 0;
     }
     return 1;
@@ -550,7 +550,7 @@ static int lf_stream_copy_text(` + prefix + `_stream_scanner *scanner, size_t le
     return 1;
 }
 
-void ` + prefix + `_stream_scanner_init_ex(` + prefix + `_stream_scanner *scanner, ` + prefix + `_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_token_bytes) {
+void ` + prefix + `_stream_scanner_init_ex(` + prefix + `_stream_scanner *scanner, ` + prefix + `_stream_read_fn read, void *user, size_t read_buffer_size, size_t max_buffered_lexeme_bytes) {
     if (scanner == NULL) { return; }
     memset(scanner, 0, sizeof(*scanner));
     scanner->read = read;
@@ -558,7 +558,7 @@ void ` + prefix + `_stream_scanner_init_ex(` + prefix + `_stream_scanner *scanne
     scanner->line = 1;
     scanner->column = 1;
     scanner->read_buffer_size = read_buffer_size == 0 ? 4096 : read_buffer_size;
-    scanner->max_buffered_token_bytes = max_buffered_token_bytes == 0 ? 1048576 : max_buffered_token_bytes;
+    scanner->max_buffered_lexeme_bytes = max_buffered_lexeme_bytes == 0 ? 1048576 : max_buffered_lexeme_bytes;
 }
 
 void ` + prefix + `_stream_scanner_init(` + prefix + `_stream_scanner *scanner, ` + prefix + `_stream_read_fn read, void *user) {
@@ -655,14 +655,14 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("typedef struct " + prefix + "_reduction {\n    int rule;\n    const char *lhs;\n    const char **rhs;\n    size_t rhs_count;\n    const char **labels;\n    size_t label_count;\n    " + prefix + "_semantic_action action_id;\n    const char *action;\n    " + prefix + "_value *values;\n} " + prefix + "_reduction;\n\n")
 	b.WriteString("/* Reducers may read ctx and terminal lexeme pointers during the callback.\n")
 	b.WriteString(" * Copy any lexeme struct or text your semantic result must retain after the\n")
-	b.WriteString(" * parse call, especially when parsing from a scanner/source. */\n")
+	b.WriteString(" * parse call, especially when parsing from a scanner/lexeme-source. */\n")
 	b.WriteString("typedef " + prefix + "_value (*" + prefix + "_reduce_fn)(const " + prefix + "_reduction *ctx, void *user, " + prefix + "_error *error);\n\n")
 	b.WriteString("typedef struct " + prefix + "_lexeme_source {\n    void *user;\n    int (*next)(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n} " + prefix + "_lexeme_source;\n\n")
-	b.WriteString("typedef struct " + prefix + "_lexeme_array_source {\n    const " + prefix + "_lexeme *tokens;\n    size_t count;\n    size_t pos;\n} " + prefix + "_lexeme_array_source;\n\n")
-	b.WriteString("void " + prefix + "_lexeme_array_source_init(" + prefix + "_lexeme_array_source *array_source, const " + prefix + "_lexeme *tokens, size_t count);\n")
+	b.WriteString("typedef struct " + prefix + "_lexeme_array_source {\n    const " + prefix + "_lexeme *lexemes;\n    size_t count;\n    size_t pos;\n} " + prefix + "_lexeme_array_source;\n\n")
+	b.WriteString("void " + prefix + "_lexeme_array_source_init(" + prefix + "_lexeme_array_source *array_source, const " + prefix + "_lexeme *lexemes, size_t count);\n")
 	b.WriteString("int " + prefix + "_lexeme_array_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_stream_scanner_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_scanner_lexeme_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_stream_scanner_lexeme_source_next(void *user, " + prefix + "_lexeme *lexeme, int *ok, " + prefix + "_error *error);\n\n")
 	b.WriteString("/* One expected terminal or reporting group. */\n")
 	b.WriteString("typedef struct " + prefix + "_expected_token {\n    const char *symbol;\n    const char *display;\n    const char *const *members;\n    size_t member_count;\n} " + prefix + "_expected_token;\n\n")
 	b.WriteString("/* One source-rich parser syntax diagnostic. */\n")
@@ -671,14 +671,14 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("typedef struct " + prefix + "_parse_result {\n    " + prefix + "_value value;\n    " + prefix + "_parse_diagnostic *diagnostics;\n    size_t diagnostic_count;\n    int accepted;\n} " + prefix + "_parse_result;\n\n")
 	b.WriteString("const char *" + prefix + "_semantic_action_name(" + prefix + "_semantic_action action);\n")
 	b.WriteString("int " + prefix + "_reduction_value_for(const " + prefix + "_reduction *ctx, const char *label, " + prefix + "_value *out, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_source(" + prefix + "_lexeme_source *source, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
-	b.WriteString("int " + prefix + "_parse_value_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
-	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_recovering_source(" + prefix + "_lexeme_source *source, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *tokens, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_value_recovering_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_parse_value_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_recovering_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("void " + prefix + "_parse_result_init(" + prefix + "_parse_result *result);\n")
 	b.WriteString("void " + prefix + "_parse_result_free(" + prefix + "_parse_result *result);\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
@@ -779,21 +779,21 @@ func renderTypedParserHeader(prefix string, source string, manifest action.Manif
 	b.WriteString("        return NULL;\n")
 	b.WriteString("    }\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_typed(const " + prefix + "_lexeme *tokens, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_lexeme_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value_source(source, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value_lexeme_source(source, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *tokens, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value_recovering(tokens, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_recovering_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_lexeme_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value_recovering_source(source, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering_lexeme_source(source, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
 	b.WriteString("}\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
 	return b.String()
@@ -844,9 +844,9 @@ typedef struct lf_owned_lexeme {
     struct lf_owned_lexeme *next;
 } lf_owned_lexeme;
 
-void ` + prefix + `_lexeme_array_source_init(` + prefix + `_lexeme_array_source *array_source, const ` + prefix + `_lexeme *tokens, size_t count) {
+void ` + prefix + `_lexeme_array_source_init(` + prefix + `_lexeme_array_source *array_source, const ` + prefix + `_lexeme *lexemes, size_t count) {
     if (array_source == NULL) { return; }
-    array_source->tokens = tokens;
+    array_source->lexemes = lexemes;
     array_source->count = count;
     array_source->pos = 0;
 }
@@ -855,18 +855,18 @@ int ` + prefix + `_lexeme_array_source_next(void *user, ` + prefix + `_lexeme *l
     ` + prefix + `_lexeme_array_source *source = (` + prefix + `_lexeme_array_source *)user;
     if (ok != NULL) { *ok = 0; }
     if (source == NULL || lexeme == NULL || ok == NULL) { lf_set_error(error, "lexeme array source arguments are required"); return 0; }
-    if (source->tokens == NULL && source->count != 0) { lf_set_error(error, "parser tokens are required"); return 0; }
+    if (source->lexemes == NULL && source->count != 0) { lf_set_error(error, "parser lexemes are required"); return 0; }
     if (source->pos >= source->count) { return 1; }
-    *lexeme = source->tokens[source->pos++];
+    *lexeme = source->lexemes[source->pos++];
     *ok = 1;
     return 1;
 }
 
-int ` + prefix + `_scanner_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+int ` + prefix + `_scanner_lexeme_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
     return ` + prefix + `_scanner_next((` + prefix + `_scanner *)user, lexeme, ok, error);
 }
 
-int ` + prefix + `_stream_scanner_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
+int ` + prefix + `_stream_scanner_lexeme_source_next(void *user, ` + prefix + `_lexeme *lexeme, int *ok, ` + prefix + `_error *error) {
     return ` + prefix + `_stream_scanner_next((` + prefix + `_stream_scanner *)user, lexeme, ok, error);
 }
 
@@ -1073,26 +1073,26 @@ void ` + prefix + `_parse_result_free(` + prefix + `_parse_result *result) {
     ` + prefix + `_parse_result_init(result);
 }
 
-int ` + prefix + `_parse(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value(tokens, count, NULL, NULL, NULL, error);
+int ` + prefix + `_parse(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value(lexemes, count, NULL, NULL, NULL, error);
 }
 
-int ` + prefix + `_parse_source(` + prefix + `_lexeme_source *source, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value_source(source, NULL, NULL, NULL, error);
+int ` + prefix + `_parse_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_lexeme_source(source, NULL, NULL, NULL, error);
 }
 
-int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
     ` + prefix + `_lexeme_array_source array_source;
     ` + prefix + `_lexeme_source source;
-    ` + prefix + `_lexeme_array_source_init(&array_source, tokens, count);
+    ` + prefix + `_lexeme_array_source_init(&array_source, lexemes, count);
     source.user = &array_source;
     source.next = ` + prefix + `_lexeme_array_source_next;
-    return ` + prefix + `_parse_value_source(&source, reducer, user, out, error);
+    return ` + prefix + `_parse_value_lexeme_source(&source, reducer, user, out, error);
 }
 
-int ` + prefix + `_parse_value_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
     ` + prefix + `_parse_result result = {0};
-    int ok = ` + prefix + `_parse_value_recovering_source(source, reducer, user, &result, error);
+    int ok = ` + prefix + `_parse_value_recovering_lexeme_source(source, reducer, user, &result, error);
     if (!ok) { ` + prefix + `_parse_result_free(&result); return 0; }
     if (out != NULL) { *out = result.value; }
     if (result.diagnostic_count != 0) {
@@ -1104,24 +1104,24 @@ int ` + prefix + `_parse_value_source(` + prefix + `_lexeme_source *source, ` + 
     return 1;
 }
 
-int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value_recovering(tokens, count, NULL, NULL, result, error);
+int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering(lexemes, count, NULL, NULL, result, error);
 }
 
-int ` + prefix + `_parse_recovering_source(` + prefix + `_lexeme_source *source, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value_recovering_source(source, NULL, NULL, result, error);
+int ` + prefix + `_parse_recovering_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering_lexeme_source(source, NULL, NULL, result, error);
 }
 
-int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *tokens, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     ` + prefix + `_lexeme_array_source array_source;
     ` + prefix + `_lexeme_source source;
-    ` + prefix + `_lexeme_array_source_init(&array_source, tokens, count);
+    ` + prefix + `_lexeme_array_source_init(&array_source, lexemes, count);
     source.user = &array_source;
     source.next = ` + prefix + `_lexeme_array_source_next;
-    return ` + prefix + `_parse_value_recovering_source(&source, reducer, user, result, error);
+    return ` + prefix + `_parse_value_recovering_lexeme_source(&source, reducer, user, result, error);
 }
 
-int ` + prefix + `_parse_value_recovering_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value_recovering_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     lf_clear_error(error);
     if (result == NULL) { lf_set_error(error, "parser result is required"); return 0; }
     ` + prefix + `_parse_result_init(result);

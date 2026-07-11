@@ -10,7 +10,7 @@ Statement : Ident Assign Number Semi
 ```
 
 `Semi` is the synchronization token. The demo calls
-`Parser.ParseRecoveringFromSource(new Scanner(source))`, inspects the returned
+`Parser.ParseRecoveringFromLexemeSource(new Scanner(source))`, inspects the returned
 `ParseResult`, and does not rely on exceptions for recoverable syntax errors.
 
 Run:

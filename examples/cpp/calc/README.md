@@ -45,6 +45,13 @@ values. The generated adapter boxes results only at the parser boundary. Pass
 before delegating to boxed reducers, or `--boxed` to exercise the older boxed
 debug path directly.
 
+The demo evaluates files through `InputStreamScanner` over `std::istream`. The
+parser pulls lexemes lazily, and the stream scanner owns copied lexeme text
+while parsing so string views remain valid even though the input buffer moves.
+Keep the `InputStreamScanner` alive until parsing and reducer code finish. The
+in-memory `Scanner` and `tokenize(source)` APIs remain useful when tests or
+debugging tools need a token vector before parsing.
+
 The calculator grammar intentionally stays in parity with the Go, C#, and C
 versions. The shared sample expression contains a decimal literal and evaluates
 to `-2`, so scanner, parser, reducer, and numeric conversion behavior are

@@ -16,7 +16,7 @@ internal static class DrawParser
     /// </summary>
     public static DrawProgram Parse(string source)
     {
-        var value = Parser.ParseWithReducerFromSource(new Scanner(source), Reducers.Value);
+        var value = Parser.ParseWithReducerFromLexemeSource(new Scanner(source), Reducers.Value);
         return value is DrawProgram program
             ? program
             : throw new InvalidOperationException($"parser returned {value?.GetType().Name ?? "<null>"} instead of DrawProgram");

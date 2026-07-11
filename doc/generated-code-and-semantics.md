@@ -4,7 +4,7 @@ Document id: `lang-forge-generated-code-and-semantics-v1`
 
 Status: `active`
 
-Last updated: `2026-07-09`
+Last updated: `2026-07-11`
 
 Owner: `Project maintainers`
 
@@ -59,6 +59,11 @@ Expr Plus Term
 LangForge generates the scanner and parser. The application owns the semantic
 layer.
 
+If the generated scanner/parser tables still feel abstract, read
+[Automata And Driving Tables](automata-and-tables.md). It shows the same
+pipeline as boxes, arrows, DFA scanner rows, LR ACTION/GOTO rows, and reducer
+callbacks.
+
 ## Generated And Handwritten Responsibilities
 
 Treat generated code as the recognizer implementation, not as the public shape
@@ -105,7 +110,7 @@ public API.
 
 The preferred production path is source-based parsing: construct the generated
 scanner and pass it directly to the parser. The parser pulls lexemes lazily
-from a token source, so callers do not need to allocate and retain a complete
+from a lexeme source, so callers do not need to allocate and retain a complete
 token collection before parsing begins.
 
 Token collections remain supported for compatibility, teaching, debugging, and
@@ -120,48 +125,52 @@ its state stack, semantic value stack, diagnostics, and any reducer-built AST
 or domain values for as long as the parse requires.
 
 Source-based parsing has two layers. The parser pulls lexemes lazily from a
-generated scanner or token source. The scanner can now be constructed either
+generated scanner or lexeme source. The scanner can now be constructed either
 from in-memory source text or from a target-native demand-fed input:
 
-- Go: `NewScannerFromReader(io.Reader, ...)` and `TokenizeReader`.
+- Go: `NewReaderScanner(io.Reader, ...)` and `TokenizeFromReader`.
 - C#: `Scanner.FromTextReader`, `Scanner.FromStream`, and reader overloads of
   `Scanner.Tokenize`.
 - C: `*_stream_scanner` with a read callback, user pointer, buffer limits, and
   `*_stream_scanner_free`.
-- C++: `StreamScanner` over `std::istream`.
+- C++: `InputStreamScanner` over `std::istream`.
 
-C and C++ stream-backed scanners own copied visible-token text. Keep the
+C and C++ stream-backed scanners own copied visible-lexeme text. Keep the
 stream scanner alive while parser/reducer code reads lexeme text, and free the
 C stream scanner when parsing is finished. C# `Scanner.FromStream` returns a
 disposable reader scanner for the internally-created `StreamReader`;
 `Scanner.FromTextReader` leaves caller-owned readers open.
 
+The cross-target calculator examples use these stream-backed APIs in their
+handwritten demo entry points while preserving token-list parsing for reports
+and assertions.
+
 | Need | Recommended API shape |
 |---|---|
-| Syntax validation from a scanner/token source | `ParseFromSource(source)` |
-| Final semantic value from a scanner/token source | `ParseValueFromSource(source)` |
-| Custom reducers from a scanner/token source | `ParseWithReducerFromSource(source, reducer)` |
-| Recovery diagnostics from a scanner/token source | `ParseRecoveringFromSource(source)` |
+| Syntax validation from a scanner/lexeme source | `ParseFromLexemeSource(source)` |
+| Final semantic value from a scanner/lexeme source | `ParseValueFromLexemeSource(source)` |
+| Custom reducers from a scanner/lexeme source | `ParseWithReducerFromLexemeSource(source, reducer)` |
+| Recovery diagnostics from a scanner/lexeme source | `ParseRecoveringFromLexemeSource(source)` |
 | Token inspection before parsing | `Tokenize` / scanner `All`, then `Parse(tokens)` |
 | Compatibility with an existing token list | `Parse(tokens)`, `ParseValue(tokens)`, or `ParseWithReducer(tokens, reducer)` |
 
 Scanner/source failures are reported when the parser pulls the failing lexeme.
 Syntax failures from strict APIs still become parse errors. Recovering APIs
-such as `ParseRecoveringFromSource` or `parse_recovering(scanner)` return
+such as `ParseRecoveringFromLexemeSource` or `parse_recovering(scanner)` return
 structured diagnostics and an accepted flag. Reducer failures keep using the
 target's ordinary error mechanism: Go `error`, C error structs and false/NULL
 returns, and C#/C++ exceptions or facade-level result objects.
 
 Target names follow local conventions:
 
-- Go exposes `TokenSource`, `ParseFromSource`, `ParseValueFromSource`,
-  `ParseWithReducerFromSource`, and `ParseRecoveringFromSource`.
+- Go exposes `LexemeSource`, `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
+  `ParseWithReducerFromLexemeSource`, and `ParseRecoveringFromLexemeSource`.
 - C# exposes `ILexemeSource`, static calls such as
-  `Parser.ParseWithReducerFromSource(new Scanner(sourceText), reducers)`, and
-  instance methods such as `parser.ParseRecoveringSource(new Scanner(sourceText))`.
-- C exposes `<prefix>_lexeme_source`, `<prefix>_parse_value_source`,
-  `<prefix>_parse_value_source_typed`, and
-  `<prefix>_parse_recovering_source`.
+  `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducers)`, and
+  instance methods such as `parser.ParseRecoveringLexemeSource(new Scanner(sourceText))`.
+- C exposes `<prefix>_lexeme_source`, `<prefix>_parse_value_lexeme_source`,
+  `<prefix>_parse_value_lexeme_source_typed`, and
+  `<prefix>_parse_recovering_lexeme_source`.
 - C++ exposes `LexemeSource&` overloads such as
   `parse_value(scanner, reducers)` and `parse_recovering(scanner)`.
 
@@ -197,7 +206,7 @@ Values   = values for Expr, Plus, and Term
 Then the parser calls user code:
 
 ```go
-value, err := parser.ParseWithReducerFromSource(
+value, err := parser.ParseWithReducerFromLexemeSource(
 	parser.NewScanner(source),
 	parser.ReducerFunc(reduce),
 )
@@ -346,7 +355,7 @@ calc_typed_reducer reducer;
 reducer.user = demo;
 reducer.add = calc_typed_add;
 reducer.number = calc_typed_number;
-/* Fill every required handler, then call calc_parse_value_source_typed. */
+/* Fill every required handler, then call calc_parse_value_lexeme_source_typed. */
 ```
 
 In C++, a direct typed handler returns the declared semantic type. For the
@@ -598,7 +607,7 @@ the generated parser imports the package because its typed context references
 that type. The application still wires reducer behavior explicitly:
 
 ```go
-value, err := calc.ParseWithReducerFromSource(
+value, err := calc.ParseWithReducerFromLexemeSource(
 	calc.NewScanner(source),
 	calc.ReducerFunc(calcsem.Reduce),
 )
@@ -728,15 +737,15 @@ internal/policy/reducer.go
 
 Each generated package is independent. A Go program can import several of
 them, build a scanner from the matching generated package, and call
-`ParseWithReducerFromSource` with the matching reducer:
+`ParseWithReducerFromLexemeSource` with the matching reducer:
 
 ```go
-queryAST, err := queryparser.ParseWithReducerFromSource(
+queryAST, err := queryparser.ParseWithReducerFromLexemeSource(
 	queryparser.NewScanner(querySource),
 	queryparser.ReducerFunc(query.Reduce),
 )
 
-policyAST, err := policyparser.ParseWithReducerFromSource(
+policyAST, err := policyparser.ParseWithReducerFromLexemeSource(
 	policyparser.NewScanner(policySource),
 	policyparser.ReducerFunc(policy.Reduce),
 )
@@ -752,9 +761,9 @@ calc_error error = {{0}};
 
 calc_scanner_init(&scanner, source);
 source_reader.user = &scanner;
-source_reader.next = calc_scanner_source_next;
+source_reader.next = calc_scanner_lexeme_source_next;
 
-if (!calc_parse_value_source(&source_reader, calc_reduce, &user_state, &value, &error)) {
+if (!calc_parse_value_lexeme_source(&source_reader, calc_reduce, &user_state, &value, &error)) {
     /* handle error.message */
 }
 ```

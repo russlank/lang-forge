@@ -4,7 +4,7 @@ Document id: `lang-forge-tool-improvement-roadmap-v1`
 
 Status: `active`
 
-Last updated: `2026-07-02`
+Last updated: `2026-07-10`
 
 Owner: `Project maintainers`
 
@@ -746,7 +746,7 @@ largest parser state
 
 ---
 
-## 14.5. Prefer Streaming Token-Source Parser APIs
+## 14.5. Prefer Streaming Lexeme-Source Parser APIs
 
 ### Problem
 
@@ -769,13 +769,13 @@ pipeline.
 Status: implemented for Go, C#, C, and C++ generated backends, with collection
 APIs retained as compatibility/debugging wrappers.
 
-Make the preferred generated parser path pull tokens directly from a scanner or
-token source:
+Make the preferred generated parser path pull lexemes directly from a scanner or
+lexeme source:
 
 ```text
 input/source
   -> scanner.Next()
-  -> parser consumes token source
+  -> parser consumes lexeme source
   -> reducer/semantic actions run during parsing
   -> final value / AST / result
 ```
@@ -788,10 +788,10 @@ so parser behavior has one implementation path.
 Target direction:
 
 ```text
-Go:      TokenSource interface with Next()
+Go:      LexemeSource interface with Next()
 C#:      ILexemeSource with synchronous Next/TryRead
 C:       lexeme-source struct with next callback and user context
-C++:     lightweight source abstraction or scanner/source parse overload
+C++:     LexemeSource abstraction with scanner-backed parse overloads
 ```
 
 This is synchronous pull-based streaming, not async parsing. Do not introduce
@@ -801,7 +801,7 @@ machinery.
 ### Acceptance Criteria
 
 - Generated Go, C#, C, and C++ parsers can parse directly from generated
-  scanners or token sources.
+  scanners or lexeme sources.
 - Collection APIs remain source-compatible and keep working for tests,
   examples, and token inspection.
 - Existing parse behavior remains equivalent for valid input, lexical errors,
@@ -822,7 +822,7 @@ machinery.
 
 ### Problem
 
-The token-source parser path is implemented, but generated scanners still
+The lexeme-source parser path is implemented, but generated scanners still
 primarily accept complete in-memory source strings or buffers. That means a
 caller often has to do this before parsing:
 
@@ -830,7 +830,7 @@ caller often has to do this before parsing:
 file/stdin/network/editor source
   -> read whole source into string
   -> scanner.Next()
-  -> parser consumes token source
+  -> parser consumes lexeme source
 ```
 
 That is fine for examples and many small DSLs, but production tools often want
@@ -840,10 +840,12 @@ the entire source into one string first.
 
 ### Recommendation
 
-Status: initial generated-runtime support implemented for Go, C#, C, and C++;
-example adoption and benchmark comparisons remain follow-up work.
+Status: generated-runtime support is implemented for Go, C#, C, and C++; the
+cross-target calc examples now demonstrate reader/stream-backed parsing, and
+the optional benchmark suite includes reader/TextReader rows for scanner and
+calc parser measurements.
 
-Add generated streaming scanner variants below the existing parser token-source
+Add generated streaming scanner variants below the existing parser lexeme-source
 API:
 
 ```text
@@ -856,10 +858,10 @@ reader/stream/callback/source
 Implemented target API direction:
 
 ```text
-Go:      NewScannerFromReader(io.Reader, ...ScannerOption), TokenizeReader
-C#:      Scanner.FromTextReader(TextReader), Scanner.FromStream(Stream, Encoding, ScannerOptions)
+Go:      NewScanner(string), NewReaderScanner(io.Reader, ...ReaderScannerOption), TokenizeFromReader
+C#:      Scanner.FromTextReader(TextReader), Scanner.FromStream(Stream, Encoding, TextReaderScannerOptions)
 C:       *_stream_scanner with read callback, user pointer, buffer limits, dispose
-C++:     StreamScanner over std::istream with read-buffer and max-token limits
+C++:     InputStreamScanner over std::istream with read-buffer and max-lexeme limits
 ```
 
 The existing string/buffer scanner path remains the simple and fastest path.
@@ -872,7 +874,7 @@ The important implementation concerns are:
 - UTF-8/scalar sequences split across chunks;
 - source spans based on absolute offsets and line/column positions;
 - read errors reported as scanner/source failures;
-- configurable maximum buffered token length;
+- configurable maximum buffered lexeme length;
 - lexeme text ownership, especially for C and C++ where lexemes currently
   borrow from caller-owned input.
 
@@ -884,12 +886,15 @@ The important implementation concerns are:
 - Implemented in generated integration tests: valid input, lexical errors,
   read failures, syntax recovery, source spans, buffer limits, and UTF-8 split
   behavior where target input encoding makes that applicable.
-- Implemented: C and C++ stream scanners own copied visible-token text and
+- Implemented: C and C++ stream scanners own copied visible-lexeme text and
   document scanner-lifetime/disposal rules in generated APIs and public docs.
-- Follow-up: update more runnable examples/templates to prefer reader/stream
-  parsing at facade boundaries where it improves realism.
-- Follow-up: add benchmark comparisons for in-memory source parsing versus
-  reader/stream-backed scanner parsing.
+- Implemented in examples: calc uses Go `NewReaderScanner`, C#
+  `Scanner.FromStream`/`Scanner.FromTextReader`, C `*_stream_scanner`, and C++
+  `InputStreamScanner`.
+- Implemented in benchmarks: Go and C# benchmark rows compare in-memory source
+  parsing with reader/TextReader-backed scanner parsing.
+- Follow-up: update more reusable templates to expose reader/stream facade
+  overloads where that improves copyability.
 
 ---
 
@@ -1205,7 +1210,7 @@ Prioritizes:
 
 1. typed reducer helpers;
 2. named RHS labels;
-3. streaming token-source parser APIs;
+3. streaming lexeme-source parser APIs;
 4. structured diagnostics;
 5. generated action manifest;
 6. `lang-forge fmt`;
@@ -1255,7 +1260,7 @@ If only ten improvements are chosen, prioritize:
 
 1. **Typed semantic values or typed reducer accessors.**
 2. **Named RHS symbols** instead of positional `ctx.Values[n]`.
-3. **Streaming token-source parser APIs** with collection wrappers preserved.
+3. **Streaming lexeme-source parser APIs** with collection wrappers preserved.
 4. **Structured diagnostics** with source ranges and expected tokens.
 5. **`lang-forge lint`** for grammar quality.
 6. **`lang-forge fmt`** for grammar consistency.
@@ -1295,7 +1300,7 @@ Introduce a target-neutral diagnostic shape.
 
 ### Task 4: Token-Source Parser Runtime
 
-Introduce generated scanner/token-source parser APIs for Go, C#, C, and C++.
+Introduce generated scanner/lexeme-source parser APIs for Go, C#, C, and C++.
 Keep collection parsing as wrappers for compatibility and debugging.
 
 Status: implemented. Follow-up work should focus on additional examples,

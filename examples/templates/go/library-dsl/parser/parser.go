@@ -25,9 +25,9 @@ func New() Parser {
 	return Parser{reducers: sharedReducers}
 }
 
-// Parse consumes source through the generated scanner token source.
+// Parse consumes source through the generated scanner lexeme source.
 func (p Parser) Parse(source string) (model.Document, error) {
-	value, err := librarydslgenerated.ParseWithReducerFromSource(librarydslgenerated.NewScanner(source), p.reducers)
+	value, err := librarydslgenerated.ParseWithReducerFromLexemeSource(librarydslgenerated.NewScanner(source), p.reducers)
 	if err != nil {
 		return model.Document{}, err
 	}

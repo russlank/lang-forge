@@ -4,7 +4,7 @@ Document id: `lang-forge-architecture-v1`
 
 Status: `active`
 
-Last updated: `2026-06-19`
+Last updated: `2026-07-11`
 
 Owner: `Project maintainers`
 
@@ -62,7 +62,9 @@ That is acceptable for the first vertical slices; a richer `internal/ir`
 package can be introduced if the backends start sharing more generation logic.
 
 For a slower, beginner-friendly walkthrough of these stages, read
-[Learning Path](learning-path.md) first, then [Compiler Pipeline](compiler-pipeline.md).
+[Learning Path](learning-path.md) first, then
+[Automata And Driving Tables](automata-and-tables.md) and
+[Compiler Pipeline](compiler-pipeline.md).
 
 ## Lexer Pipeline
 
@@ -116,10 +118,10 @@ algorithm-selection guidance, see [Parser Algorithms](parser-algorithms.md).
 The generated Go package is reentrant and thread-safe for the common service
 shape: scanner state is stored in a mutex-protected `Scanner` instance, and
 parser state is local to each parse call. Generated public Go APIs include doc
-comments for editor help. The parser core consumes a synchronous `TokenSource`
+comments for editor help. The parser core consumes a synchronous `LexemeSource`
 with `Next`, and generated scanners implement that source contract directly.
-`ParseFromSource`, `ParseValueFromSource`, `ParseWithReducerFromSource`, and
-`ParseRecoveringFromSource` are the preferred production APIs. Token-slice
+`ParseFromLexemeSource`, `ParseValueFromLexemeSource`, `ParseWithReducerFromLexemeSource`, and
+`ParseRecoveringFromLexemeSource` are the preferred production APIs. Token-slice
 APIs such as `Parse`, `ParseValue`, and `ParseWithReducer` remain convenience
 wrappers for testing, debugging, and token reports; they accept the slice
 returned by `Tokenize` or the same slice with one trailing `TokenEOF`, and
@@ -165,8 +167,8 @@ diagnostic collections remain local to each parse call.
 
 Generated C# output targets nullable-aware .NET code. Scanner instances
 implement `ILexemeSource`, serialize access to their mutable cursor, and can be
-passed directly to `ParseFromSource`, `ParseValueFromSource`,
-`ParseWithReducerFromSource`, or `ParseRecoveringFromSource`. Collection APIs
+passed directly to `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
+`ParseWithReducerFromLexemeSource`, or `ParseRecoveringFromLexemeSource`. Collection APIs
 such as `Scanner.Tokenize` and `Parser.Parse(tokens, ...)` remain wrappers for
 compatibility and token inspection. Parser state is local to each parse call,
 and parser instances can be reused concurrently when the installed reducer is
@@ -191,8 +193,8 @@ Generated C output is dependency-free C11. Scanner state is stored in a
 caller-owned `*_scanner` struct, parser stacks are allocated per parse call,
 and semantic state is supplied through a reducer callback plus `void *user`.
 The preferred parser path wraps a scanner in a generated `*_lexeme_source`
-callback struct and calls `*_parse_source`, `*_parse_value_source`, or
-`*_parse_value_source_typed`. Existing `*_tokenize` and token-array parse APIs
+callback struct and calls `*_parse_lexeme_source`, `*_parse_value_lexeme_source`, or
+`*_parse_value_lexeme_source_typed`. Existing `*_tokenize` and token-array parse APIs
 remain available for diagnostics and compatibility. The generated API is
 reentrant for independent scanner/parser instances. Sharing one scanner struct
 across threads requires caller synchronization.

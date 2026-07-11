@@ -32,12 +32,19 @@ project, use `examples/templates/csharp/mini-compiler`. For reusable parser
 library code, use `examples/templates/csharp/library-dsl`.
 
 C# examples prefer source-based parsing with `new Scanner(sourceText)` passed
-to generated parser APIs such as `Parser.ParseWithReducerFromSource(...)` or
-instance `ParseRecoveringSource(...)`. `Scanner.Tokenize(...)` and token-list
+to generated parser APIs such as `Parser.ParseWithReducerFromLexemeSource(...)` or
+instance `ParseRecoveringLexemeSource(...)`. `Scanner.Tokenize(...)` and token-list
 parse APIs remain useful for debugging and tests. Reusable examples convert
 generated values and diagnostics into domain `ParseResult<T>` values at the
 facade boundary; generated code stays container-agnostic, while handwritten
 semantics/facades are the right place for policies, services, and DI.
+
+When learning from a C# example, read `*.lf` first, then the handwritten
+`Semantics` or `Program.cs` reducer wiring, then any `Parsing` facade. Generated
+`*.g.cs` files are intentionally separated under `Generated/`; after running
+`make generate`, they show the token enum, scanner DFA tables, parser
+ACTION/GOTO tables, and typed reducer context records that the handwritten code
+uses.
 
 For a reusable compiler-style starter, use
 `examples/templates/csharp/layered-compiler`. It keeps `Generated/` isolated,

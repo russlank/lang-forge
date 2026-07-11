@@ -202,11 +202,11 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	b.WriteString("/// <summary>One scanner result with UTF-16 offsets and Unicode scalar positions.</summary>\n")
 	b.WriteString("public readonly record struct Lexeme(Token Token, string Text, string Channel, int Start, int End, int StartLine, int StartColumn, int EndLine, int EndColumn);\n\n")
 	b.WriteString("/// <summary>Options for reader-backed scanner input.</summary>\n")
-	b.WriteString("public sealed class ScannerOptions\n{\n")
+	b.WriteString("public sealed class TextReaderScannerOptions\n{\n")
 	b.WriteString("    /// <summary>Number of UTF-16 code units requested from the reader at a time.</summary>\n")
 	b.WriteString("    public int ReadBufferSize { get; set; } = 4096;\n")
-	b.WriteString("    /// <summary>Maximum buffered UTF-16 code units retained while deciding one token.</summary>\n")
-	b.WriteString("    public int MaxBufferedTokenLength { get; set; } = 1048576;\n")
+	b.WriteString("    /// <summary>Maximum buffered UTF-16 code units retained while deciding one lexeme.</summary>\n")
+	b.WriteString("    public int MaxBufferedLexemeLength { get; set; } = 1048576;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("/// <summary>Incrementally tokenizes an input string.</summary>\n")
 	b.WriteString("/// <remarks>Scanner methods are thread-safe. Concurrent calls to Next share one serialized input cursor.</remarks>\n")
@@ -219,22 +219,22 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	b.WriteString("    private bool _includeHidden;\n\n")
 	b.WriteString("    public Scanner(string input)\n    {\n        _input = input ?? throw new ArgumentNullException(nameof(input));\n    }\n\n")
 	b.WriteString("    /// <summary>Creates a scanner that pulls source text from a TextReader on demand.</summary>\n")
-	b.WriteString("    public static ReaderScanner FromTextReader(TextReader reader, ScannerOptions? options = null) => new ReaderScanner(reader, options, ownsReader: false);\n\n")
+	b.WriteString("    public static TextReaderScanner FromTextReader(TextReader reader, TextReaderScannerOptions? options = null) => new TextReaderScanner(reader, options, ownsReader: false);\n\n")
 	b.WriteString("    /// <summary>Creates a scanner that decodes source bytes from a stream and pulls text on demand.</summary>\n")
-	b.WriteString("    public static ReaderScanner FromStream(Stream stream, Encoding? encoding = null, ScannerOptions? options = null)\n    {\n        if (stream is null) { throw new ArgumentNullException(nameof(stream)); }\n        encoding ??= new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);\n        int bufferSize = Math.Max(1, options?.ReadBufferSize ?? 4096);\n        return new ReaderScanner(new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: true), options, ownsReader: true);\n    }\n\n")
-	b.WriteString("    /// <summary>Controls whether channel tokens are returned.</summary>\n")
+	b.WriteString("    public static TextReaderScanner FromStream(Stream stream, Encoding? encoding = null, TextReaderScannerOptions? options = null)\n    {\n        if (stream is null) { throw new ArgumentNullException(nameof(stream)); }\n        encoding ??= new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);\n        int bufferSize = Math.Max(1, options?.ReadBufferSize ?? 4096);\n        return new TextReaderScanner(new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: true), options, ownsReader: true);\n    }\n\n")
+	b.WriteString("    /// <summary>Controls whether channel lexemes are returned.</summary>\n")
 	b.WriteString("    public void IncludeHidden(bool include)\n    {\n        lock (_gate) { _includeHidden = include; }\n    }\n\n")
-	b.WriteString("    /// <summary>Returns every visible token in input.</summary>\n")
+	b.WriteString("    /// <summary>Returns every visible lexeme in input.</summary>\n")
 	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(string input) => new Scanner(input).All();\n\n")
-	b.WriteString("    /// <summary>Returns every visible token read from a TextReader.</summary>\n")
-	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(TextReader reader, ScannerOptions? options = null) => FromTextReader(reader, options).All();\n\n")
-	b.WriteString("    /// <summary>Returns every visible token decoded from a stream.</summary>\n")
-	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(Stream stream, Encoding? encoding = null, ScannerOptions? options = null) => FromStream(stream, encoding, options).All();\n\n")
-	b.WriteString("    /// <summary>Returns all tokens until end-of-input.</summary>\n")
+	b.WriteString("    /// <summary>Returns every visible lexeme read from a TextReader.</summary>\n")
+	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(TextReader reader, TextReaderScannerOptions? options = null) => FromTextReader(reader, options).All();\n\n")
+	b.WriteString("    /// <summary>Returns every visible lexeme decoded from a stream.</summary>\n")
+	b.WriteString("    public static IReadOnlyList<Lexeme> Tokenize(Stream stream, Encoding? encoding = null, TextReaderScannerOptions? options = null) => FromStream(stream, encoding, options).All();\n\n")
+	b.WriteString("    /// <summary>Returns all visible lexemes until end-of-input.</summary>\n")
 	b.WriteString("    public IReadOnlyList<Lexeme> All()\n    {\n        var output = new List<Lexeme>();\n        while (Next(out var lexeme))\n        {\n            output.Add(lexeme);\n        }\n        return output;\n    }\n\n")
-	b.WriteString("    /// <summary>Returns the next visible token, or false at end-of-input.</summary>\n")
+	b.WriteString("    /// <summary>Returns the next visible lexeme, or false at end-of-input.</summary>\n")
 	b.WriteString("    public bool Next(out Lexeme lexeme)\n    {\n        lock (_gate)\n        {\n            while (_pos < _input.Length)\n            {\n                int start = _pos;\n                int startLine = _line;\n                int startColumn = _column;\n                var match = MatchAt(_input, _pos);\n                if (match.Rule <= 0)\n                {\n                    throw new InvalidOperationException($\"no lexical rule matched offset {_pos} near '{Preview(_input, _pos)}'\");\n                }\n                if (match.End == _pos)\n                {\n                    throw new InvalidOperationException($\"lexer rule {match.Rule} matched empty input at offset {_pos}\");\n                }\n                var action = RuleActions[match.Rule];\n                var endPosition = AdvancePosition(_input, _pos, match.End, _line, _column);\n                lexeme = new Lexeme(action.Token, _input.Substring(start, match.End - start), action.Channel, start, match.End, startLine, startColumn, endPosition.Line, endPosition.Column);\n                _pos = match.End;\n                _line = endPosition.Line;\n                _column = endPosition.Column;\n                if (action.Skip) { continue; }\n                if (action.Channel.Length != 0 && !_includeHidden) { continue; }\n                return true;\n            }\n            lexeme = new Lexeme(Token.EOF, string.Empty, string.Empty, _pos, _pos, _line, _column, _line, _column);\n            return false;\n        }\n    }\n\n")
-	b.WriteString(csharpReaderScannerRuntime())
+	b.WriteString(csharpTextReaderScannerRuntime())
 	b.WriteString("    private readonly record struct ScannerTransition(int Lo, int Hi, int Target);\n")
 	b.WriteString("    private readonly record struct ScannerState(int Accept, ScannerTransition[] Transitions);\n")
 	b.WriteString("    private readonly record struct RuleAction(Token Token, bool Skip, string Channel);\n")
@@ -272,20 +272,20 @@ func renderScanner(namespace string, source string, dfa *lex.DFA, tokens []strin
 	return b.String()
 }
 
-func csharpReaderScannerRuntime() string {
+func csharpTextReaderScannerRuntime() string {
 	return `    /// <summary>Scanner that pulls source text synchronously from a TextReader.</summary>
     /// <remarks>
     /// The parser still consumes an ILexemeSource. This scanner widens the source
     /// input side for files, stdin, streams, and virtual text providers without
     /// introducing async or queue-based parser machinery.
     /// </remarks>
-    public sealed class ReaderScanner : ILexemeSource, IDisposable
+    public sealed class TextReaderScanner : ILexemeSource, IDisposable
     {
         private readonly object _readerGate = new();
         private readonly TextReader _reader;
         private readonly bool _ownsReader;
         private readonly char[] _readBuffer;
-        private readonly int _maxBufferedTokenLength;
+        private readonly int _maxBufferedLexemeLength;
         private string _buffer = string.Empty;
         private int _base;
         private int _line = 1;
@@ -293,12 +293,12 @@ func csharpReaderScannerRuntime() string {
         private bool _includeHidden;
         private bool _eof;
 
-        internal ReaderScanner(TextReader reader, ScannerOptions? options, bool ownsReader)
+        internal TextReaderScanner(TextReader reader, TextReaderScannerOptions? options, bool ownsReader)
         {
             _reader = reader ?? throw new ArgumentNullException(nameof(reader));
             _ownsReader = ownsReader;
             int readBufferSize = Math.Max(1, options?.ReadBufferSize ?? 4096);
-            _maxBufferedTokenLength = Math.Max(1, options?.MaxBufferedTokenLength ?? 1048576);
+            _maxBufferedLexemeLength = Math.Max(1, options?.MaxBufferedLexemeLength ?? 1048576);
             _readBuffer = new char[readBufferSize];
         }
 
@@ -311,13 +311,13 @@ func csharpReaderScannerRuntime() string {
             }
         }
 
-        /// <summary>Controls whether channel tokens are returned.</summary>
+        /// <summary>Controls whether channel lexemes are returned.</summary>
         public void IncludeHidden(bool include)
         {
             lock (_readerGate) { _includeHidden = include; }
         }
 
-        /// <summary>Returns all tokens until end-of-input.</summary>
+        /// <summary>Returns all visible lexemes until end-of-input.</summary>
         public IReadOnlyList<Lexeme> All()
         {
             var output = new List<Lexeme>();
@@ -328,7 +328,7 @@ func csharpReaderScannerRuntime() string {
             return output;
         }
 
-        /// <summary>Returns the next visible token, or false at end-of-input.</summary>
+        /// <summary>Returns the next visible lexeme, or false at end-of-input.</summary>
         public bool Next(out Lexeme lexeme)
         {
             lock (_readerGate)
@@ -380,9 +380,9 @@ func csharpReaderScannerRuntime() string {
                 return;
             }
             _buffer += new string(_readBuffer, 0, read);
-            if (_buffer.Length > _maxBufferedTokenLength)
+            if (_buffer.Length > _maxBufferedLexemeLength)
             {
-                throw new InvalidOperationException($"scanner buffered token exceeds {_maxBufferedTokenLength} UTF-16 code units");
+                throw new InvalidOperationException($"scanner buffered lexeme exceeds {_maxBufferedLexemeLength} UTF-16 code units");
             }
         }
 
@@ -486,28 +486,28 @@ func renderParser(namespace string, source string, project *spec.Spec, table *pa
 	b.WriteString("    private readonly IReducer? _reducer;\n\n")
 	b.WriteString("    public Parser(IReducer? reducer = null)\n    {\n        if (reducer is IReducerCoverage coverage) { coverage.ValidateCoverage(); }\n        _reducer = reducer;\n    }\n\n")
 	b.WriteString("    public static void Parse(IReadOnlyList<Lexeme> input) => new Parser().ParseInput(input);\n")
-	b.WriteString("    public static void ParseFromSource(ILexemeSource source) => new Parser().ParseSource(source);\n")
+	b.WriteString("    public static void ParseFromLexemeSource(ILexemeSource source) => new Parser().ParseLexemeSource(source);\n")
 	b.WriteString("    public static object? ParseValue(IReadOnlyList<Lexeme> input) => new Parser().ParseValueInput(input);\n")
-	b.WriteString("    public static object? ParseValueFromSource(ILexemeSource source) => new Parser().ParseValueSource(source);\n")
+	b.WriteString("    public static object? ParseValueFromLexemeSource(ILexemeSource source) => new Parser().ParseValueLexemeSource(source);\n")
 	b.WriteString("    public static ParseResult ParseRecovering(IReadOnlyList<Lexeme> input) => new Parser().ParseRecoveringInput(input);\n")
-	b.WriteString("    public static ParseResult ParseRecoveringFromSource(ILexemeSource source) => new Parser().ParseRecoveringSource(source);\n")
+	b.WriteString("    public static ParseResult ParseRecoveringFromLexemeSource(ILexemeSource source) => new Parser().ParseRecoveringLexemeSource(source);\n")
 	b.WriteString("    public static object? ParseWithReducer(IReadOnlyList<Lexeme> input, IReducer reducer) => new Parser(reducer).ParseValueInput(input);\n")
-	b.WriteString("    public static object? ParseWithReducerFromSource(ILexemeSource source, IReducer reducer) => new Parser(reducer).ParseValueSource(source);\n\n")
+	b.WriteString("    public static object? ParseWithReducerFromLexemeSource(ILexemeSource source, IReducer reducer) => new Parser(reducer).ParseValueLexemeSource(source);\n\n")
 	b.WriteString("    public void ParseInput(IReadOnlyList<Lexeme> input) => ParseValueInput(input);\n")
-	b.WriteString("    public void ParseSource(ILexemeSource source) => ParseValueSource(source);\n\n")
-	b.WriteString("    public object? ParseValueInput(IReadOnlyList<Lexeme> input) => ParseValueSource(new LexemeListSource(input));\n\n")
-	b.WriteString("    public object? ParseValueSource(ILexemeSource source)\n    {\n        var result = ParseRecoveringSource(source);\n        if (result.Diagnostics.Count != 0) { throw new ParseException(result.Diagnostics); }\n        return result.Value;\n    }\n\n")
+	b.WriteString("    public void ParseLexemeSource(ILexemeSource source) => ParseValueLexemeSource(source);\n\n")
+	b.WriteString("    public object? ParseValueInput(IReadOnlyList<Lexeme> input) => ParseValueLexemeSource(new LexemeListSource(input));\n\n")
+	b.WriteString("    public object? ParseValueLexemeSource(ILexemeSource source)\n    {\n        var result = ParseRecoveringLexemeSource(source);\n        if (result.Diagnostics.Count != 0) { throw new ParseException(result.Diagnostics); }\n        return result.Value;\n    }\n\n")
 	b.WriteString("    /// <summary>Parses with grammar-directed recovery and returns every syntax diagnostic.</summary>\n")
-	b.WriteString("    public ParseResult ParseRecoveringInput(IReadOnlyList<Lexeme> input) => ParseRecoveringSource(new LexemeListSource(input));\n\n")
+	b.WriteString("    public ParseResult ParseRecoveringInput(IReadOnlyList<Lexeme> input) => ParseRecoveringLexemeSource(new LexemeListSource(input));\n\n")
 	b.WriteString("    /// <summary>Parses a synchronous pull source with grammar-directed recovery.</summary>\n")
-	b.WriteString("    public ParseResult ParseRecoveringSource(ILexemeSource source)\n    {\n        var cursor = new LexemeSourceCursor(source);\n        var states = new List<int> { 0 };\n        var values = new List<object?>();\n        var diagnostics = new List<ParseDiagnostic>();\n        int recovering = 0;\n        int activeDiagnostic = -1;\n        while (true)\n        {\n            string lookahead = cursor.PeekSymbol();\n            if (!TryFindAction(states[^1], lookahead, out var action))\n            {\n                if (recovering == 0)\n                {\n                    diagnostics.Add(NewParseDiagnostic(states[^1], lookahead, cursor));\n                    activeDiagnostic = diagnostics.Count - 1;\n                    bool recovered = false;\n                    while (states.Count != 0)\n                    {\n                        if (TryFindAction(states[^1], \"error\", out var errorAction) && errorAction.Kind == \"shift\")\n                        {\n                            states.Add(errorAction.State);\n                            values.Add(ParserErrorLexeme(cursor));\n                            recovering = 3;\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"shift-error\", 0) };\n                            recovered = true;\n                            break;\n                        }\n                        if (states.Count == 1) { break; }\n                        states.RemoveAt(states.Count - 1);\n                        if (values.Count != 0) { values.RemoveAt(values.Count - 1); }\n                    }\n                    if (recovered) { continue; }\n                    diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"abort\", 0) };\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                if (lookahead == \"$\")\n                {\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"abort\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                cursor.Advance();\n                if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Discarded = diagnostics[activeDiagnostic].Recovery.Discarded + 1 } }; }\n                continue;\n            }\n            switch (action.Kind)\n            {\n                case \"shift\":\n                    states.Add(action.State);\n                    values.Add(cursor.Advance());\n                    if (recovering > 0)\n                    {\n                        recovering--;\n                        if (recovering == 0 && activeDiagnostic >= 0)\n                        {\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } };\n                            activeDiagnostic = -1;\n                        }\n                    }\n                    break;\n                case \"reduce\":\n                    var rule = ParserRules[action.Rule];\n                    if (states.Count < rule.Size + 1) { throw new InvalidOperationException($\"parser stack underflow reducing rule {action.Rule}\"); }\n                    if (values.Count < rule.Size) { throw new InvalidOperationException($\"semantic value stack underflow reducing rule {action.Rule}\"); }\n                    var rhs = values.Skip(values.Count - rule.Size).Take(rule.Size).ToArray();\n                    values.RemoveRange(values.Count - rule.Size, rule.Size);\n                    object? value = Reduce(action.Rule, rule, rhs);\n                    states.RemoveRange(states.Count - rule.Size, rule.Size);\n                    if (!ParserGotos.TryGetValue(states[^1], out var gotoBySymbol) || !gotoBySymbol.TryGetValue(rule.LHS, out int gotoState))\n                    {\n                        throw new InvalidOperationException($\"missing goto from state {states[^1]} on {rule.LHS}\");\n                    }\n                    states.Add(gotoState);\n                    values.Add(value);\n                    break;\n                case \"accept\":\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, true);\n                default:\n                    throw new InvalidOperationException($\"invalid parser action '{action.Kind}'\");\n            }\n        }\n    }\n\n")
+	b.WriteString("    public ParseResult ParseRecoveringLexemeSource(ILexemeSource source)\n    {\n        var cursor = new LexemeSourceCursor(source);\n        var states = new List<int> { 0 };\n        var values = new List<object?>();\n        var diagnostics = new List<ParseDiagnostic>();\n        int recovering = 0;\n        int activeDiagnostic = -1;\n        while (true)\n        {\n            string lookahead = cursor.PeekSymbol();\n            if (!TryFindAction(states[^1], lookahead, out var action))\n            {\n                if (recovering == 0)\n                {\n                    diagnostics.Add(BuildParseDiagnostic(states[^1], lookahead, cursor));\n                    activeDiagnostic = diagnostics.Count - 1;\n                    bool recovered = false;\n                    while (states.Count != 0)\n                    {\n                        if (TryFindAction(states[^1], \"error\", out var errorAction) && errorAction.Kind == \"shift\")\n                        {\n                            states.Add(errorAction.State);\n                            values.Add(ParserErrorLexeme(cursor));\n                            recovering = 3;\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"shift-error\", 0) };\n                            recovered = true;\n                            break;\n                        }\n                        if (states.Count == 1) { break; }\n                        states.RemoveAt(states.Count - 1);\n                        if (values.Count != 0) { values.RemoveAt(values.Count - 1); }\n                    }\n                    if (recovered) { continue; }\n                    diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = new RecoveryAction(\"abort\", 0) };\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                if (lookahead == \"$\")\n                {\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"abort\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, false);\n                }\n                cursor.Advance();\n                if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Discarded = diagnostics[activeDiagnostic].Recovery.Discarded + 1 } }; }\n                continue;\n            }\n            switch (action.Kind)\n            {\n                case \"shift\":\n                    states.Add(action.State);\n                    values.Add(cursor.Advance());\n                    if (recovering > 0)\n                    {\n                        recovering--;\n                        if (recovering == 0 && activeDiagnostic >= 0)\n                        {\n                            diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } };\n                            activeDiagnostic = -1;\n                        }\n                    }\n                    break;\n                case \"reduce\":\n                    var rule = ParserRules[action.Rule];\n                    if (states.Count < rule.Size + 1) { throw new InvalidOperationException($\"parser stack underflow reducing rule {action.Rule}\"); }\n                    if (values.Count < rule.Size) { throw new InvalidOperationException($\"semantic value stack underflow reducing rule {action.Rule}\"); }\n                    var rhs = values.Skip(values.Count - rule.Size).Take(rule.Size).ToArray();\n                    values.RemoveRange(values.Count - rule.Size, rule.Size);\n                    object? value = Reduce(action.Rule, rule, rhs);\n                    states.RemoveRange(states.Count - rule.Size, rule.Size);\n                    if (!ParserGotos.TryGetValue(states[^1], out var gotoBySymbol) || !gotoBySymbol.TryGetValue(rule.LHS, out int gotoState))\n                    {\n                        throw new InvalidOperationException($\"missing goto from state {states[^1]} on {rule.LHS}\");\n                    }\n                    states.Add(gotoState);\n                    values.Add(value);\n                    break;\n                case \"accept\":\n                    if (activeDiagnostic >= 0) { diagnostics[activeDiagnostic] = diagnostics[activeDiagnostic] with { Recovery = diagnostics[activeDiagnostic].Recovery with { Kind = \"recovered\" } }; }\n                    return new ParseResult(CurrentValue(values), diagnostics, true);\n                default:\n                    throw new InvalidOperationException($\"invalid parser action '{action.Kind}'\");\n            }\n        }\n    }\n\n")
 	b.WriteString("    private object? Reduce(int ruleID, ParserRule rule, object?[] values)\n    {\n        var ctx = new Reduction(ruleID, rule.LHS, rule.RHS, rule.Labels, rule.Action, SemanticActions.SemanticActionName(rule.Action), values);\n        if (_reducer is not null && rule.Action != SemanticAction.None)\n        {\n            return _reducer.Reduce(ctx);\n        }\n        return DefaultReduce(values);\n    }\n\n")
 	b.WriteString("    private static bool TryFindAction(int state, string symbol, out ParserAction action)\n    {\n        if (ParserActions.TryGetValue(state, out var bySymbol) && bySymbol.TryGetValue(symbol, out action)) { return true; }\n        action = default;\n        return false;\n    }\n\n")
 	b.WriteString("    private static object? CurrentValue(IReadOnlyList<object?> values) => values.Count == 0 ? null : values[^1];\n\n")
 	b.WriteString("    private static object? DefaultReduce(IReadOnlyList<object?> values)\n    {\n        return values.Count switch\n        {\n            0 => null,\n            1 => values[0],\n            _ => values.ToArray(),\n        };\n    }\n\n")
 	b.WriteString("    private sealed class LexemeListSource : ILexemeSource\n    {\n        private readonly IReadOnlyList<Lexeme> _input;\n        private int _pos;\n\n        public LexemeListSource(IReadOnlyList<Lexeme> input)\n        {\n            _input = input ?? throw new ArgumentNullException(nameof(input));\n        }\n\n        public bool Next(out Lexeme lexeme)\n        {\n            if (_pos >= _input.Count)\n            {\n                lexeme = default;\n                return false;\n            }\n            lexeme = _input[_pos++];\n            return true;\n        }\n    }\n\n")
 	b.WriteString("    private sealed class LexemeSourceCursor\n    {\n        private readonly ILexemeSource _source;\n        private Lexeme _lookahead;\n        private string _symbol = \"$\";\n        private bool _ready;\n        private bool _sawEOF;\n        private Lexeme _last;\n        private bool _haveLast;\n\n        public LexemeSourceCursor(ILexemeSource source)\n        {\n            _source = source ?? throw new ArgumentNullException(nameof(source));\n        }\n\n        public string PeekSymbol()\n        {\n            if (_ready) { return _symbol; }\n            if (_sawEOF)\n            {\n                _lookahead = EOFLexeme();\n                _symbol = \"$\";\n                _ready = true;\n                return _symbol;\n            }\n            if (!_source.Next(out var lexeme))\n            {\n                _lookahead = EOFLexeme();\n                _symbol = \"$\";\n                _ready = true;\n                _sawEOF = true;\n                return _symbol;\n            }\n            if (lexeme.Token == Token.EOF)\n            {\n                lexeme = NormalizeEOFLexeme(lexeme);\n                if (_source.Next(out var extra))\n                {\n                    throw new InvalidOperationException($\"token after EOF in lexeme source: {TerminalName(extra.Token)} at {extra.StartLine}:{extra.StartColumn}\");\n                }\n                _lookahead = lexeme;\n                _symbol = \"$\";\n                _ready = true;\n                _sawEOF = true;\n                return _symbol;\n            }\n            _last = lexeme;\n            _haveLast = true;\n            _lookahead = lexeme;\n            _symbol = TerminalName(lexeme.Token);\n            _ready = true;\n            return _symbol;\n        }\n\n        public Lexeme Advance()\n        {\n            var symbol = PeekSymbol();\n            if (symbol == \"$\") { throw new InvalidOperationException(\"shift past end of input\"); }\n            var lexeme = _lookahead;\n            _ready = false;\n            return lexeme;\n        }\n\n        public Lexeme DiagnosticLexeme() => _ready ? _lookahead : EOFLexeme();\n\n        private Lexeme EOFLexeme()\n        {\n            if (_haveLast)\n            {\n                return new Lexeme(Token.EOF, string.Empty, string.Empty, _last.End, _last.End, _last.EndLine, _last.EndColumn, _last.EndLine, _last.EndColumn);\n            }\n            return new Lexeme(Token.EOF, string.Empty, string.Empty, 0, 0, 1, 1, 1, 1);\n        }\n\n        private Lexeme NormalizeEOFLexeme(Lexeme lexeme)\n        {\n            var fallback = EOFLexeme();\n            return new Lexeme(\n                Token.EOF,\n                lexeme.Text,\n                lexeme.Channel,\n                lexeme.Start == 0 && lexeme.End == 0 && _haveLast ? fallback.Start : lexeme.Start,\n                lexeme.Start == 0 && lexeme.End == 0 && _haveLast ? fallback.End : lexeme.End,\n                lexeme.StartLine <= 0 ? fallback.StartLine : lexeme.StartLine,\n                lexeme.StartColumn <= 0 ? fallback.StartColumn : lexeme.StartColumn,\n                lexeme.EndLine <= 0 ? fallback.EndLine : lexeme.EndLine,\n                lexeme.EndColumn <= 0 ? fallback.EndColumn : lexeme.EndColumn);\n        }\n    }\n\n")
-	b.WriteString("    private static ParseDiagnostic NewParseDiagnostic(int state, string unexpected, LexemeSourceCursor cursor)\n    {\n        var lexeme = cursor.DiagnosticLexeme();\n        var expected = ParserExpected.TryGetValue(state, out var entries) ? entries : Array.Empty<ExpectedToken>();\n        return new ParseDiagnostic(state, unexpected, UnexpectedDisplay(unexpected), expected, lexeme.Start, lexeme.End, lexeme.StartLine, lexeme.StartColumn, lexeme.EndLine, lexeme.EndColumn, new RecoveryAction(\"none\", 0));\n    }\n\n")
+	b.WriteString("    private static ParseDiagnostic BuildParseDiagnostic(int state, string unexpected, LexemeSourceCursor cursor)\n    {\n        var lexeme = cursor.DiagnosticLexeme();\n        var expected = ParserExpected.TryGetValue(state, out var entries) ? entries : Array.Empty<ExpectedToken>();\n        return new ParseDiagnostic(state, unexpected, UnexpectedDisplay(unexpected), expected, lexeme.Start, lexeme.End, lexeme.StartLine, lexeme.StartColumn, lexeme.EndLine, lexeme.EndColumn, new RecoveryAction(\"none\", 0));\n    }\n\n")
 	b.WriteString("    private static Lexeme ParserErrorLexeme(LexemeSourceCursor cursor)\n    {\n        var lexeme = cursor.DiagnosticLexeme();\n        return new Lexeme(Token.Error, string.Empty, string.Empty, lexeme.Start, lexeme.Start, lexeme.StartLine, lexeme.StartColumn, lexeme.StartLine, lexeme.StartColumn);\n    }\n\n")
 	b.WriteString("    private static string UnexpectedDisplay(string symbol)\n    {\n        if (symbol == \"$\") { return \"end of input\"; }\n        return ParserTokenAliases.TryGetValue(symbol, out var display) ? display : symbol;\n    }\n\n")
 	b.WriteString("    private static string TerminalName(Token token) => token switch\n    {\n        Token.EOF => \"$\",\n")
@@ -654,12 +654,12 @@ func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, 
 		suffix := strings.TrimPrefix(constant, "SemanticAction.")
 		contextType := suffix + "Reduction"
 		handlerType := suffix + "Handler"
-		constructor := "New" + contextType
+		converter := contextType + "From"
 		adapter := "Typed" + suffix
 		fields := typedFields(semanticAction.Rules[0])
 
 		b.WriteString(fmt.Sprintf("    /// <summary>Validates and converts an untyped reduction context for %s.</summary>\n", csharpString(semanticAction.Name)))
-		b.WriteString(fmt.Sprintf("    internal static %s %s(Reduction ctx)\n    {\n", contextType, constructor))
+		b.WriteString(fmt.Sprintf("    internal static %s %s(Reduction ctx)\n    {\n", contextType, converter))
 		b.WriteString(fmt.Sprintf("        if (ctx.ActionID != %s) { throw new InvalidOperationException($\"typed context %s requires action %s, got {ctx.ActionID}\"); }\n", constant, contextType, suffix))
 		b.WriteString(fmt.Sprintf("        return new %s(ctx", contextType))
 		for _, field := range fields {
@@ -670,7 +670,7 @@ func renderTypedReductionContexts(b *strings.Builder, manifest action.Manifest, 
 		b.WriteString("    /// <summary>Adapts a typed handler to the generated reducer map shape.</summary>\n")
 		b.WriteString(fmt.Sprintf("    internal static Func<Reduction, object?> %s(%s handler)\n    {\n", adapter, handlerType))
 		b.WriteString("        if (handler is null) { throw new ArgumentNullException(nameof(handler)); }\n")
-		b.WriteString(fmt.Sprintf("        return ctx => handler(%s(ctx));\n", constructor))
+		b.WriteString(fmt.Sprintf("        return ctx => handler(%s(ctx));\n", converter))
 		b.WriteString("    }\n\n")
 	}
 	b.WriteString("}\n\n")

@@ -115,7 +115,7 @@ S : left=A right=B {c: program.withParameters}
 			t.Fatalf("generated C scanner missing stream fragment %q", fragment)
 		}
 	}
-	if !strings.Contains(readGeneratedFile(t, out, "parser.h")+parserSource, "_stream_scanner_source_next") {
+	if !strings.Contains(readGeneratedFile(t, out, "parser.h")+parserSource, "_stream_scanner_lexeme_source_next") {
 		t.Fatalf("generated C parser missing stream scanner source adapter")
 	}
 }

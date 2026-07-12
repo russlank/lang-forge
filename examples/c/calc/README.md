@@ -11,26 +11,26 @@ Action labels such as `{c: add}` become generated `CALC_ACTION_*` enum values.
 - the default direct typed reducer path, where `parser_typed.h` provides
   contexts such as `calc_add_reduction` with fields like `left` and `right`;
 - `--boxed-typed`, a migration path where typed contexts validate before
-  delegating to the older boxed reducer;
-- `--boxed`, the compatibility/debug path that reads boxed `ctx->values`
+  delegating to the boxed reducer;
+- `--boxed`, the boxed/debug path that reads boxed `ctx->values`
   directly.
 
 The direct typed handlers still return `calc_value` pointers because C keeps
 semantic ownership explicit. This example stores returned numbers in the demo
 arena and releases them with `demo_arena_free`.
 
-The default evaluation path uses `calc_stream_scanner`, not the older
+The default evaluation path uses `calc_stream_scanner`, not the token-array
 string-only `calc_scanner`. `main.c` includes a small `calc_string_stream_read`
 callback so the same parser code can be copied to file, stdin, pipe,
 editor-buffer, or virtual-file inputs. The generated stream scanner owns copied
 visible-lexeme text while parsing; keep it alive until parse/reducer code has
 finished and always call `calc_stream_scanner_free`.
 
-Token collections are still useful for inspection and compatibility:
+Token collections are still useful for inspection and tests:
 
 ```c
 calc_tokenize(source, &tokens, &count, &error);
-calc_parse(tokens, count, &error);
+calc_parse_tokens(tokens, count, &error);
 ```
 
 Use the collection path for tests, reports, or token debugging. Prefer

@@ -304,7 +304,13 @@ the suite and confirm the examples return to source-only form:
 make examples-test
 make examples-run
 make examples-cleanliness
+make vocabulary-check
 ```
+
+`make vocabulary-check` keeps generated API names and documentation language
+aligned with the glossary: Go uses explicit `FromLexemeSource` names, C# uses
+overloads, C uses prefixed `_lexeme_source`/`_tokens` names, and C++ uses
+overloads.
 
 Optional benchmark examples are available separately from normal CI:
 
@@ -342,6 +348,7 @@ Makefile:
 make ci
 make fuzz-smoke
 make golden-stability
+make vocabulary-check
 make examples-testdata
 make examples-templates
 make examples-benchmarks
@@ -375,14 +382,14 @@ layouts.
 - [Parser error recovery](doc/parser-error-recovery.md)
 - [Examples](doc/examples.md)
 - [Example Template Guide](doc/example-template-guide.md)
-- [UCDT legacy inspiration](doc/ucdt-legacy-inspiration.md)
+- [UCDT reference](doc/ucdt-reference.md)
 
 ## Current Status And Limits
 
 ### Implemented
 
 - Combined `.lf` specification parsing.
-- Legacy split `.l` plus `.y` parsing for curated UCDT-derived regression
+- Split `.l` plus `.y` parsing for curated UCDT-derived regression
   fixtures.
 - Regex parsing, character-class partitioning, NFA-to-DFA construction, and
   DFA minimization.
@@ -413,34 +420,33 @@ layouts.
 - Optional AST helper generation.
 - Additional parity checks and reusable templates as the examples mature.
 
-### Compatibility Notes
+### Current API Notes
 
 - LALR(1) is the default parser algorithm. SLR, IELR(1), and canonical LR(1)
   can be selected with `%type slr`, `%type ielr`, or `%type canonical`.
 - Scanners default to checked UTF-8 and sparse Unicode scalar ranges for the
   in-process engine plus generated Go, C#, C, and C++ output. See
   [Scanner encoding architecture](doc/encoding.md).
-- Pull-based lexeme sources are the preferred production API. Older collection
-  APIs such as `Tokenize`, `All`, `Parse(tokens, ...)`, and target equivalents
-  remain supported for tests, debugging, token reports, and simple examples.
+- Pull-based lexeme sources are the preferred production API. Collection APIs
+  such as `Tokenize`, `All`, `Parse(tokens, ...)`, and target equivalents remain
+  available for tests, debugging, token reports, and simple examples.
 - Specs can use reducer callbacks with generated action IDs/enums across all
   targets. Go also has an advanced inline action mode for projects that need
-  target-tagged semantic imports.
+  target-specific semantic imports.
 
-## Background / UCDT Inspiration
+## UCDT Reference
 
-LangForge was inspired by the older Pascal
-[UCDT](https://github.com/russlank/UCDT) project. UCDT is useful historical
-context and influenced the starting point, but LangForge is not trying to
-preserve DOS-era compatibility. The current design uses a target-neutral core,
-modern generated APIs, typed reducers, cross-target examples, and public
-documentation intended to work as compiler-learning material.
+LangForge acknowledges [russlank/UCDT](https://github.com/russlank/UCDT) as an
+important reference for practical Lex/Yacc-style tooling and sample languages.
+The current design uses a target-neutral core, generated APIs for Go, C#, C, and
+C++, typed reducers, cross-target examples, and public documentation intended to
+work as compiler-learning material.
 
 ## Agent Skills
 
 Reusable Codex skills for LangForge live under [skills](skills):
 
-- `langforge-spec-authoring` for `.lf` and legacy `.l`/`.y` grammar work.
+- `langforge-spec-authoring` for `.lf` and split `.l`/`.y` grammar work.
 - `langforge-example-runner` for generated example projects and demo runs.
 
 ## License

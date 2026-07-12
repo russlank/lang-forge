@@ -221,7 +221,7 @@ func TestParseLex_DoesNotSplitQuotedPercentSeparator(t *testing.T) {
 "%%" : #{LEX_DPercent#}
 DIGIT : #{LEX_Digit#}
 %%
-`), "legacy.l")
+`), "split.l")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -238,7 +238,7 @@ func TestParseLex_PreservesQuotedBlockCommentDelimiters(t *testing.T) {
 %%
 COMMENT : #{LEX_Comment#}
 %%
-`), "legacy.l")
+`), "split.l")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -252,7 +252,7 @@ func TestParseLex_PreservesCommentDelimitersInClass(t *testing.T) {
 %%
 DELIM : #{YACC_Delim#}
 %%
-`), "legacy.l")
+`), "split.l")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}
@@ -266,7 +266,7 @@ func TestParseLex_DoesNotSplitPercentSeparatorInClass(t *testing.T) {
 %%
 PERCENT : #{YACC_Percent#}
 %%
-`), "legacy.l")
+`), "split.l")
 	if diags.HasErrors() {
 		t.Fatalf("unexpected diagnostics: %v", diags)
 	}

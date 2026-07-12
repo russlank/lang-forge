@@ -103,7 +103,7 @@ The calc family is the compact cross-target demonstration of streamed scanner
 input. Go uses `io.Reader`, C# uses `TextReader`/`Stream`, C uses a read
 callback with `*_stream_scanner`, and C++ uses `InputStreamScanner` over
 `std::istream`. Token-list parsing remains in the examples for tests,
-compatibility, and token inspection.
+debugging, tests, and token inspection.
 
 The calc example also demonstrates reducer-mode handwritten package references:
 `calc.lf` declares a `%semantic go import` and the demo wires that package as
@@ -348,9 +348,9 @@ C and C++ benchmark harnesses remain future optional work. Their examples
 already expose the same source/token and typed/boxed entry points, but
 target-specific timing harnesses should stay outside normal CI.
 
-## UCDT Calc Legacy Fixture
+## UCDT Calc Fixture
 
-Curated copies of the old Pascal
+Curated copies of the Pascal
 [UCDT](https://github.com/russlank/UCDT) calc input files live under:
 
 - [testdata/ucdt/calc/calc.l](../testdata/ucdt/calc/calc.l)
@@ -364,14 +364,14 @@ Run:
   --yacc testdata/ucdt/calc/calc.y
 ```
 
-This fixture is used to keep split-file parsing and old sample translation
-honest while the modern `.lf` format evolves. It is not a compatibility
+This fixture is used to keep split-file parsing and sample translation
+honest while the `.lf` format evolves. It is not a
 contract with UCDT.
 
 Additional curated UCDT-derived fixtures live under
 [testdata/ucdt/draw](../testdata/ucdt/draw) and
 [testdata/ucdt/metas](../testdata/ucdt/metas). See
-[UCDT legacy inspiration](ucdt-legacy-inspiration.md) for the source role and
+[UCDT reference](ucdt-reference.md) for the source role and
 validation evidence.
 
 ## Parser Algorithm Fixtures
@@ -398,8 +398,8 @@ The DataKeeper scripting demo lives under:
 
 - [examples/go/datakeeper](../examples/go/datakeeper)
 
-It reconstructs the small Irony-based script language from the old
-DataKeeperScripting compiler as a real LangForge example. The syntax is defined
+It reconstructs the small Irony-based DataKeeperScripting language as a real
+LangForge example. The syntax is defined
 in [examples/go/datakeeper/datakeeper.lf](../examples/go/datakeeper/datakeeper.lf),
 the generated Go scanner/parser is created on demand under
 `examples/go/datakeeper/generated`, and the reducer-backed semantic layer lowers
@@ -453,7 +453,7 @@ The DRAW demo lives under:
 
 - [examples/go/draw](../examples/go/draw)
 
-It modernizes the old [UCDT](https://github.com/russlank/UCDT)
+It adapts the [UCDT](https://github.com/russlank/UCDT)
 `SAMPLES/DRAW` language idea as a LangForge example that renders real PNG
 images. The syntax is defined in
 [examples/go/draw/draw.lf](../examples/go/draw/draw.lf), the generated Go
@@ -470,8 +470,8 @@ DRAW is also the larger typed-semantics example. Its four target specs share
 labels such as `width=Expr`, `target=FigureReference`, and `right=Term`, plus
 target-native nonterminal result declarations. Supported targets generate typed
 contexts or adapters for DRAW actions; the handwritten adapters use named
-fields directly or validate typed contexts before delegating to boxed
-compatibility reducers. The Go dependency-only `model` package prevents an
+fields directly or validate typed contexts before delegating to boxed reducers.
+The Go dependency-only `model` package prevents an
 import cycle between generated parser code and the application AST.
 
 ```text

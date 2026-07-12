@@ -7,7 +7,7 @@ var reducers = CreateReducers();
 
 static ProgramNode ParseProgram(string source, ReducerMap reducers)
 {
-    var value = Parser.ParseWithReducerFromLexemeSource(new Scanner(source), reducers);
+    var value = Parser.ParseWithReducer(new Scanner(source), reducers);
     if (value is ProgramNode program)
     {
         return program;

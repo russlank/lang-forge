@@ -118,7 +118,7 @@ loop:
         return parse error
 ```
 
-Semantic actions are target-tagged reduction hooks in the source model.
+Semantic actions are target-specific reduction hooks in the source model.
 Generated Go parsers can dispatch those hooks to a reducer callback while still
 supporting recognizer-only parsing through `Parse`.
 
@@ -189,7 +189,7 @@ create conflicts that a real LR(1) context avoids.
 
 Use `%type slr` when:
 
-- checking compatibility with simpler Yacc-like grammars;
+- comparing behavior with simpler Yacc-like grammars;
 - teaching or debugging the basic automaton;
 - you want the smallest conceptual table and the grammar validates cleanly.
 
@@ -281,7 +281,7 @@ buildLALR(grammar):
 ```
 
 This keeps most of the useful LR(1) context while producing state counts close
-to old Yacc-style table sizes. It can introduce reduce/reduce conflicts that
+to compact Yacc-style table sizes. It can introduce reduce/reduce conflicts that
 canonical LR(1) would avoid if merged states union incompatible lookaheads, but
 that is rare for ordinary language grammars and is exactly why `%type ielr`
 and `%type canonical` remain available for diagnosis.
@@ -507,7 +507,7 @@ Start here:
 6. If canonical also conflicts, the grammar is ambiguous or not LR(1) in its
    current form. If canonical succeeds and IELR does not, treat that as an
    implementation gap to report and minimize.
-7. Use `%type slr` only when compatibility or simplicity is the goal.
+7. Use `%type slr` only when SLR comparison or simplicity is the goal.
 
 Practical rule:
 
@@ -517,7 +517,7 @@ Practical rule:
 | LALR conflict but grammar should be LR(1) | Use `%type ielr`; compare with `%type canonical` if needed |
 | Deep conflict diagnosis | Temporarily use `%type canonical` and inspect JSON |
 | Teaching or very small grammars | Try `%type slr` |
-| Matching old Yacc expectations | Use LALR first, SLR only for specific compatibility checks |
+| Matching Yacc-like expectations | Use LALR first, SLR only for specific SLR comparison checks |
 | Table-size investigation | Compare LALR, IELR, and canonical state counts |
 
 ## Best Use of LangForge
@@ -558,13 +558,13 @@ make -C examples/go/vehicle-report test
 make -C examples/parser-algorithms test
 ```
 
-For legacy fixture work:
+For split-file fixture work:
 
 1. Keep raw `.l` and `.y` fixtures under `testdata/ucdt` or a similar
    source-only fixture directory.
 2. Validate split inputs with `--lex` and `--yacc`.
-3. Treat historical behavior as inspiration or regression input, not as a
-   compatibility contract.
+3. Treat source fixtures as regression input, not as a promise to preserve every
+   source-tool quirk.
 4. Create a modern `.lf` example only after the split fixture is understood.
 
 ## Current Limits
@@ -572,9 +572,9 @@ For legacy fixture work:
 - LR(0) is not selectable as a generated parser mode.
 - Precedence and associativity declarations are not implemented yet, so encode
   precedence in the grammar.
-- Generated Go parsers dispatch target-tagged actions to reducer callbacks by
-  default and support explicit inline Go action mode for target-specific
-  library calls. Typed semantic values, generated AST helpers, and debug
+- Generated parsers dispatch target-specific semantic action labels to reducer
+  callbacks by default. Go also supports explicit inline action mode for
+  target-specific library calls. Generated AST helpers and richer debug
   tracing remain future work.
 - Conflict diagnostics record state, symbol, competing actions, involved
   reduce rules, source spans, expanded item displays, and item cores. They do
@@ -582,5 +582,5 @@ For legacy fixture work:
 - IELR is correctness-first and now reports accepted and rejected core merges.
   Future research can still compare LangForge's table sizes against Bison's
   most optimized IELR construction on a broader grammar corpus.
-- LALR is the default today; a future release may add a clearer parser
-  directive while preserving `%type` compatibility.
+- LALR is the default today; future work may add a clearer parser directive
+  while preserving `%type` support.

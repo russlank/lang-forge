@@ -28,7 +28,7 @@ LangForge currently demonstrates:
 - how generated parsers and semantic reducers fit into a larger compiler or DSL
   tool;
 - how to keep generated code deterministic and testable;
-- how legacy compiler tools can be migrated without copying old assumptions.
+- how split Lex/Yacc-style inputs can be represented without copying tool-specific assumptions.
 
 ## Suggested Order
 
@@ -183,7 +183,7 @@ report output.
 
 ### 9. Explore Legacy Inspiration
 
-Read [UCDT Legacy Inspiration](ucdt-legacy-inspiration.md), then validate a split
+Read [UCDT Reference](ucdt-reference.md), then validate a split
 fixture:
 
 ```sh
@@ -192,8 +192,8 @@ fixture:
   --yacc testdata/ucdt/draw/draw.y
 ```
 
-Goal: understand which old Lex/Yacc ideas inspired LangForge and how old
-fixtures can be used without turning them into a compatibility promise.
+Goal: understand which Lex/Yacc-style ideas informed LangForge and how source
+fixtures can guide regression tests without becoming public behavior promises.
 
 ## Concept Map
 
@@ -206,7 +206,7 @@ fixtures can be used without turning them into a compatibility promise.
 | Parser tables | [Parser Algorithms](parser-algorithms.md) | `internal/parse` | parser algorithm fixtures |
 | Generated Go | [Usage](usage.md) | `internal/codegen/golang` | `examples/go/calc` |
 | Semantic layer | [Examples](examples.md) | generated reducers and example-local packages | calc, DataKeeper, DRAW, and vehicle report |
-| Legacy inspiration | [UCDT Legacy Inspiration](ucdt-legacy-inspiration.md) | `internal/spec` split parsing | `testdata/ucdt` |
+| UCDT reference | [UCDT Reference](ucdt-reference.md) | `internal/spec` split parsing | `testdata/ucdt` |
 
 ## Exercises
 
@@ -252,8 +252,8 @@ When adding a feature, try to leave three breadcrumbs:
 - Use canonical LR(1) to diagnose deeper conflicts.
 - Keep generated output in ignored `generated` directories unless you are
   intentionally creating golden fixtures.
-- Use target-tagged reducer hooks for rule-local semantics, and keep larger
-  domain behavior in ordinary target-language code. Use `%semantic <target>
+- Use target-specific semantic action labels for rule-local semantics, and keep
+  larger domain behavior in ordinary target-language code. Use `%semantic <target>
   import` to record handwritten semantic dependencies, and reserve inline mode
   for target-specific generated reductions that truly need to call APIs
   directly.

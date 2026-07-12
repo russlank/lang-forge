@@ -75,7 +75,7 @@ static int draw_run_assertions(const char *source, const char *output_path, char
     if (!draw_tokenize("draw ;", &tokens, &count, &error)) {
         return demo_set_error(message, message_size, "unexpected scanner failure: %s", error.message);
     }
-    if (draw_parse(tokens, count, &error)) {
+    if (draw_parse_tokens(tokens, count, &error)) {
         draw_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected parser failure");
     }

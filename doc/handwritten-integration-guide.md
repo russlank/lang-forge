@@ -4,7 +4,7 @@ Document id: `lang-forge-handwritten-integration-guide-v1`
 
 Status: `active`
 
-Last updated: `2026-07-10`
+Last updated: `2026-07-12`
 
 Owner: `Project maintainers`
 
@@ -147,7 +147,7 @@ Choose the smallest wrapper that matches your use case.
 
 | Style | Good for | Handwritten shape |
 |---|---|---|
-| Demo or command | Examples, scripts, learning | `main` calls a generated scanner/source parser API with a reducer map, then prints output |
+| Demo or command | Examples, scripts, learning | `main` calls a generated scanner/lexeme-source parser API with a reducer map, then prints output |
 | Reusable library | DSL embedded in a larger app | Public facade hides generated package and returns domain types |
 | Compiler pipeline | Real compiler/interpreter | Facade returns AST, then semantic validation, IR lowering, and execution happen in separate modules |
 | Service with DI | C# applications, hosted services, tests | Interfaces for parser and semantics; generated code remains an implementation detail |
@@ -254,22 +254,23 @@ Use this rule of thumb:
 |---|---|
 | `Tokenize` / scanner `All` | You want to inspect or snapshot tokens before parsing. |
 | `Parse(tokens)` | You already have a token collection and only need syntax validation. |
-| `ParseFromLexemeSource(source)` | You only need syntax validation and want the parser to pull tokens lazily. |
+| Source-based validation API | You only need syntax validation and want the parser to pull lexemes lazily. |
 | `ParseValue(tokens)` | You already have tokens and want the final semantic value through the parser's configured reducer/default reducer path. |
-| `ParseValueFromLexemeSource(source)` | You want a final semantic value from a pull lexeme source. |
+| Source-based value API | You want a final semantic value from a pull lexeme source. |
 | `ParseWithReducer(tokens, reducer)` | You already have tokens and need custom semantics; useful for tests and debugging. |
-| `ParseWithReducerFromLexemeSource(source, reducer)` | Preferred production reducer path for Go/C# convenience APIs. |
+| Source-based reducer API | Preferred production reducer path. |
 | `ParseRecovering(tokens)` | You already have tokens and want multiple syntax diagnostics or a partial result. |
-| `ParseRecoveringFromLexemeSource(source)` | Preferred recovery path when reading directly from a scanner/source. |
+| Source-based recovery API | Preferred recovery path when reading directly from a scanner or lexeme source. |
 
 Target naming follows each language:
 
 - Go uses `LexemeSource`, `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
   `ParseWithReducerFromLexemeSource`, and `ParseRecoveringFromLexemeSource`.
-- C# uses `ILexemeSource`, static convenience methods such as
-  `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducers)`, and
-  instance methods such as
-  `new Parser(reducers).ParseRecoveringLexemeSource(new Scanner(sourceText))`.
+- C# uses `ILexemeSource` plus overloads such as
+  `Parser.ParseWithReducer(new Scanner(sourceText), reducers)` and
+  `Parser.ParseRecovering(new Scanner(sourceText), reducers)`.
+  Explicit `FromLexemeSource` aliases remain generated for discoverability, but
+  new handwritten C# should prefer overloads.
 - C uses a `<prefix>_lexeme_source` callback struct and functions such as
   `<prefix>_parse_lexeme_source`, `<prefix>_parse_value_lexeme_source_typed`, and
   `<prefix>_parse_recovering_lexeme_source`.
@@ -320,7 +321,7 @@ C ownership must be explicit:
 
 C++ ownership should be intentional:
 
-- generated parser stacks use `std::any` for compatibility, but direct typed
+- generated parser stacks use `std::any`, but direct typed
   adapters keep `std::any_cast` out of normal handwritten reducers;
 - use `std::unique_ptr` for AST nodes with one owner;
 - use `std::shared_ptr` only for real sharing, such as interned symbols or
@@ -510,9 +511,9 @@ when the generated package does not exist yet.
 Generated C# code exposes:
 
 - `new Scanner(source)` as an `ILexemeSource`;
-- `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducerMap)`;
+- `Parser.ParseWithReducer(new Scanner(sourceText), reducerMap)`;
 - `Scanner.Tokenize(source)` and `Parser.ParseWithReducer(tokens, reducerMap)`
-  as compatibility/debugging helpers;
+  as debugging and token-inspection helpers;
 - `SemanticAction` enum values;
 - `ReducerMap`;
 - `SemanticReducerContexts.Typed<ActionName>` adapter methods;
@@ -582,7 +583,7 @@ public sealed class CalcParser : ICalcParser
 
     public double Evaluate(string source)
     {
-        return (double)Parser.ParseWithReducerFromLexemeSource(
+        return (double)Parser.ParseWithReducer(
             new Scanner(source),
             reducers)!;
     }
@@ -611,8 +612,7 @@ The concrete facade keeps generated scanner/parser details inside
 ```csharp
 public ParseResult<ProgramNode> Parse(string source)
 {
-    var parser = new Parser(reducers);
-    var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
+    var result = Parser.ParseRecovering(new Scanner(source), reducers);
     // Convert generated diagnostics/final values into domain ParseResult<T>.
 }
 ```
@@ -846,7 +846,7 @@ Generated C++ output exposes:
 - `Scanner` as a `LexemeSource`;
 - `parse(source)` and `parse_value(source, reducerMap)`;
 - `tokenize(source)`, `parse(tokens)`, and `parse_value(tokens, reducerMap)`
-  as compatibility/debugging helpers;
+  as debugging and token-inspection helpers;
 - `SemanticAction` enum class values;
 - `ReducerMap`;
 - `typed_reducer_map_from_boxed`;
@@ -880,7 +880,7 @@ gen::ReducerMap make_reducers(ParseSession& session) {
 ```
 
 The handwritten code above never calls `std::any_cast`. Generated parser code
-can still use `std::any` internally for its boxed compatibility layer, but the
+can still use `std::any` internally for its boxed value stack, but the
 application-facing reducer contract stays named and typed.
 
 A boxed-to-typed migration reducer map can be:
@@ -982,8 +982,8 @@ auto value = gen::parse_value(scanner, make_reducers(session));
 ```
 
 Token-vector parsing remains useful for tests and token inspection, but the
-scanner/source overload is the production path because it lets the parser pull
-tokens lazily.
+scanner/lexeme-source overload is the production path because it lets the
+parser pull lexemes lazily.
 
 ## Main Program Or Reusable Library?
 
@@ -991,7 +991,7 @@ For a command-line tool, it is acceptable for `main` to call generated APIs
 directly:
 
 ```text
-read file -> Scanner.Next -> Parser.ParseWithReducerFromLexemeSource -> print report
+read file -> Scanner.Next -> target source-based parse API -> print report
 ```
 
 For a library, keep generated types behind a stable boundary:
@@ -1161,7 +1161,7 @@ Every serious grammar should have tests for:
 - reducer coverage or required-handler validation;
 - generated output can be deleted and regenerated;
 - multiple parser instances can run independently;
-- optional boxed reducer compatibility, if you keep it;
+- optional boxed reducer coverage, if you keep it;
 - error recovery cases, if the grammar uses `error` productions.
 
 A useful golden test shape is:

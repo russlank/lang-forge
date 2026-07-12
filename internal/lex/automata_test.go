@@ -77,7 +77,7 @@ func TestBuildFromSpec_AcceptsLegacyByteRanges(t *testing.T) {
 		{Pattern: `[128-255]`, Action: spec.LexAction{Kind: spec.ActionToken, Token: "HighByte"}},
 	}})
 	if diags.HasErrors() {
-		t.Fatalf("unexpected diagnostics for legacy byte range: %v", diags)
+		t.Fatalf("unexpected diagnostics for byte-oriented range: %v", diags)
 	}
 }
 

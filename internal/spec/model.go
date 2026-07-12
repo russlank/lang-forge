@@ -66,7 +66,7 @@ func (s ScannerSpec) WithDefaults() ScannerSpec {
 	return out
 }
 
-// SemanticActionMode controls how target-tagged parser action text is used.
+// SemanticActionMode controls how target-specific semantic action text is used.
 type SemanticActionMode string
 
 const (
@@ -167,7 +167,7 @@ const (
 	ActionRaw     LexActionKind = "raw"
 )
 
-// LexAction describes a token, skip, hidden channel, or raw legacy action.
+// LexAction describes a token, skip, hidden channel, or raw split-file action.
 type LexAction struct {
 	Kind    LexActionKind `json:"kind"`
 	Token   string        `json:"token,omitempty"`

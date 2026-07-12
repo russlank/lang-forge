@@ -10,12 +10,12 @@ func TestParseRegex_ModernAndLegacyRanges(t *testing.T) {
 	if !modern.Set.Contains('5') || modern.Set.Contains(byteRune(5)) {
 		t.Fatalf("[0-9] should mean digit characters, got %s", modern.Set)
 	}
-	legacy, err := ParseRegex("[1-32]")
+	controlRange, err := ParseRegex("[1-32]")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !legacy.Set.Contains('\n') || legacy.Set.Contains('A') {
-		t.Fatalf("[1-32] should mean control code range, got %s", legacy.Set)
+	if !controlRange.Set.Contains('\n') || controlRange.Set.Contains('A') {
+		t.Fatalf("[1-32] should mean control code range, got %s", controlRange.Set)
 	}
 	escapedLegacy, err := ParseRegex("[\\0-\\9]")
 	if err != nil {

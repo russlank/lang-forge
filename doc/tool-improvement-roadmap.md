@@ -158,9 +158,9 @@ APIs for gradual migration.
   `PREFIX_ACTION_RUN_OBJECTS_JOB` and `SemanticAction::RunObjectsJob`.
 - C and C++ calc plus the maintained mini-compiler and library-dsl templates
   demonstrate direct typed reducers; boxed-to-typed adapters remain available
-  for migration, and `--boxed` stays as an explicit compatibility/debug path
+  for migration, and `--boxed` stays as an explicit boxed/debug path
   where examples expose it.
-- Backward compatibility with boxed reducer mode is preserved.
+- Boxed reducer mode remains available while direct typed reducers are preferred.
 - The CLI now has optional stderr-only verbosity for `validate`, `inspect`, and
   `generate`: level 1 reports major build stages, level 2 reports lexer,
   grammar, semantic-action, and parser-table decisions, and level 3 reports DFA
@@ -463,7 +463,7 @@ Possible syntax:
 ### Use Cases
 
 - ambiguous DSLs;
-- legacy grammars;
+- split-file grammars;
 - natural-language-like inputs;
 - complex expression syntaxes;
 - IDE parsing;
@@ -750,7 +750,7 @@ largest parser state
 
 ### Problem
 
-Generated parsers historically used token collections as the most visible API
+Generated parsers currently support token collections as a visible API
 shape:
 
 ```text
@@ -767,7 +767,7 @@ pipeline.
 ### Recommendation
 
 Status: implemented for Go, C#, C, and C++ generated backends, with collection
-APIs retained as compatibility/debugging wrappers.
+APIs retained as debugging and token-inspection wrappers.
 
 Make the preferred generated parser path pull lexemes directly from a scanner or
 lexeme source:
@@ -781,7 +781,7 @@ input/source
 ```
 
 Keep existing collection APIs such as `Tokenize`, `All`, and
-`Parse(tokens, ...)` as compatibility and debugging helpers. Where practical,
+`Parse(tokens, ...)` as debugging and token-inspection helpers. Where practical,
 those helpers should adapt their collection into the source-based parser core
 so parser behavior has one implementation path.
 
@@ -808,7 +808,7 @@ machinery.
   syntax errors, recovery diagnostics, reducer errors, hidden/skipped tokens,
   explicit EOF handling, and normal EOF synthesis.
 - Examples show source parsing as the production path and collection parsing as
-  a debugging, teaching, or compatibility path.
+  a debugging, teaching, or token-inspection path.
 - Tests prove source and collection parity across EOF, scanner errors, syntax
   errors, recovery, reducer failures, hidden/skipped tokens, source spans, and
   reducer coverage validation.
@@ -873,7 +873,7 @@ The important implementation concerns are:
 - maximal-munch lexing across chunk boundaries;
 - UTF-8/scalar sequences split across chunks;
 - source spans based on absolute offsets and line/column positions;
-- read errors reported as scanner/source failures;
+- read errors reported as scanner/lexeme-source failures;
 - configurable maximum buffered lexeme length;
 - lexeme text ownership, especially for C and C++ where lexemes currently
   borrow from caller-owned input.
@@ -1301,7 +1301,7 @@ Introduce a target-neutral diagnostic shape.
 ### Task 4: Token-Source Parser Runtime
 
 Introduce generated scanner/lexeme-source parser APIs for Go, C#, C, and C++.
-Keep collection parsing as wrappers for compatibility and debugging.
+Keep collection parsing as wrappers for debugging and token inspection.
 
 Status: implemented. Follow-up work should focus on additional examples,
 performance measurements for very large inputs, and any target-specific naming

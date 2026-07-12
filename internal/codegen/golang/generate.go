@@ -634,7 +634,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("type ParseDiagnostic struct {\n\tState int\n\tUnexpected string\n\tUnexpectedDisplay string\n\tExpected []ExpectedToken\n\tStart int\n\tEnd int\n\tStartLine int\n\tStartColumn int\n\tEndLine int\n\tEndColumn int\n\tRecovery RecoveryAction\n}\n\n")
 	b.WriteString("// ParseResult contains a possibly partial semantic value and all syntax diagnostics.\n")
 	b.WriteString("type ParseResult struct {\n\tValue Value\n\tDiagnostics []ParseDiagnostic\n\tAccepted bool\n}\n\n")
-	b.WriteString("// ParseError reports one or more syntax diagnostics from fail-fast-compatible APIs.\n")
+	b.WriteString("// ParseError reports one or more syntax diagnostics from strict parse APIs.\n")
 	b.WriteString("type ParseError struct { Diagnostics []ParseDiagnostic }\n\n")
 	b.WriteString("// Error formats the first syntax diagnostic and the total diagnostic count.\n")
 	b.WriteString("func (e *ParseError) Error() string {\n\tif e == nil || len(e.Diagnostics) == 0 { return \"parse error\" }\n\td := e.Diagnostics[0]\n\tmessage := fmt.Sprintf(\"parse error at %d:%d: unexpected %s\", d.StartLine, d.StartColumn, d.UnexpectedDisplay)\n\tif len(d.Expected) > 0 {\n\t\tnames := make([]string, len(d.Expected))\n\t\tfor i, expected := range d.Expected { names[i] = expected.Display }\n\t\tmessage += fmt.Sprintf(\"; expected %v\", names)\n\t}\n\tif len(e.Diagnostics) > 1 { message += fmt.Sprintf(\" (%d diagnostics)\", len(e.Diagnostics)) }\n\treturn message\n}\n\n")
@@ -653,7 +653,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 		b.WriteString(fmt.Sprintf("\t{Target: %q, Alias: %q, Path: %q},\n", include.Target, include.Alias, include.Path))
 	}
 	b.WriteString("}\n\n")
-	b.WriteString("// Reducer receives target-tagged action hooks during parser reductions.\n")
+	b.WriteString("// Reducer receives target-specific semantic action hooks during parser reductions.\n")
 	b.WriteString("type Reducer interface { Reduce(Reduction) (Value, error) }\n\n")
 	b.WriteString("// ReductionHandler handles one generated semantic action.\n")
 	b.WriteString("type ReductionHandler func(Reduction) (Value, error)\n\n")
@@ -670,7 +670,7 @@ func renderParser(pkg string, generatedFile string, project *spec.Spec, table *p
 	b.WriteString("func (f ReducerFunc) Reduce(ctx Reduction) (Value, error) { return f(ctx) }\n\n")
 	b.WriteString("// Option configures a generated parser instance.\n")
 	b.WriteString("type Option func(*Parser)\n\n")
-	b.WriteString("// WithReducer installs a semantic reducer for target-tagged grammar actions.\n")
+	b.WriteString("// WithReducer installs a semantic reducer for target-specific semantic actions.\n")
 	b.WriteString("func WithReducer(reducer Reducer) Option { return func(p *Parser) { p.reducer = reducer } }\n\n")
 	b.WriteString("// NewParser creates a parser instance configured by options.\n")
 	b.WriteString("func NewParser(options ...Option) *Parser {\n\tp := &Parser{}\n\tfor _, option := range options { option(p) }\n\treturn p\n}\n\n")
@@ -787,13 +787,13 @@ func (c *parserLexemeCursor) normalizeEOFLexeme(lexeme Lexeme) Lexeme {
 // Parse recognizes input with a parser configured by default options.
 func Parse(input []Lexeme) error { return NewParser().Parse(input) }
 
-// ParseFromLexemeSource recognizes lexemes pulled from source with a parser configured by default options.
+// ParseFromLexemeSource recognizes lexemes pulled from a lexeme source with a parser configured by default options.
 func ParseFromLexemeSource(source LexemeSource) error { return NewParser().ParseFromLexemeSource(source) }
 
 // ParseValue recognizes input and returns the final reduced semantic value.
 func ParseValue(input []Lexeme) (Value, error) { return NewParser().ParseValue(input) }
 
-// ParseValueFromLexemeSource recognizes lexemes pulled from source and returns the final reduced semantic value.
+// ParseValueFromLexemeSource recognizes lexemes pulled from a lexeme source and returns the final reduced semantic value.
 func ParseValueFromLexemeSource(source LexemeSource) (Value, error) {
 	return NewParser().ParseValueFromLexemeSource(source)
 }
@@ -801,17 +801,17 @@ func ParseValueFromLexemeSource(source LexemeSource) (Value, error) {
 // ParseRecovering recognizes input and returns all syntax diagnostics.
 func ParseRecovering(input []Lexeme) (ParseResult, error) { return NewParser().ParseRecovering(input) }
 
-// ParseRecoveringFromLexemeSource recognizes lexemes pulled from source and returns all syntax diagnostics.
+// ParseRecoveringFromLexemeSource recognizes lexemes pulled from a lexeme source and returns all syntax diagnostics.
 func ParseRecoveringFromLexemeSource(source LexemeSource) (ParseResult, error) {
 	return NewParser().ParseRecoveringFromLexemeSource(source)
 }
 
-// ParseWithReducer recognizes input using reducer for target-tagged grammar actions.
+// ParseWithReducer recognizes input using reducer for target-specific semantic actions.
 func ParseWithReducer(input []Lexeme, reducer Reducer) (Value, error) {
 	return ParseWithReducerFromLexemeSource(newLexemeSliceSource(input), reducer)
 }
 
-// ParseWithReducerFromLexemeSource recognizes lexemes pulled from source using reducer for target-tagged grammar actions.
+// ParseWithReducerFromLexemeSource recognizes lexemes pulled from a lexeme source using reducer for target-specific semantic actions.
 func ParseWithReducerFromLexemeSource(source LexemeSource, reducer Reducer) (Value, error) {
 	return NewParser(WithReducer(reducer)).ParseValueFromLexemeSource(source)
 }
@@ -819,7 +819,7 @@ func ParseWithReducerFromLexemeSource(source LexemeSource, reducer Reducer) (Val
 // Parse recognizes input using this parser instance.
 func (p *Parser) Parse(input []Lexeme) error { _, err := p.ParseValue(input); return err }
 
-// ParseFromLexemeSource recognizes lexemes pulled from source using this parser instance.
+// ParseFromLexemeSource recognizes lexemes pulled from a lexeme source using this parser instance.
 func (p *Parser) ParseFromLexemeSource(source LexemeSource) error {
 	_, err := p.ParseValueFromLexemeSource(source)
 	return err
@@ -830,7 +830,7 @@ func (p *Parser) ParseValue(input []Lexeme) (Value, error) {
 	return p.ParseValueFromLexemeSource(newLexemeSliceSource(input))
 }
 
-// ParseValueFromLexemeSource recognizes lexemes pulled from source using this parser instance.
+// ParseValueFromLexemeSource recognizes lexemes pulled from a lexeme source using this parser instance.
 func (p *Parser) ParseValueFromLexemeSource(source LexemeSource) (Value, error) {
 	result, err := p.ParseRecoveringFromLexemeSource(source)
 	if err != nil { return result.Value, err }

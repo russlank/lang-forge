@@ -19,7 +19,7 @@ typedef enum calc_reducer_mode
     CALC_REDUCER_TYPED,
     /* Migration path: generated contexts validate before delegating to boxed code. */
     CALC_REDUCER_BOXED_TO_TYPED,
-    /* Compatibility/debug path: the historical boxed reducer ABI. */
+    /* Boxed/debug path: reducer values are read through ctx->values. */
     CALC_REDUCER_BOXED
 } calc_reducer_mode;
 
@@ -381,7 +381,7 @@ static int calc_eval_stream(calc_demo *demo, calc_stream_read_fn read, void *rea
     else if (mode == CALC_REDUCER_BOXED_TO_TYPED)
     {
         /*
-         * Migration path: keep an older boxed reducer while letting generated
+         * Adapter path: keep a boxed reducer while letting generated
          * typed contexts validate labels and semantic value types first.
          */
         calc_boxed_typed_reducer boxed = {0};
@@ -518,7 +518,7 @@ static int calc_run_assertions(char *message, size_t message_size)
     {
         return demo_set_error(message, message_size, "unexpected scanner failure: %s", error.message);
     }
-    if (calc_parse(tokens, count, &error))
+    if (calc_parse_tokens(tokens, count, &error))
     {
         calc_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected parser failure for incomplete expression");

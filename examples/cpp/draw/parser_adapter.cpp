@@ -31,7 +31,7 @@ static std::string text_arg(const draw::Reduction& ctx, std::size_t index, const
 template <typename T>
 static T value_arg(const draw::Reduction& ctx, std::size_t index, const std::string& name) {
     // Boxed reducers still receive std::any values. Typed mode validates the
-    // generated named-label context first, then delegates to this compatibility
+    // generated named-label context first, then delegates to this boxed
     // implementation so AST construction remains a single source of truth.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing " + name);

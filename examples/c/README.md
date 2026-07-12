@@ -28,10 +28,10 @@ with `LDLIBS=-lm` by default.
 
 The examples default to the generated typed reducer wrapper, which validates
 named RHS labels and required handlers before delegating to the boxed C reducer.
-Pass `--boxed` to any C demo to run the compatibility reducer path directly.
+Pass `--boxed` to any C demo to run the boxed reducer path directly.
 Production paths wrap a generated scanner in a `<prefix>_lexeme_source` and
 call source APIs such as `<prefix>_parse_value_lexeme_source_typed`. Token arrays are
-kept for compatibility and token-inspection tests.
+kept for token-inspection and boxed-path tests.
 
 When learning from a C example, read the files in this order:
 

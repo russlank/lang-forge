@@ -8,7 +8,7 @@ data extraction in ordinary C code.
 The grammar includes named RHS labels and C semantic type declarations. The
 demo defaults to the generated typed wrapper in `parser_typed.h`, which
 validates typed contexts before delegating to the boxed reducer. Pass `--boxed`
-to run the compatibility reducer path directly.
+to run the boxed reducer path directly.
 
 ```sh
 make -C examples/c/vehicle-report run

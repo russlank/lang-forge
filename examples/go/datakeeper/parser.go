@@ -147,7 +147,7 @@ func prependStatement(head Statement, tail []Statement) []Statement {
 	return append([]Statement{head}, tail...)
 }
 
-// decodeStringLexeme accepts both the legacy #{...#} form and normal quoted
+// decodeStringLexeme accepts both the brace-delimited #{...#} form and normal quoted
 // strings used by the sample inputs. Keeping this outside the grammar makes
 // the scanner responsible for recognizing literals and the reducer responsible
 // for interpreting their text.

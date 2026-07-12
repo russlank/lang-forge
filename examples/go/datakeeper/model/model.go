@@ -79,7 +79,7 @@ type StringLiteral struct {
 
 func (StringLiteral) valueNode() {}
 
-// NumberLiteral is compiled as a string value to match the old VM behavior.
+// NumberLiteral is compiled as a string value to match the demo VM behavior.
 type NumberLiteral struct {
 	Value string
 }

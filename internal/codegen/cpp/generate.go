@@ -677,7 +677,7 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("struct ParseDiagnostic {\n    int state = 0;\n    std::string_view unexpected;\n    std::string_view unexpected_display;\n    std::vector<ExpectedToken> expected;\n    std::size_t start = 0;\n    std::size_t end = 0;\n    int start_line = 1;\n    int start_column = 1;\n    int end_line = 1;\n    int end_column = 1;\n    RecoveryAction recovery;\n};\n\n")
 	b.WriteString("/// A possibly partial parser value plus every syntax diagnostic.\n")
 	b.WriteString("struct ParseResult {\n    Value value;\n    std::vector<ParseDiagnostic> diagnostics;\n    bool accepted = false;\n};\n\n")
-	b.WriteString("/// Thrown by compatibility parse APIs when syntax diagnostics were produced.\n")
+	b.WriteString("/// Thrown by strict parse APIs when syntax diagnostics were produced.\n")
 	b.WriteString("class ParseError : public std::runtime_error {\npublic:\n    explicit ParseError(std::vector<ParseDiagnostic> diagnostics);\n    const std::vector<ParseDiagnostic>& diagnostics() const noexcept;\nprivate:\n    std::vector<ParseDiagnostic> diagnostics_;\n};\n\n")
 	b.WriteString("/// Describes one grammar rule reduction passed to handwritten semantics.\n")
 	b.WriteString("struct Reduction {\n")
@@ -690,7 +690,7 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    std::vector<Value> values;\n")
 	b.WriteString("    const Value& value_for(std::string_view label) const;\n")
 	b.WriteString("};\n\n")
-	b.WriteString("/// Receives target-tagged action hooks during parser reductions.\n")
+	b.WriteString("/// Receives target-specific semantic action hooks during parser reductions.\n")
 	b.WriteString("using Reducer = std::function<Value(const Reduction&)>;\n")
 	b.WriteString("using ReductionHandler = std::function<Value(const Reduction&)>;\n\n")
 	b.WriteString("/// Hashes generated semantic action IDs for reducer maps.\n")
@@ -698,13 +698,13 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("    std::size_t operator()(SemanticAction action) const noexcept;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("using ReducerTable = std::unordered_map<SemanticAction, ReductionHandler, SemanticActionHash>;\n\n")
-	b.WriteString("/// Adapts an existing token vector to the pull source parser API.\n")
+	b.WriteString("/// Adapts an existing materialized lexeme collection to the pull parser API.\n")
 	b.WriteString("class VectorLexemeSource final : public LexemeSource {\n")
 	b.WriteString("public:\n")
-	b.WriteString("    explicit VectorLexemeSource(const std::vector<Lexeme>& tokens);\n")
+	b.WriteString("    explicit VectorLexemeSource(const std::vector<Lexeme>& lexemes);\n")
 	b.WriteString("    bool next(Lexeme& lexeme) override;\n\n")
 	b.WriteString("private:\n")
-	b.WriteString("    const std::vector<Lexeme>& tokens_;\n")
+	b.WriteString("    const std::vector<Lexeme>& lexemes_;\n")
 	b.WriteString("    std::size_t pos_ = 0;\n")
 	b.WriteString("};\n\n")
 	b.WriteString("/// Dispatches reductions by generated semantic action ID.\n")
@@ -728,11 +728,11 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("public:\n")
 	b.WriteString("    explicit Parser(Reducer reducer = Reducer{});\n")
 	b.WriteString("    explicit Parser(const ReducerMap& reducer);\n")
-	b.WriteString("    void parse(const std::vector<Lexeme>& tokens) const;\n")
+	b.WriteString("    void parse(const std::vector<Lexeme>& lexemes) const;\n")
 	b.WriteString("    void parse(LexemeSource& source) const;\n")
-	b.WriteString("    Value parse_value(const std::vector<Lexeme>& tokens) const;\n\n")
+	b.WriteString("    Value parse_value(const std::vector<Lexeme>& lexemes) const;\n\n")
 	b.WriteString("    Value parse_value(LexemeSource& source) const;\n\n")
-	b.WriteString("    ParseResult parse_recovering(const std::vector<Lexeme>& tokens) const;\n")
+	b.WriteString("    ParseResult parse_recovering(const std::vector<Lexeme>& lexemes) const;\n")
 	b.WriteString("    ParseResult parse_recovering(LexemeSource& source) const;\n\n")
 	b.WriteString("private:\n")
 	b.WriteString("    Reducer reducer_;\n")
@@ -741,25 +741,25 @@ func renderParserHeader(namespace []string, source string, actions []SemanticAct
 	b.WriteString("std::string_view semantic_action_name(SemanticAction action) noexcept;\n")
 	b.WriteString("/// Looks up a generated action ID from the source action label.\n")
 	b.WriteString("bool lookup_semantic_action(std::string_view name, SemanticAction& action) noexcept;\n")
-	b.WriteString("/// Recognizes a token stream without user semantics.\n")
-	b.WriteString("void parse(const std::vector<Lexeme>& tokens);\n")
-	b.WriteString("/// Recognizes tokens pulled from source without user semantics.\n")
+	b.WriteString("/// Recognizes a materialized lexeme collection without user semantics.\n")
+	b.WriteString("void parse(const std::vector<Lexeme>& lexemes);\n")
+	b.WriteString("/// Recognizes lexemes pulled from a scanner or lexeme source without user semantics.\n")
 	b.WriteString("void parse(LexemeSource& source);\n")
 	b.WriteString("/// Parses with an explicit reducer and returns the final semantic value.\n")
-	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
-	b.WriteString("/// Parses tokens pulled from source with an explicit reducer and returns the final semantic value.\n")
+	b.WriteString("Value parse_value(const std::vector<Lexeme>& lexemes, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses lexemes pulled from a scanner or lexeme source with an explicit reducer and returns the final semantic value.\n")
 	b.WriteString("Value parse_value(LexemeSource& source, Reducer reducer = Reducer{});\n\n")
 	b.WriteString("/// Parses with a checked reducer map and returns the final semantic value.\n")
-	b.WriteString("Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
-	b.WriteString("/// Parses tokens pulled from source with a checked reducer map and returns the final semantic value.\n")
+	b.WriteString("Value parse_value(const std::vector<Lexeme>& lexemes, const ReducerMap& reducer);\n\n")
+	b.WriteString("/// Parses lexemes pulled from a scanner or lexeme source with a checked reducer map and returns the final semantic value.\n")
 	b.WriteString("Value parse_value(LexemeSource& source, const ReducerMap& reducer);\n\n")
 	b.WriteString("/// Parses with grammar-directed recovery and returns every syntax diagnostic.\n")
-	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer = Reducer{});\n\n")
-	b.WriteString("/// Parses tokens pulled from source with grammar-directed recovery.\n")
+	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& lexemes, Reducer reducer = Reducer{});\n\n")
+	b.WriteString("/// Parses lexemes pulled from a scanner or lexeme source with grammar-directed recovery.\n")
 	b.WriteString("ParseResult parse_recovering(LexemeSource& source, Reducer reducer = Reducer{});\n\n")
 	b.WriteString("/// Parses with grammar-directed recovery and a checked reducer map.\n")
-	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer);\n\n")
-	b.WriteString("/// Parses tokens pulled from source with grammar-directed recovery and a checked reducer map.\n")
+	b.WriteString("ParseResult parse_recovering(const std::vector<Lexeme>& lexemes, const ReducerMap& reducer);\n\n")
+	b.WriteString("/// Parses lexemes pulled from a scanner or lexeme source with grammar-directed recovery and a checked reducer map.\n")
 	b.WriteString("ParseResult parse_recovering(LexemeSource& source, const ReducerMap& reducer);\n\n")
 	b.WriteString(closeNamespace(namespace))
 	return b.String()
@@ -1458,26 +1458,26 @@ Parser::Parser(const ReducerMap& reducer) : reducer_([reducer](const Reduction& 
     reducer.validate_coverage();
 }
 
-VectorLexemeSource::VectorLexemeSource(const std::vector<Lexeme>& tokens) : tokens_(tokens) {}
+VectorLexemeSource::VectorLexemeSource(const std::vector<Lexeme>& lexemes) : lexemes_(lexemes) {}
 
 bool VectorLexemeSource::next(Lexeme& lexeme) {
-    if (pos_ >= tokens_.size()) {
+    if (pos_ >= lexemes_.size()) {
         return false;
     }
-    lexeme = tokens_[pos_++];
+    lexeme = lexemes_[pos_++];
     return true;
 }
 
-void Parser::parse(const std::vector<Lexeme>& tokens) const {
-    (void)parse_value(tokens);
+void Parser::parse(const std::vector<Lexeme>& lexemes) const {
+    (void)parse_value(lexemes);
 }
 
 void Parser::parse(LexemeSource& source) const {
     (void)parse_value(source);
 }
 
-Value Parser::parse_value(const std::vector<Lexeme>& tokens) const {
-    VectorLexemeSource source(tokens);
+Value Parser::parse_value(const std::vector<Lexeme>& lexemes) const {
+    VectorLexemeSource source(lexemes);
     return parse_value(source);
 }
 
@@ -1489,8 +1489,8 @@ Value Parser::parse_value(LexemeSource& source) const {
     return std::move(result.value);
 }
 
-ParseResult Parser::parse_recovering(const std::vector<Lexeme>& tokens) const {
-    VectorLexemeSource source(tokens);
+ParseResult Parser::parse_recovering(const std::vector<Lexeme>& lexemes) const {
+    VectorLexemeSource source(lexemes);
     return parse_recovering(source);
 }
 
@@ -1609,40 +1609,40 @@ ParseResult Parser::parse_recovering(LexemeSource& source) const {
     }
 }
 
-void parse(const std::vector<Lexeme>& tokens) {
-    Parser{}.parse(tokens);
+void parse(const std::vector<Lexeme>& lexemes) {
+    Parser{}.parse(lexemes);
 }
 
 void parse(LexemeSource& source) {
     Parser{}.parse(source);
 }
 
-Value parse_value(const std::vector<Lexeme>& tokens, Reducer reducer) {
-    return Parser(std::move(reducer)).parse_value(tokens);
+Value parse_value(const std::vector<Lexeme>& lexemes, Reducer reducer) {
+    return Parser(std::move(reducer)).parse_value(lexemes);
 }
 
 Value parse_value(LexemeSource& source, Reducer reducer) {
     return Parser(std::move(reducer)).parse_value(source);
 }
 
-Value parse_value(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
-    return Parser(reducer).parse_value(tokens);
+Value parse_value(const std::vector<Lexeme>& lexemes, const ReducerMap& reducer) {
+    return Parser(reducer).parse_value(lexemes);
 }
 
 Value parse_value(LexemeSource& source, const ReducerMap& reducer) {
     return Parser(reducer).parse_value(source);
 }
 
-ParseResult parse_recovering(const std::vector<Lexeme>& tokens, Reducer reducer) {
-    return Parser(std::move(reducer)).parse_recovering(tokens);
+ParseResult parse_recovering(const std::vector<Lexeme>& lexemes, Reducer reducer) {
+    return Parser(std::move(reducer)).parse_recovering(lexemes);
 }
 
 ParseResult parse_recovering(LexemeSource& source, Reducer reducer) {
     return Parser(std::move(reducer)).parse_recovering(source);
 }
 
-ParseResult parse_recovering(const std::vector<Lexeme>& tokens, const ReducerMap& reducer) {
-    return Parser(reducer).parse_recovering(tokens);
+ParseResult parse_recovering(const std::vector<Lexeme>& lexemes, const ReducerMap& reducer) {
+    return Parser(reducer).parse_recovering(lexemes);
 }
 
 ParseResult parse_recovering(LexemeSource& source, const ReducerMap& reducer) {

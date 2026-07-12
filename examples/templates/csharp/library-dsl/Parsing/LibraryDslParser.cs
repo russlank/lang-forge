@@ -45,8 +45,7 @@ public sealed class LibraryDslParser : ILibraryDslParser
     {
         try
         {
-            var parser = new Parser(reducers);
-            var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
+            var result = Parser.ParseRecovering(new Scanner(source), reducers);
             if (!result.Accepted || result.Diagnostics.Count != 0)
             {
                 return ParseResult<Document>.Fail(DiagnosticFormatter.Format(result.Diagnostics), result.Value as Document);
@@ -75,8 +74,7 @@ public sealed class LibraryDslParser : ILibraryDslParser
     {
         try
         {
-            var parser = new Parser(reducers);
-            var result = parser.ParseRecoveringInput(tokens);
+            var result = Parser.ParseRecovering(tokens, reducers);
             if (!result.Accepted || result.Diagnostics.Count != 0)
             {
                 return ParseResult<Document>.Fail(DiagnosticFormatter.Format(result.Diagnostics), result.Value as Document);

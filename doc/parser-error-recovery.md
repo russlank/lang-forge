@@ -91,18 +91,18 @@ All targets expose:
 - a recovery result containing a possibly partial value, diagnostics, and an
   accepted flag.
 
-Prefer source-based recovery in production. The parser pulls tokens from the
+Prefer source-based recovery in production. The parser pulls lexemes from the
 generated scanner as needed:
 
 ```text
-source text -> scanner.Next() -> ParseRecoveringFromLexemeSource / parse_recovering(source)
+source text -> scanner.Next() -> target recovery API
 ```
 
 Token-collection recovery remains useful when a test or tool needs to inspect
 the token stream before parsing:
 
 ```text
-source text -> Tokenize/All -> inspect tokens -> ParseRecovering(tokens)
+source text -> Tokenize/All -> inspect tokens -> target pre-tokenized recovery API
 ```
 
 Go:
@@ -120,7 +120,7 @@ for _, diagnostic := range result.Diagnostics {
 C#:
 
 ```csharp
-ParseResult result = Parser.ParseRecoveringFromLexemeSource(new Scanner(source));
+ParseResult result = Parser.ParseRecovering(new Scanner(source));
 ```
 
 C++:

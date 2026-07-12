@@ -183,7 +183,7 @@ static int vehicle_run_assertions(const char *source, char *message, size_t mess
     if (!vehicle_report_tokenize("car = {}", &tokens, &count, &error)) {
         return demo_set_error(message, message_size, "unexpected scanner failure: %s", error.message);
     }
-    if (vehicle_report_parse(tokens, count, &error)) {
+    if (vehicle_report_parse_tokens(tokens, count, &error)) {
         vehicle_report_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected parser failure");
     }

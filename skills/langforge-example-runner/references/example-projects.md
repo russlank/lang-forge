@@ -117,7 +117,7 @@ Modern examples should make the grammar-to-code contract obvious:
 - `{target: action}` labels map to generated action IDs/enums;
 - `langforge.actions.json` records the cross-target action manifest;
 - examples should use generated typed reducer contexts/adapters when eligible;
-- boxed reducer paths should be explicit compatibility coverage and keep any
+- boxed reducer paths should be explicit boxed-path coverage and keep any
   remaining casts behind descriptive helper names.
 - reusable/parser-facade examples should prefer source parsing from generated
   scanners, and use reader/stream-backed scanners where the target has a
@@ -129,7 +129,7 @@ Modern examples should make the grammar-to-code contract obvious:
 
 DRAW, DataKeeper, and vehicle-report are the best examples for this pattern.
 Calc is the compact cross-target example for reader/stream-backed scanner input
-and token-list compatibility.
+and token-list inspection.
 
 ## Benchmark Variants
 

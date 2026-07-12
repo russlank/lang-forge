@@ -292,7 +292,7 @@ static int dks_run_assertions(const char *source, char *message, size_t message_
     if (!datakeeper_tokenize("begin end", &tokens, &count, &error)) {
         return demo_set_error(message, message_size, "unexpected scanner failure: %s", error.message);
     }
-    if (datakeeper_parse(tokens, count, &error)) {
+    if (datakeeper_parse_tokens(tokens, count, &error)) {
         datakeeper_free_lexemes(tokens);
         return demo_set_error(message, message_size, "expected parser failure");
     }

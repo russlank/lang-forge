@@ -41,8 +41,7 @@ public sealed class MiniCompilerParser : IMiniCompilerParser
         // private and returns ProgramNode plus diagnostics to application code.
         try
         {
-            var parser = new Parser(reducers);
-            var result = parser.ParseRecoveringLexemeSource(new Scanner(source));
+            var result = Parser.ParseRecovering(new Scanner(source), reducers);
             if (!result.Accepted || result.Diagnostics.Count != 0)
             {
                 return ParseResult<ProgramNode>.Fail(DiagnosticFormatter.Format(result.Diagnostics), result.Value as ProgramNode);

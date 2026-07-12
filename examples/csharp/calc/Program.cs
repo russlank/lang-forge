@@ -16,7 +16,7 @@ static double EvalString(string source, ReducerMap reducers)
 static double EvalReader(TextReader source, ReducerMap reducers, TextReaderScannerOptions? options = null)
 {
     using var scanner = Scanner.FromTextReader(source, options);
-    return (double)Parser.ParseWithReducerFromLexemeSource(scanner, reducers)!;
+    return (double)Parser.ParseWithReducer(scanner, reducers)!;
 }
 
 static double EvalStream(Stream source, ReducerMap reducers, TextReaderScannerOptions? options = null)
@@ -25,7 +25,7 @@ static double EvalStream(Stream source, ReducerMap reducers, TextReaderScannerOp
     // caller-owned stream open. Disposing the scanner releases decoder buffers
     // after the synchronous pull parse has finished.
     using var scanner = Scanner.FromStream(source, options: options);
-    return (double)Parser.ParseWithReducerFromLexemeSource(scanner, reducers)!;
+    return (double)Parser.ParseWithReducer(scanner, reducers)!;
 }
 
 static ReducerMap CreateReducers()
@@ -108,12 +108,11 @@ static void RunAssertions(ReducerMap reducers)
     Check(Math.Abs(EvalString("7.5/2.5", reducers) - 3) < 0.0001, "wrong decimal division result");
     using (var syntaxScanner = Scanner.FromTextReader(new StringReader("1+2"), new TextReaderScannerOptions { ReadBufferSize = 1 }))
     {
-        Parser.ParseFromLexemeSource(syntaxScanner);
+        Parser.Parse(syntaxScanner);
     }
     Parser.Parse(Scanner.Tokenize("1+2"));
 
-    var parser = new Parser();
-    Parallel.For(0, 16, _ => parser.ParseLexemeSource(new Scanner("1 + 2 * (3 - 4.5)")));
+    Parallel.For(0, 16, _ => Parser.Parse(new Scanner("1 + 2 * (3 - 4.5)")));
 
     var shared = new Scanner("1 + 2 * (3 - 4.5)");
     var count = 0;
@@ -155,7 +154,7 @@ static void RunAssertions(ReducerMap reducers)
 
     try
     {
-        Parser.ParseFromLexemeSource(new Scanner("1+"));
+        Parser.Parse(new Scanner("1+"));
         throw new InvalidOperationException("expected parse error");
     }
     catch (InvalidOperationException ex) when (ex.Message.Contains("parse error"))

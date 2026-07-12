@@ -982,14 +982,14 @@ int main(void) {
     recovery_parse_result result;
     recovery_parse_result_init(&result);
     if (!recovery_tokenize("x=y; y=2; z=; w=3;", &tokens, &count, &error)) { return 1; }
-    if (!recovery_parse_recovering(tokens, count, &result, &error)) { return 2; }
+    if (!recovery_parse_recovering_tokens(tokens, count, &result, &error)) { return 2; }
     if (!require(result.accepted && result.diagnostic_count == 2, "wrong recovery result")) { return 3; }
     const recovery_parse_diagnostic *first = &result.diagnostics[0];
     if (!require(strcmp(first->unexpected, "Ident") == 0 && strcmp(first->unexpected_display, "identifier") == 0 && first->start_column == 3, "wrong first diagnostic")) { return 4; }
     if (!require(first->expected_count == 1 && strcmp(first->expected[0].display, "number literal") == 0, "wrong expected token")) { return 5; }
     if (!require(strcmp(first->recovery, "recovered") == 0 && first->discarded == 1, "wrong recovery action")) { return 6; }
     recovery_parse_result_free(&result);
-    if (recovery_parse(tokens, count, &error) || strstr(error.message, "parse error at 1:3") == NULL) { return 7; }
+    if (recovery_parse_tokens(tokens, count, &error) || strstr(error.message, "parse error at 1:3") == NULL) { return 7; }
     recovery_lexeme_array_source array_source;
     recovery_lexeme_source source;
     recovery_lexeme_array_source_init(&array_source, tokens, count);
@@ -1037,7 +1037,7 @@ int main(void) {
     tokens = NULL;
     count = 0;
     if (!recovery_tokenize("=", &tokens, &count, &error)) { return 8; }
-    if (!recovery_parse_recovering(tokens, count, &result, &error)) { return 9; }
+    if (!recovery_parse_recovering_tokens(tokens, count, &result, &error)) { return 9; }
     if (!require(!result.accepted && result.diagnostic_count == 1 && strcmp(result.diagnostics[0].recovery, "abort") == 0, "unrecoverable input did not terminate")) { return 10; }
     recovery_parse_result_free(&result);
     recovery_free_lexemes(tokens);
@@ -1150,7 +1150,7 @@ var first = result.Diagnostics[0];
 Require(first.Unexpected == "Ident" && first.UnexpectedDisplay == "identifier" && first.StartColumn == 3, "wrong first diagnostic");
 Require(first.Expected.Count == 1 && first.Expected[0].Display == "number literal", "wrong expected token");
 Require(first.Recovery.Kind == "recovered" && first.Recovery.Discarded == 1, "wrong recovery action");
-var sourceResult = Parser.ParseRecoveringFromLexemeSource(new Scanner("x=y; y=2; z=; w=3;"));
+var sourceResult = Parser.ParseRecovering(new Scanner("x=y; y=2; z=; w=3;"));
 Require(sourceResult.Accepted && sourceResult.Diagnostics.Count == result.Diagnostics.Count, "wrong source recovery result");
 Require(sourceResult.Diagnostics[0].Unexpected == first.Unexpected && sourceResult.Diagnostics[0].Recovery.Kind == first.Recovery.Kind, "wrong source recovery diagnostic");
 try
@@ -1164,7 +1164,7 @@ catch (ParseException error)
 }
 var aborted = Parser.ParseRecovering(Scanner.Tokenize("="));
 Require(!aborted.Accepted && aborted.Diagnostics.Count == 1 && aborted.Diagnostics[0].Recovery.Kind == "abort", "unrecoverable input did not terminate");
-var abortedSource = Parser.ParseRecoveringFromLexemeSource(new Scanner("="));
+var abortedSource = Parser.ParseRecovering(new Scanner("="));
 Require(!abortedSource.Accepted && abortedSource.Diagnostics.Count == 1 && abortedSource.Diagnostics[0].Recovery.Kind == "abort", "source unrecoverable input did not terminate");
 `)
 	run(t, dir, dotnet, "run", "--project", "Recovery.csproj")
@@ -1708,7 +1708,7 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 		t.Fatalf("exit = %d, stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 	for _, name := range []string{"Tokens.cs", "Scanner.cs", "Parser.cs"} {
-		writeFile(t, filepath.Join(out, name), "// stale legacy generated filename\n")
+		writeFile(t, filepath.Join(out, name), "// stale generated filename\n")
 	}
 	stdout.Reset()
 	stderr.Reset()
@@ -1726,7 +1726,7 @@ func TestRunGenerate_GeneratedCSharpScannerParserCompilesAndParses(t *testing.T)
 		}
 	}
 	parserSource := readFile(t, filepath.Join(out, "Parser.g.cs"))
-	for _, fragment := range []string{"interface ILexemeSource", "record ParseResult", "class ParseException", "ParseFromLexemeSource", "ParseRecoveringFromLexemeSource"} {
+	for _, fragment := range []string{"interface ILexemeSource", "record ParseResult", "class ParseException", "Parse(ILexemeSource source)", "ParseWithReducer(ILexemeSource source, IReducer reducer)", "ParseFromLexemeSource", "ParseRecoveringFromLexemeSource"} {
 		if !strings.Contains(parserSource, fragment) {
 			t.Fatalf("generated C# parser missing %q:\n%s", fragment, parserSource)
 		}
@@ -1784,12 +1784,12 @@ static double Eval(string source)
 
 static double EvalFromStringScanner(string source)
 {
-    return (double)Parser.ParseWithReducerFromLexemeSource(new Scanner(source), Reducers())!;
+    return (double)Parser.ParseWithReducer(new Scanner(source), Reducers())!;
 }
 
 static double EvalFromTextReader(TextReader reader)
 {
-    return (double)Parser.ParseWithReducerFromLexemeSource(
+    return (double)Parser.ParseWithReducer(
         Scanner.FromTextReader(reader, new TextReaderScannerOptions { ReadBufferSize = 1 }),
         Reducers())!;
 }
@@ -1807,10 +1807,10 @@ Check(Math.Abs(EvalFromStringScanner("1+2*(3-4)") - -1) < 0.0001, "wrong string-
 Check(Math.Abs(EvalFromTextReader(new ChunkTextReader("1", "+", "2*", "(3", "-4)")) - -1) < 0.0001, "wrong reader expression result");
 var visible = Scanner.Tokenize("1+2");
 Parser.Parse(visible);
-Parser.ParseFromLexemeSource(new Scanner("1+2"));
-Parser.ParseFromLexemeSource(Scanner.FromTextReader(new StringReader("1+2"), new TextReaderScannerOptions { ReadBufferSize = 1 }));
+Parser.Parse(new Scanner("1+2"));
+Parser.Parse(Scanner.FromTextReader(new StringReader("1+2"), new TextReaderScannerOptions { ReadBufferSize = 1 }));
 var spy = new SpySource(visible);
-Parser.ParseFromLexemeSource(spy);
+Parser.Parse(spy);
 Check(spy.Pulls == visible.Count + 1, $"source pulls {spy.Pulls}");
 Parser.Parse(visible.Concat(new[] { new Lexeme(Token.EOF, "", "", 0, 0, 1, 1, 1, 1) }).ToArray());
 try
@@ -1826,7 +1826,7 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("token after EOF"
 }
 try
 {
-    Parser.ParseFromLexemeSource(new SpySource(visible.Concat(new[] {
+    Parser.Parse(new SpySource(visible.Concat(new[] {
         new Lexeme(Token.EOF, "", "", 0, 0, 1, 1, 1, 1),
         new Lexeme(Token.Plus, "+", "", 0, 1, 1, 1, 1, 2),
     }).ToArray()));
@@ -1869,7 +1869,7 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("reader failed"))
 }
 try
 {
-    Parser.ParseFromLexemeSource(new Scanner("1@"));
+    Parser.Parse(new Scanner("1@"));
     throw new InvalidOperationException("expected source scanner error");
 }
 catch (InvalidOperationException ex) when (ex.Message.Contains("no lexical rule"))
@@ -1885,7 +1885,7 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("invalid UTF-16")
 }
 try
 {
-    Parser.ParseFromLexemeSource(null!);
+    Parser.Parse((ILexemeSource)null!);
     throw new InvalidOperationException("expected null source error");
 }
 catch (ArgumentNullException)
@@ -1894,7 +1894,7 @@ catch (ArgumentNullException)
 var sourceFailure = new InvalidOperationException("source failed");
 try
 {
-    Parser.ParseFromLexemeSource(new FailingSource(visible, 2, sourceFailure));
+    Parser.Parse(new FailingSource(visible, 2, sourceFailure));
     throw new InvalidOperationException("expected source failure");
 }
 catch (InvalidOperationException ex) when (ReferenceEquals(ex, sourceFailure))
@@ -1903,7 +1903,7 @@ catch (InvalidOperationException ex) when (ReferenceEquals(ex, sourceFailure))
 var coverageSource = new SpySource(visible);
 try
 {
-    Parser.ParseWithReducerFromLexemeSource(coverageSource, new ReducerMap());
+    Parser.ParseWithReducer(coverageSource, new ReducerMap());
     throw new InvalidOperationException("expected reducer coverage error");
 }
 catch (InvalidOperationException ex) when (ex.Message.Contains("coverage"))
@@ -1912,7 +1912,7 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("coverage"))
 Check(coverageSource.Pulls == 0, $"coverage pulled {coverageSource.Pulls}");
 try
 {
-    Parser.ParseWithReducerFromLexemeSource(new SpySource(visible), new ReducerFunc(_ => throw new InvalidOperationException("reducer failed")));
+    Parser.ParseWithReducer(new SpySource(visible), new ReducerFunc(_ => throw new InvalidOperationException("reducer failed")));
     throw new InvalidOperationException("expected reducer failure");
 }
 catch (InvalidOperationException ex) when (ex.Message.Contains("reducer failed"))
@@ -1921,7 +1921,7 @@ catch (InvalidOperationException ex) when (ex.Message.Contains("reducer failed")
 
 var parser = new Parser();
 Parallel.For(0, 16, _ => parser.ParseInput(Scanner.Tokenize("1+2*(3-4)")));
-Parallel.For(0, 16, _ => parser.ParseLexemeSource(new Scanner("1+2*(3-4)")));
+Parallel.For(0, 16, _ => Parser.Parse(new Scanner("1+2*(3-4)")));
 var shared = new Scanner("1+2*(3-4)");
 int count = 0;
 Parallel.For(0, 4, _ =>

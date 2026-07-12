@@ -1,6 +1,6 @@
 # LangForge Spec Patterns
 
-Use this reference for non-trivial `.lf` authoring, legacy migration, and
+Use this reference for non-trivial `.lf` authoring, split-file migration, and
 validation debugging.
 
 ## Combined Spec Skeleton
@@ -61,7 +61,7 @@ examples and manifests use `cpp` consistently.
   selecting a parser algorithm intentionally. LALR is the default.
 - Treat conflicts as design work, not warnings to ignore. Use `inspect` to
   review states and lookaheads.
-- Use target-tagged reducer labels such as `{go: add}`, `{csharp: add}`,
+- Use target-specific semantic action labels such as `{go: add}`, `{csharp: add}`,
   `{c: add}`, or `{cpp: add}` for runnable examples. C++ reducers normally use
   generated `SemanticAction` values with `ReducerMap`.
 - Keep action-label text portable across targets when examples are equivalent;
@@ -89,7 +89,7 @@ For every non-trivial production, line up:
 - handwritten reducer map entries or switch branches;
 - tests for missing reducer coverage in Go, C#, and C++, or missing required
   typed-handler pointers in C;
-- explicit `--boxed` smoke coverage when an example keeps the compatibility
+- explicit `--boxed` smoke coverage when an example keeps the boxed
   reducer path.
 
 Scanner input shape is part of the handwritten facade, not the grammar. New
@@ -100,17 +100,16 @@ choose the target-native input adapter in handwritten code: Go
 `Tokenize`/token-list parsing when a test or teaching report needs to inspect
 tokens before parsing.
 
-The generated parser APIs are source-first and collection-compatible:
+The generated parser APIs are source-first and collection-aware:
 
 - Go: `ParseWithReducerFromLexemeSource`, `ParseValueFromLexemeSource`, and
   `ParseRecoveringFromLexemeSource`.
-- C#: `Parser.ParseWithReducerFromLexemeSource`,
-  `Parser.ParseValueFromLexemeSource`, and
-  `Parser.ParseRecoveringFromLexemeSource`.
+- C#: overloads such as `Parser.ParseWithReducer(scanner, reducers)`,
+  `Parser.ParseValue(scanner)`, and `Parser.ParseRecovering(scanner)`.
 - C: `*_parse_value_lexeme_source`, `*_parse_value_lexeme_source_typed`, and
   `*_parse_recovering_lexeme_source`.
-- C++: `ParseValueFromLexemeSource`, typed reducer helpers, and recovery
-  overloads exposed through the generated namespace.
+- C++: overloads such as `parse_value(scanner, reducers)` and
+  `parse_recovering(scanner)` exposed through the generated namespace.
 
 ## Legacy Split Inputs
 
@@ -132,7 +131,7 @@ Current split-input support:
   delimiters inside regex literals are supported for curated source-only
   fixtures.
 
-When converting legacy samples to `.lf`, keep the original fixture under
+When converting split-file samples to `.lf`, keep the original fixture under
 `testdata/ucdt` when useful, then create a modern combined spec under
 `examples/<target>/<name>/<name>.lf` if it should become runnable.
-Do not treat UCDT behavior as a compatibility contract.
+Do not treat UCDT behavior as a generated-output contract.

@@ -125,7 +125,7 @@ make token materialization plus parsing explicit if that scenario becomes
 important.
 
 Typed reducer benchmarks use generated typed reducer contexts. Boxed reducer
-benchmarks use the compatibility shape where values are retrieved from the
+benchmarks use the boxed shape where values are retrieved from the
 generic reduction object. The boxed path is useful for migration and overhead
 comparison; typed reducers are the recommended production style for real
 LangForge applications.

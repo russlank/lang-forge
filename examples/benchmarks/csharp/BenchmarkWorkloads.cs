@@ -107,7 +107,7 @@ internal static class BenchmarkWorkloads
     {
         // ParseFromStringScanner includes scanning in the measured operation:
         // source text -> generated string scanner -> parser lexeme source -> reducer.
-        return RequireDouble(CalcParser.ParseWithReducerFromLexemeSource(new CalcScanner(CalcLargeSource), reducer));
+        return RequireDouble(CalcParser.ParseWithReducer(new CalcScanner(CalcLargeSource), reducer));
     }
 
     public static double CalcParseFromTextReaderScanner(CalcReducer reducer)
@@ -117,7 +117,7 @@ internal static class BenchmarkWorkloads
         // reader construction, buffered reads, parsing, and reducer work.
         using var reader = new StringReader(CalcLargeSource);
         using var scanner = CalcScanner.FromTextReader(reader);
-        return RequireDouble(CalcParser.ParseWithReducerFromLexemeSource(scanner, reducer));
+        return RequireDouble(CalcParser.ParseWithReducer(scanner, reducer));
     }
 
     public static double CalcParsePreTokenized(CalcReducer reducer)
@@ -134,7 +134,7 @@ internal static class BenchmarkWorkloads
 
     public static int RecoveryParseFromStringScanner()
     {
-        var result = RecoveryParser.ParseRecoveringFromLexemeSource(new RecoveryScanner(RecoveryLargeSource));
+        var result = RecoveryParser.ParseRecovering(new RecoveryScanner(RecoveryLargeSource));
         RequireRecoveryResult(result);
         return result.Diagnostics.Count;
     }

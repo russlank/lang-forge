@@ -52,7 +52,7 @@ func runCalcDemoFile(path string) (string, error) {
 
 func runCalcDemoFromReaders(name string, parseInput io.Reader, tokenInput io.Reader, source string, options ...calc.ReaderScannerOption) (string, error) {
 	// Production-style parsing uses the reader-backed scanner. The parser pulls
-	// tokens lazily, so file, stdin, pipe, and virtual inputs do not need to be
+	// lexemes lazily, so file, stdin, pipe, and virtual inputs do not need to be
 	// materialized just to drive parsing. The second reader is used only for the
 	// teaching report that prints the full token stream.
 	value, err := calc.ParseWithReducerFromLexemeSource(calc.NewReaderScanner(parseInput, options...), calc.ReducerFunc(calcsem.Reduce))

@@ -14,7 +14,7 @@ internal static class Program
         {
             var options = Options.Parse(args);
             var source = File.ReadAllText(options.InputPath);
-            var result = ParseLexemeSource(source);
+            var result = ParseSourceText(source);
             PrintResult(result);
 
             if (options.Assert)
@@ -37,9 +37,9 @@ internal static class Program
     /// Preferred production-style path:
     /// source text -> generated scanner lexeme source -> recovering parser.
     /// </summary>
-    private static ParseResult ParseLexemeSource(string source)
+    private static ParseResult ParseSourceText(string source)
     {
-        return Parser.ParseRecoveringFromLexemeSource(new Scanner(source));
+        return Parser.ParseRecovering(new Scanner(source));
     }
 
     private static void PrintResult(ParseResult result)

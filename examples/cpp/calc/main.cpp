@@ -164,7 +164,7 @@ static const lfcalc::ReducerMap& make_direct_typed_reducers() {
 
 /// Builds reducers through generated typed contexts while reusing boxed semantics.
 ///
-/// This is the migration bridge for older boxed reducers. It validates named
+/// This adapter bridge validates named
 /// contexts first, then delegates to `make_boxed_reducers`.
 static const lfcalc::ReducerMap& make_boxed_to_typed_reducers() {
     static const lfcalc::ReducerMap reducers = lfcalc::typed_reducer_map_from_boxed(make_boxed_reducers());

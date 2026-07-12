@@ -4,7 +4,7 @@ Document id: `lang-forge-generated-code-and-semantics-v1`
 
 Status: `active`
 
-Last updated: `2026-07-11`
+Last updated: `2026-07-12`
 
 Owner: `Project maintainers`
 
@@ -113,7 +113,7 @@ scanner and pass it directly to the parser. The parser pulls lexemes lazily
 from a lexeme source, so callers do not need to allocate and retain a complete
 token collection before parsing begins.
 
-Token collections remain supported for compatibility, teaching, debugging, and
+Token collections remain supported for teaching, debugging, tests, and
 token-stream inspection. They are the right choice when a tool needs to print,
 filter, snapshot, or compare tokens before parsing. They also make some tests
 very direct because the test can control the exact token stream, including an
@@ -145,18 +145,17 @@ The cross-target calculator examples use these stream-backed APIs in their
 handwritten demo entry points while preserving token-list parsing for reports
 and assertions.
 
-| Need | Recommended API shape |
-|---|---|
-| Syntax validation from a scanner/lexeme source | `ParseFromLexemeSource(source)` |
-| Final semantic value from a scanner/lexeme source | `ParseValueFromLexemeSource(source)` |
-| Custom reducers from a scanner/lexeme source | `ParseWithReducerFromLexemeSource(source, reducer)` |
-| Recovery diagnostics from a scanner/lexeme source | `ParseRecoveringFromLexemeSource(source)` |
-| Token inspection before parsing | `Tokenize` / scanner `All`, then `Parse(tokens)` |
-| Compatibility with an existing token list | `Parse(tokens)`, `ParseValue(tokens)`, or `ParseWithReducer(tokens, reducer)` |
+| Target | Source-based validation/value path | Source-based recovery path | Pre-tokenized path |
+|---|---|---|---|
+| Go | `ParseFromLexemeSource(scanner)`, `ParseValueFromLexemeSource(scanner)`, or `ParseWithReducerFromLexemeSource(scanner, reducer)` | `ParseRecoveringFromLexemeSource(scanner)` | `Tokenize` / scanner `All`, then `Parse(tokens)`, `ParseValue(tokens)`, or `ParseWithReducer(tokens, reducer)` |
+| C# | `Parser.Parse(scanner)`, `Parser.ParseValue(scanner)`, or `Parser.ParseWithReducer(scanner, reducer)` | `Parser.ParseRecovering(scanner)` or `Parser.ParseRecovering(scanner, reducer)` | `Scanner.Tokenize`, then `Parser.Parse(tokens)`, `Parser.ParseValue(tokens)`, or `Parser.ParseWithReducer(tokens, reducer)` |
+| C | `<prefix>_parse_lexeme_source`, `<prefix>_parse_value_lexeme_source`, or `<prefix>_parse_value_lexeme_source_typed` | `<prefix>_parse_recovering_lexeme_source` or `<prefix>_parse_value_recovering_lexeme_source` | `<prefix>_tokenize`, then `<prefix>_parse_tokens`, `<prefix>_parse_value_tokens`, `<prefix>_parse_value_tokens_typed`, or `<prefix>_parse_recovering_tokens` |
+| C++ | `parse(scanner)` or `parse_value(scanner, reducers)` | `parse_recovering(scanner)` | `tokenize`, then `parse(tokens)`, `parse_value(tokens, reducers)`, or `parse_recovering(tokens)` |
 
-Scanner/source failures are reported when the parser pulls the failing lexeme.
+Scanner and lexeme-source failures are reported when the parser pulls the failing lexeme.
 Syntax failures from strict APIs still become parse errors. Recovering APIs
-such as `ParseRecoveringFromLexemeSource` or `parse_recovering(scanner)` return
+such as Go `ParseRecoveringFromLexemeSource`, C# `Parser.ParseRecovering(scanner)`,
+C `<prefix>_parse_recovering_lexeme_source`, or C++ `parse_recovering(scanner)` return
 structured diagnostics and an accepted flag. Reducer failures keep using the
 target's ordinary error mechanism: Go `error`, C error structs and false/NULL
 returns, and C#/C++ exceptions or facade-level result objects.
@@ -165,9 +164,11 @@ Target names follow local conventions:
 
 - Go exposes `LexemeSource`, `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
   `ParseWithReducerFromLexemeSource`, and `ParseRecoveringFromLexemeSource`.
-- C# exposes `ILexemeSource`, static calls such as
-  `Parser.ParseWithReducerFromLexemeSource(new Scanner(sourceText), reducers)`, and
-  instance methods such as `parser.ParseRecoveringLexemeSource(new Scanner(sourceText))`.
+- C# exposes `ILexemeSource` and overloads such as
+  `Parser.ParseWithReducer(new Scanner(sourceText), reducers)` and
+  `Parser.ParseRecovering(new Scanner(sourceText), reducers)`. Explicit
+  `FromLexemeSource` aliases are generated for discoverability, but handwritten
+  C# should prefer overloads.
 - C exposes `<prefix>_lexeme_source`, `<prefix>_parse_value_lexeme_source`,
   `<prefix>_parse_value_lexeme_source_typed`, and
   `<prefix>_parse_recovering_lexeme_source`.
@@ -327,10 +328,10 @@ validate action coverage, named RHS labels, and semantic value types before the
 handwritten logic runs, while reducer bodies read fields by role instead of by
 position.
 
-Use boxed-to-typed adapters when migrating older reducers that already use the
-boxed API. The adapter still validates generated typed contexts, then delegates
-to the existing boxed reducer. Keep pure boxed reducers for debugging, token
-inspection, and compatibility tests.
+Use boxed-to-typed adapters when a project already has reducers written against
+the boxed API. The adapter still validates generated typed contexts, then
+delegates to the existing boxed reducer. Keep pure boxed reducers for debugging,
+token inspection, and explicit boxed-path tests.
 
 In C, a direct typed handler receives a generated context but still returns the
 target's boxed `*_value` pointer. That pointer is owned by the application. The
@@ -371,7 +372,7 @@ calculator that type is `double`, so reducer lambdas do not need
 ```
 
 The generated typed adapter boxes the returned `double` for the parser stack.
-The final parse result is still a boxed value in the compatibility API, so a
+The final parse result is still a boxed value at this generated API boundary, so a
 small boundary cast may remain at the application edge:
 
 ```cpp
@@ -498,8 +499,8 @@ static Command ReduceRunObjectsJob(RunObjectsJobReduction ctx)
 ```
 
 For C and C++, the same `.lf` contract is written into `langforge.actions.json`
-and into generated typed companion headers. The examples keep their boxed
-reducers as a compatibility source of truth, then use generated
+and into generated typed companion headers. Some examples keep boxed reducers as
+an alternate source of truth, then use generated
 `*_typed_reducer_from_boxed(...)` or `typed_reducer_map_from_boxed(...)`
 adapters to validate typed contexts before delegating to boxed semantics. You
 can also write native typed handlers directly:
@@ -798,7 +799,7 @@ See [Invocation And Layout Patterns](invocation-and-layouts.md) for
 Makefile templates, Docker invocation, and larger multi-parser layouts.
 
 For C examples, handwritten code includes generated headers with paths such as
-`generated/parser.h`. That avoids checked-in compatibility stubs and keeps the
+`generated/parser.h`. That avoids checked-in handwritten stubs and keeps the
 generated header as the only definition of types like `calc_lexeme`, while
 still allowing IDEs to resolve the API without understanding the Makefile's
 `-Igenerated` flag. Run the example `generate` target once before expecting IDE

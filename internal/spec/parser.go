@@ -64,7 +64,7 @@ func ParseCombined(data []byte, filename string) (*Spec, diagnostics.List) {
 	return spec, diags
 }
 
-// ParseLex reads the legacy Pascal-oriented lex half used by UCDT examples.
+// ParseLex reads a split lex half used by UCDT-derived examples.
 func ParseLex(data []byte, filename string) (*Spec, diagnostics.List) {
 	src := diagnostics.NewSource(filename, data)
 	parts := splitPercentSections(stripBlockComments(src.Text))
@@ -79,7 +79,7 @@ func ParseLex(data []byte, filename string) (*Spec, diagnostics.List) {
 	return spec, diags
 }
 
-// ParseYacc reads the legacy Pascal-oriented yacc half used by UCDT examples.
+// ParseYacc reads a split yacc half used by UCDT-derived examples.
 func ParseYacc(data []byte, filename string) (*Spec, diagnostics.List) {
 	src := diagnostics.NewSource(filename, data)
 	parts := splitPercentSections(stripBlockComments(src.Text))
@@ -537,13 +537,13 @@ func parseLegacyLexRules(text string, src diagnostics.Source, base int, diags *d
 		idx := indexLegacyLexRuleColon(trimmed)
 		span := src.Span(base+block.Offset, base+block.Offset+len(block.Text))
 		if idx < 0 {
-			diags.AddError("LF122", "legacy lexer rule must contain `:`", span)
+			diags.AddError("LF122", "split lexer rule must contain `:`", span)
 			continue
 		}
 		pattern := strings.TrimSpace(trimmed[:idx])
 		raw := strings.TrimSpace(trimmed[idx+1:])
 		if pattern == "" {
-			diags.AddError("LF123", "legacy lexer rule has empty pattern", span)
+			diags.AddError("LF123", "split lexer rule has empty pattern", span)
 			continue
 		}
 		action := legacyLexAction(raw)

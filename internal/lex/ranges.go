@@ -20,7 +20,7 @@ func Single(r rune) RangeSet {
 	return RangeSet{{Lo: r, Hi: r}}
 }
 
-// AnyByte returns the legacy byte domain.
+// AnyByte returns the byte-oriented scanner domain.
 func AnyByte() RangeSet {
 	return RangeSet{{Lo: 0, Hi: 255}}
 }

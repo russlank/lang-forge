@@ -76,7 +76,7 @@ func TestReducerCoverageAndTypedActionManifest(t *testing.T) {
 func TestParserHandlesCommentsTrailingSemicolonAndQuotedStrings(t *testing.T) {
 	source := `parameters Name;
 begin
-  /* old Irony grammar supported block comments */
+  /* block comments are accepted */
   greeting = "hello";
   replace(greeting, "hello", Name); // trailing semicolon is accepted
 end`

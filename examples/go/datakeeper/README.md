@@ -83,14 +83,14 @@ Values are:
 
 - `#{...#}` strings, matching the original multi-line Irony string literal;
 - quoted strings, added here for friendlier examples;
-- integers, compiled as string values to match the old `IntConstNode`;
+- integers, compiled as string values to match the demo stack-machine value model;
 - references to variables or parameters.
 
 Line comments `//...` and block comments `/*...*/` are supported.
 
 ## Stack Machine Mapping
 
-The instruction order mirrors the old C# AST translation:
+The instruction order mirrors the reconstructed AST-to-stack translation:
 
 | Script form | Stack code shape |
 |---|---|

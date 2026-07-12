@@ -4,7 +4,7 @@ Document id: `lang-forge-usage-v1`
 
 Status: `active`
 
-Last updated: `2026-07-10`
+Last updated: `2026-07-12`
 
 Owner: `Project maintainers`
 
@@ -27,6 +27,7 @@ make build
 make dist VERSION=0.1.0
 make docker-smoke
 make examples-run
+make vocabulary-check
 ```
 
 If you are using LangForge to learn compiler construction, start with
@@ -213,7 +214,7 @@ The text output also reports the selected parser algorithm. The default is
 
 For parser algorithm selection, start with the default LALR(1). Use `%type
 ielr` when LALR reports a conflict that should be LR(1), `%type canonical` for
-deep diagnosis, and `%type slr` mainly for small grammars or compatibility
+deep diagnosis, and `%type slr` mainly for small grammars or SLR comparison
 checks. See
 [Parser Algorithms](parser-algorithms.md) for the automata model, pseudo-code,
 and LR(1)-not-SLR example.
@@ -273,7 +274,7 @@ Use token collections when:
 - a debugger, test, formatter, or report needs to inspect the token stream;
 - the application already owns a token list from an earlier stage;
 - you need to snapshot or compare tokens before parsing;
-- you are writing compatibility tests for explicit EOF-marked streams.
+- you are writing tests for explicit EOF-marked streams.
 
 Source-based parsing reduces peak token-storage allocation because visible
 tokens do not need to be materialized as a complete slice, list, array, or
@@ -291,7 +292,7 @@ that prefer EOF-marked streams. Streaming here means synchronous pull-based
 parsing; it does not introduce goroutines, channels, async tasks, or queues.
 
 Error behavior is the same parser contract with a different input shape.
-Scanner/source failures surface when the parser pulls the failing token.
+Scanner and lexeme-source failures surface when the parser pulls the failing lexeme.
 Syntax failures are reported by `Parse`/`ParseValue` style APIs as normal parse
 errors. `ParseRecoveringFromLexemeSource` and equivalent recovery APIs return
 structured syntax diagnostics and an accepted flag. Reducer failures still
@@ -300,8 +301,8 @@ propagate through the target's normal error mechanism.
 | Target | Source value/reducer path | Source recovery path | Token collection path |
 | --- | --- | --- | --- |
 | Go | `ParseWithReducerFromLexemeSource(NewScanner(source), reducer)` or `ParseValueFromLexemeSource(NewScanner(source))` | `ParseRecoveringFromLexemeSource(NewScanner(source))` | `Tokenize(source)` or `Scanner.All()`, then `Parse(tokens)` / `ParseWithReducer(tokens, reducer)` |
-| C# | `Parser.ParseWithReducerFromLexemeSource(new Scanner(source), reducers)` or `Parser.ParseValueFromLexemeSource(new Scanner(source))` | `Parser.ParseRecoveringFromLexemeSource(new Scanner(source))` or instance `ParseRecoveringLexemeSource(...)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
-| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_lexeme_source` or `*_parse_value_lexeme_source_typed` | `*_parse_recovering_lexeme_source` | `*_tokenize`, then `*_parse_value` / `*_parse_value_typed` / `*_parse_recovering` |
+| C# | `Parser.ParseWithReducer(new Scanner(source), reducers)` or `Parser.ParseValue(new Scanner(source))` | `Parser.ParseRecovering(new Scanner(source))` or `Parser.ParseRecovering(new Scanner(source), reducers)` | `Scanner.Tokenize(source)`, then `Parser.Parse(tokens)` / `Parser.ParseWithReducer(tokens, reducers)` |
+| C | initialize `*_scanner`, wrap it in `*_lexeme_source`, then call `*_parse_value_lexeme_source` or `*_parse_value_lexeme_source_typed` | `*_parse_recovering_lexeme_source` | `*_tokenize`, then `*_parse_value_tokens` / `*_parse_value_tokens_typed` / `*_parse_recovering_tokens` |
 | C++ | construct `Generated::Scanner scanner(sourceText)`, then call `parse_value(scanner, reducers)` | `parse_recovering(scanner)` | `tokenize(sourceText)`, then `parse_value(tokens, reducers)` / `parse_recovering(tokens)` |
 
 | Target | In-memory scanner input | Reader/stream-backed scanner input |
@@ -324,7 +325,7 @@ The calc examples show the same pattern in all supported targets:
 `Scanner.FromStream`/`Scanner.FromTextReader`, `examples/c/calc` uses
 `*_stream_scanner` plus a read callback, and `examples/cpp/calc` uses
 `InputStreamScanner` over `std::istream`. Each one keeps token-collection APIs only
-for tests, compatibility, or teaching reports.
+for tests, debugging, or teaching reports.
 
 Generated parsers can be used in two semantic styles:
 
@@ -423,7 +424,7 @@ The C++ examples are Makefile-based rather than CMake-based. The repository
 includes shared VS Code settings that tell the Microsoft C/C++ extension to use
 C++17 and to index the generated include folders for the C++ example family.
 Without those settings,
-IntelliSense may parse `main.cpp` with an older C++ dialect and incorrectly
+IntelliSense may parse `main.cpp` with a different C++ dialect and incorrectly
 underline valid C++17 names such as `std::string_view` or `std::any_cast`.
 
 ## Run Example Projects

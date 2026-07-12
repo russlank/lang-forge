@@ -1,6 +1,6 @@
 # DRAW PNG Renderer Demo
 
-This example modernizes the old [UCDT](https://github.com/russlank/UCDT)
+This example adapts the [UCDT](https://github.com/russlank/UCDT)
 `SAMPLES/DRAW` idea as a runnable LangForge project.
 
 The language syntax lives in [draw.lf](draw.lf). The generated scanner/parser

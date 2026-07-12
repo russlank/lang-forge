@@ -20,5 +20,5 @@ enable audit;
 ```
 
 The parser facade uses `ParseWithReducerFromLexemeSource(new Scanner(...), reducers)`
-so production code consumes tokens lazily from the generated scanner. A
-collection-based `ParseTokens` method is kept for debugging and compatibility.
+so production code consumes lexemes lazily from the generated scanner. A
+collection-based `ParseTokens` method is kept for debugging and token inspection.

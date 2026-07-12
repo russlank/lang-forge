@@ -4,7 +4,7 @@ Document id: `lang-forge-architecture-v1`
 
 Status: `active`
 
-Last updated: `2026-07-11`
+Last updated: `2026-07-12`
 
 Owner: `Project maintainers`
 
@@ -22,7 +22,7 @@ internal/app
   CLI orchestration, exit codes, validation, inspection, generation command wiring
 
 internal/spec
-  .lf parser plus legacy .l/.y migration parsing into a shared source model
+  .lf parser plus split .l/.y parsing into a shared source model
 
 internal/diagnostics
   Source positions, spans, diagnostics, and diagnostic lists
@@ -68,7 +68,7 @@ For a slower, beginner-friendly walkthrough of these stages, read
 
 ## Lexer Pipeline
 
-1. Parse lexer definitions and rules from `.lf` or legacy `.l`.
+1. Parse lexer definitions and rules from `.lf` or split `.l`.
 2. Parse regex expressions into an AST.
 3. Expand named definitions.
 4. Reject unsupported scanner cases, including ranges outside the active
@@ -85,7 +85,7 @@ priority. See [Scanner Encoding Architecture](encoding.md) for details.
 
 ## Parser Pipeline
 
-1. Parse grammar declarations and productions from `.lf` or legacy `.y`.
+1. Parse grammar declarations and productions from `.lf` or split `.y`.
 2. Classify terminals and nonterminals.
 3. Validate undefined symbols and reject names that are both tokens and
    nonterminals.
@@ -127,7 +127,7 @@ wrappers for testing, debugging, and token reports; they accept the slice
 returned by `Tokenize` or the same slice with one trailing `TokenEOF`, and
 tokens after explicit EOF are rejected. `Parse` keeps the recognizer-only path,
 while value parse APIs maintain a semantic value stack and dispatch
-target-tagged rule actions to user reducers. Generated parsers expose
+target-specific semantic actions to user reducers. Generated parsers expose
 `SemanticAction` IDs, source action labels, and `ReducerMap` so reducers can
 dispatch by enum-like constants while keeping readable diagnostics.
 Named RHS labels and `%semantic go type` declarations additionally generate
@@ -147,7 +147,7 @@ references: table metadata gets source comments, and inline Go snippets get
 `.y` inputs.
 
 The C#, C, and C++ runtimes implement the same recovery state machine. C#
-returns `ParseResult` and throws `ParseException` from compatibility APIs; C++
+returns `ParseResult` and throws `ParseException` from strict parse APIs; C++
 returns `ParseResult` and throws `ParseError`; C exposes an allocated
 `*_parse_result` released with `*_parse_result_free`. Recovery stacks and
 diagnostic collections remain local to each parse call.
@@ -167,14 +167,17 @@ diagnostic collections remain local to each parse call.
 
 Generated C# output targets nullable-aware .NET code. Scanner instances
 implement `ILexemeSource`, serialize access to their mutable cursor, and can be
-passed directly to `ParseFromLexemeSource`, `ParseValueFromLexemeSource`,
-`ParseWithReducerFromLexemeSource`, or `ParseRecoveringFromLexemeSource`. Collection APIs
-such as `Scanner.Tokenize` and `Parser.Parse(tokens, ...)` remain wrappers for
-compatibility and token inspection. Parser state is local to each parse call,
-and parser instances can be reused concurrently when the installed reducer is
-also safe. C# reducer mode mirrors Go reducer mode: `{csharp: add}` becomes a
-`SemanticAction.Add` enum value and a `Reduction.Action` string that
-handwritten code can dispatch through `ReducerMap`.
+passed directly to overloads such as `Parser.Parse(scanner)`,
+`Parser.ParseValue(scanner)`, `Parser.ParseWithReducer(scanner, reducers)`, or
+`Parser.ParseRecovering(scanner)`. Collection APIs such as `Scanner.Tokenize`
+and `Parser.Parse(tokens, ...)` remain wrappers for token inspection and tests.
+Explicit `FromLexemeSource` aliases remain generated for discoverability, but
+handwritten examples use the overloads. Parser
+state is local to each parse call, and parser instances can be reused
+concurrently when the installed reducer is also safe. C# reducer mode mirrors
+Go reducer mode: `{csharp: add}` becomes a `SemanticAction.Add` enum value and a
+`Reduction.Action` string that handwritten code can dispatch through
+`ReducerMap`.
 
 ## C Backend
 
@@ -195,7 +198,7 @@ and semantic state is supplied through a reducer callback plus `void *user`.
 The preferred parser path wraps a scanner in a generated `*_lexeme_source`
 callback struct and calls `*_parse_lexeme_source`, `*_parse_value_lexeme_source`, or
 `*_parse_value_lexeme_source_typed`. Existing `*_tokenize` and token-array parse APIs
-remain available for diagnostics and compatibility. The generated API is
+remain available for diagnostics and tests. The generated API is
 reentrant for independent scanner/parser instances. Sharing one scanner struct
 across threads requires caller synchronization.
 Action labels such as `{c: add}` become target-prefixed enum values such as
@@ -223,7 +226,7 @@ Generated C++ output targets C++17. Scanner instances store a
 `std::string_view` into caller-owned source text and serialize shared cursor
 access with a mutex. Generated scanners implement `LexemeSource`, and parser
 overloads accept either a `LexemeSource&` for lazy parsing or a
-`std::vector<Lexeme>` for compatibility. Parser state is local to each parse
+`std::vector<Lexeme>` for materialized-token parsing. Parser state is local to each parse
 call, so a parser can be reused concurrently when the installed reducer is also
 safe. Action labels
 such as `{cpp: add}` become `enum class SemanticAction` values such as

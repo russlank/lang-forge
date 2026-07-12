@@ -42,7 +42,7 @@ Generated C++ output uses conventional filenames: `tokens.hpp`,
 directory remains the single source of generated declarations.
 
 The examples default to generated typed reducer adapters and keep `--boxed` as
-an explicit compatibility mode. The typed path validates named RHS labels and
+an explicit boxed mode. The typed path validates named RHS labels and
 `ReducerMap` coverage before delegating to the boxed reducer implementation.
 When a spec declares structural semantic values as `std::nullptr_t`, reducers
 return `nullptr` rather than `{}` when using typed adapters or direct typed
@@ -54,7 +54,7 @@ C++ examples prefer source-based parsing by passing a generated `Scanner` to
 `parse_value(scanner, reducers)` or `parse_recovering(scanner)`. Token vectors
 remain available for tests and token inspection. Reusable handwritten code
 should hide generated headers behind parser facades, use direct typed reducers
-where practical, keep `std::any_cast` at compatibility boundaries, and express
+where practical, keep `std::any_cast` at boxed-value boundaries, and express
 ownership with `std::unique_ptr`, `std::variant`, or a domain result type
 instead of exposing generated parser stack values.
 

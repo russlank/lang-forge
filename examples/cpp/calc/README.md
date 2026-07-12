@@ -42,7 +42,7 @@ fast, strongly typed dispatch key.
 fields such as `ctx.left` and `ctx.right`, and handlers return native `double`
 values. The generated adapter boxes results only at the parser boundary. Pass
 `--boxed-typed` to exercise the migration adapter that validates typed contexts
-before delegating to boxed reducers, or `--boxed` to exercise the older boxed
+before delegating to boxed reducers, or `--boxed` to exercise the boxed
 debug path directly.
 
 The demo evaluates files through `InputStreamScanner` over `std::istream`. The

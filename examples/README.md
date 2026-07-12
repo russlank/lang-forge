@@ -38,7 +38,7 @@ LangForge examples are organized by supported target language.
 Generated folders, build outputs, and demo logs are ignored. Run each example's
 Makefile to regenerate the target-specific scanner/parser before building.
 Production paths in the examples prefer scanner/lexeme-source parsing, where
-the parser pulls tokens lazily from the generated scanner. The calc family now
+the parser pulls lexemes lazily from the generated scanner. The calc family now
 shows both in-memory and reader/stream-backed scanner inputs across Go, C#,
 C, and C++: Go `io.Reader`, C# `TextReader`/`Stream`, C read callbacks, and
 C++ `std::istream`. Token collection APIs are still demonstrated where they

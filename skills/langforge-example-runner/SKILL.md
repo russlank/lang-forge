@@ -62,11 +62,11 @@ make -C examples/<target>/<name> LANG_FORGE=../../../dist/lang-forge run
 9. For examples that use named RHS labels and semantic type declarations,
    verify the handwritten reducer boundary: prefer generated typed
    contexts/adapters, and keep boxed reducer paths only as explicit
-   compatibility coverage when useful.
+   boxed-path coverage when useful.
 10. For production-style facades, prefer pull parsing from scanners backed by
    target-native reader/stream inputs when practical: Go `io.Reader`, C#
    `TextReader`/`Stream`, C read callbacks, and C++ `std::istream`. Keep token
-   collections for tests, token inspection, compatibility, and teaching
+   collections for tests, token inspection, boxed-path checks, and teaching
    reports.
 11. Clean generated and binary output before final status unless the task
    explicitly asks to inspect those files.

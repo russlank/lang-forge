@@ -31,4 +31,4 @@ C variants. C++ semantic types such as `lfdraw::ExprPtr` and
 `lfdraw::StatementList` are recorded in `generated/langforge.actions.json`.
 Generated typed adapters in `generated/parser_typed.hpp` validate reducer-map
 coverage and feed handwritten semantic functions through named contexts. Pass
-`--boxed` to run the lower-level compatibility reducer map directly.
+`--boxed` to run the lower-level boxed reducer map directly.

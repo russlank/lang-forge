@@ -17,7 +17,7 @@ The target validates `calc.lf`, generates a Go scanner/parser under
 `generated`, builds `dist/calc-demo`, parses `input.calc` through
 `NewReaderScanner`, evaluates the expression through rule-reduction
 actions, and writes the same report to `dist/calc-demo.log`. The parser pulls
-tokens lazily from the reader-backed scanner. The demo also calls
+lexemes lazily from the reader-backed scanner. The demo also calls
 `TokenizeFromReader` afterward only to print the teaching token stream; real
 facades do not need to materialize tokens unless callers want to inspect them.
 
@@ -25,7 +25,7 @@ The grammar declares a reducer-mode semantic import for
 `examples/go/calc/semantics`; the demo passes that handwritten package to the
 generated parser with `ParseWithReducerFromLexemeSource`.
 
-The same generated parser still supports the older convenience shape:
+The same generated parser also supports the token-collection shape:
 
 ```go
 tokens, err := calc.Tokenize(source)

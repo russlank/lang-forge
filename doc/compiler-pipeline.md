@@ -77,7 +77,7 @@ Package:
 Inputs:
 
 - combined `.lf` specs;
-- legacy split `.l` and `.y` inputs.
+- split `.l` and `.y` inputs.
 
 The parser builds one shared model with:
 
@@ -93,7 +93,7 @@ Important validation:
 - token names must be identifiers;
 - rule names must be identifiers;
 - token and nonterminal roles must not collide;
-- legacy Pascal action blocks are not executed.
+- Pascal action blocks from split inputs are not executed.
 
 Useful commands:
 
@@ -301,12 +301,12 @@ Current Go generation writes:
 - `langforge.manifest.json`.
 
 The generated parser is a table-driven recognizer with an optional semantic
-reducer. Source APIs pull visible tokens from a scanner or lexeme source.
+reducer. Source APIs pull visible lexemes from a scanner or lexeme source.
 Calling `ParseFromLexemeSource` validates syntax, while `ParseValueFromLexemeSource` or
 `ParseWithReducerFromLexemeSource` also carries a semantic value stack and dispatches
-target-tagged rule actions to user code. Token collection APIs such as
-`Tokenize` and `Parse(tokens, ...)` remain available for debugging and
-compatibility.
+target-specific semantic actions to user code. Token collection APIs such as
+`Tokenize` and `Parse(tokens, ...)` remain available for debugging and token
+inspection.
 
 When the grammar contains a production such as `Statement : error Semi`, the
 same table contains a shift action for the reserved `error` terminal.
@@ -347,7 +347,7 @@ the generated recognizer:
 
 ```text
 generated scanner/parser
-  -> reducer callback for target-tagged actions
+  -> reducer callback for target-specific semantic actions
   -> AST, command model, compiler, interpreter, renderer, or VM
 ```
 

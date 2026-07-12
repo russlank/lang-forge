@@ -34,7 +34,7 @@ LDFLAGS := -s -w \
 	-X $(MODULE)/internal/version.BuildDate=$(DATE) \
 	-X $(MODULE)/internal/version.Branch=$(BRANCH)
 
-.PHONY: all ci fmt fmt-check vet test test-race fuzz-smoke golden-stability \
+.PHONY: all ci fmt fmt-check vet test test-race fuzz-smoke golden-stability vocabulary-check \
 	vulncheck tidy build install \
 	dist linux-amd64 linux-arm64 darwin-arm64 darwin-amd64 windows-amd64 \
 	examples-generate examples-run examples-test examples-cleanliness \
@@ -46,7 +46,7 @@ LDFLAGS := -s -w \
 
 all: fmt vet test build
 
-ci: fmt-check vet test-race fuzz-smoke golden-stability build examples-test
+ci: fmt-check vet test-race fuzz-smoke golden-stability vocabulary-check build examples-test
 
 fmt:
 	$(GO) fmt ./...
@@ -75,6 +75,9 @@ fuzz-smoke:
 
 golden-stability:
 	GO=$(GO) sh scripts/check-golden-stability.sh
+
+vocabulary-check:
+	sh scripts/check-vocabulary.sh
 
 vulncheck:
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
@@ -181,6 +184,7 @@ examples-run:
 
 examples-test:
 	$(MAKE) examples-cleanliness
+	$(MAKE) vocabulary-check
 	$(MAKE) examples-parity
 	$(MAKE) examples-target-env-smoke
 	$(MAKE) examples-testdata

@@ -1,6 +1,6 @@
 ---
 name: langforge-spec-authoring
-description: Create, edit, validate, or migrate LangForge grammar specifications. Use when working with `.lf` files, legacy `.l`/`.y` Lex/Yacc inputs, lexer rules, parser productions, `%token`/`%start`/`%type` directives, named RHS labels, semantic type declarations, parser recovery, parser conflicts, regex validation errors, or grammar examples that should be accepted by `lang-forge validate`, `inspect`, or `generate`.
+description: Create, edit, validate, or migrate LangForge grammar specifications. Use when working with `.lf` files, split `.l`/`.y` Lex/Yacc-style inputs, lexer rules, parser productions, `%token`/`%start`/`%type` directives, named RHS labels, semantic type declarations, parser recovery, parser conflicts, regex validation errors, or grammar examples that should be accepted by `lang-forge validate`, `inspect`, or `generate`.
 ---
 
 # LangForge Spec Authoring
@@ -9,19 +9,19 @@ description: Create, edit, validate, or migrate LangForge grammar specifications
 
 Author LangForge specifications as source-of-truth compiler inputs. Keep lexer
 and parser changes small, validate early, and explain grammar choices when they
-affect ambiguity, token priority, legacy import behavior, or scanner encoding.
+affect ambiguity, token priority, split-file import behavior, or scanner encoding.
 
 ## Workflow
 
 1. Read the relevant existing spec and nearby tests/examples before editing.
 2. Load `references/spec-patterns.md` when writing non-trivial lexer/parser
-   syntax, migrating legacy `.l`/`.y`, or debugging validation errors.
+   syntax, migrating split `.l`/`.y`, or debugging validation errors.
 3. Prefer combined `.lf` specs for new examples and tools.
 4. Remember the current scanner defaults to checked UTF-8 for in-process and
    generated Go, C#, C, and C++ output. Additional non-UTF-8 source encoding
    adapters are future work.
 5. Encode precedence through grammar structure because precedence declarations
-   are not implemented yet. Use target-tagged parser actions as reducer hooks
+   are not implemented yet. Use target-specific semantic action labels as reducer hooks
    by default; add named RHS labels such as `left=Expr`; declare
    `%semantic <target> type Nonterminal Type` when reducers should have a
    typed contract; add `%semantic <target> import` for handwritten semantic
@@ -63,7 +63,7 @@ affect ambiguity, token priority, legacy import behavior, or scanner encoding.
   expected-token aliases/groups in the grammar when diagnostics need friendly
   names.
 - Use split `.l`/`.y` inputs only for source-only fixtures or import
-  experiments; UCDT is inspiration, not a compatibility target.
+  experiments; UCDT is a reference, not a generated-output target.
 
 ## Validation
 

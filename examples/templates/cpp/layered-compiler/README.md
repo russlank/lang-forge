@@ -95,6 +95,6 @@ lfgen::Scanner scanner(source);
 (void)lfgen::parse_value(scanner, make_reducers(session));
 ```
 
-That means the generated parser pulls tokens lazily from the generated scanner.
+That means the generated parser pulls lexemes lazily from the generated scanner.
 Token vectors remain useful for debugging, but this template teaches the
 production path.

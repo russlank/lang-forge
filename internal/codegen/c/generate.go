@@ -671,14 +671,18 @@ func renderParserHeader(prefix string, source string, actions []SemanticAction) 
 	b.WriteString("typedef struct " + prefix + "_parse_result {\n    " + prefix + "_value value;\n    " + prefix + "_parse_diagnostic *diagnostics;\n    size_t diagnostic_count;\n    int accepted;\n} " + prefix + "_parse_result;\n\n")
 	b.WriteString("const char *" + prefix + "_semantic_action_name(" + prefix + "_semantic_action action);\n")
 	b.WriteString("int " + prefix + "_reduction_value_for(const " + prefix + "_reduction *ctx, const char *label, " + prefix + "_value *out, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_tokens(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
+	b.WriteString("int " + prefix + "_parse_value_tokens(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
 	b.WriteString("int " + prefix + "_parse_value_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error);\n\n")
-	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_recovering_tokens(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_recovering_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
-	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering_tokens(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
 	b.WriteString("int " + prefix + "_parse_value_recovering_lexeme_source(" + prefix + "_lexeme_source *source, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error);\n")
+	b.WriteString("int " + prefix + "_parse(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_error *error); /* Named wrapper for " + prefix + "_parse_tokens. */\n")
+	b.WriteString("int " + prefix + "_parse_value(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_value *out, " + prefix + "_error *error); /* Named wrapper for " + prefix + "_parse_value_tokens. */\n")
+	b.WriteString("int " + prefix + "_parse_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_parse_result *result, " + prefix + "_error *error); /* Named wrapper for " + prefix + "_parse_recovering_tokens. */\n")
+	b.WriteString("int " + prefix + "_parse_value_recovering(const " + prefix + "_lexeme *lexemes, size_t count, " + prefix + "_reduce_fn reducer, void *user, " + prefix + "_parse_result *result, " + prefix + "_error *error); /* Named wrapper for " + prefix + "_parse_value_recovering_tokens. */\n")
 	b.WriteString("void " + prefix + "_parse_result_init(" + prefix + "_parse_result *result);\n")
 	b.WriteString("void " + prefix + "_parse_result_free(" + prefix + "_parse_result *result);\n\n")
 	b.WriteString("#ifdef __cplusplus\n}\n#endif\n\n#endif\n")
@@ -779,17 +783,23 @@ func renderTypedParserHeader(prefix string, source string, manifest action.Manif
 	b.WriteString("        return NULL;\n")
 	b.WriteString("    }\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_tokens_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value_tokens(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
+	b.WriteString("    return " + prefix + "_parse_value_tokens_typed(lexemes, count, reducer, out, error);\n")
 	b.WriteString("}\n\n")
 	b.WriteString("static inline int " + prefix + "_parse_value_lexeme_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_value *out, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
 	b.WriteString("    return " + prefix + "_parse_value_lexeme_source(source, " + prefix + "_typed_reduce, (void *)reducer, out, error);\n")
 	b.WriteString("}\n\n")
-	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_tokens_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
-	b.WriteString("    return " + prefix + "_parse_value_recovering(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering_tokens(lexemes, count, " + prefix + "_typed_reduce, (void *)reducer, result, error);\n")
+	b.WriteString("}\n\n")
+	b.WriteString("static inline int " + prefix + "_parse_value_recovering_typed(const " + prefix + "_lexeme *lexemes, size_t count, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
+	b.WriteString("    return " + prefix + "_parse_value_recovering_tokens_typed(lexemes, count, reducer, result, error);\n")
 	b.WriteString("}\n\n")
 	b.WriteString("static inline int " + prefix + "_parse_value_recovering_lexeme_source_typed(" + prefix + "_lexeme_source *source, const " + prefix + "_typed_reducer *reducer, " + prefix + "_parse_result *result, " + prefix + "_error *error) {\n")
 	b.WriteString("    if (!" + prefix + "_typed_reducer_validate(reducer, error)) { return 0; }\n")
@@ -1073,15 +1083,15 @@ void ` + prefix + `_parse_result_free(` + prefix + `_parse_result *result) {
     ` + prefix + `_parse_result_init(result);
 }
 
-int ` + prefix + `_parse(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value(lexemes, count, NULL, NULL, NULL, error);
+int ` + prefix + `_parse_tokens(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_tokens(lexemes, count, NULL, NULL, NULL, error);
 }
 
 int ` + prefix + `_parse_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_error *error) {
     return ` + prefix + `_parse_value_lexeme_source(source, NULL, NULL, NULL, error);
 }
 
-int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value_tokens(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
     ` + prefix + `_lexeme_array_source array_source;
     ` + prefix + `_lexeme_source source;
     ` + prefix + `_lexeme_array_source_init(&array_source, lexemes, count);
@@ -1104,21 +1114,37 @@ int ` + prefix + `_parse_value_lexeme_source(` + prefix + `_lexeme_source *sourc
     return 1;
 }
 
-int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
-    return ` + prefix + `_parse_value_recovering(lexemes, count, NULL, NULL, result, error);
+int ` + prefix + `_parse_recovering_tokens(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering_tokens(lexemes, count, NULL, NULL, result, error);
 }
 
 int ` + prefix + `_parse_recovering_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     return ` + prefix + `_parse_value_recovering_lexeme_source(source, NULL, NULL, result, error);
 }
 
-int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+int ` + prefix + `_parse_value_recovering_tokens(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
     ` + prefix + `_lexeme_array_source array_source;
     ` + prefix + `_lexeme_source source;
     ` + prefix + `_lexeme_array_source_init(&array_source, lexemes, count);
     source.user = &array_source;
     source.next = ` + prefix + `_lexeme_array_source_next;
     return ` + prefix + `_parse_value_recovering_lexeme_source(&source, reducer, user, result, error);
+}
+
+int ` + prefix + `_parse(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_tokens(lexemes, count, error);
+}
+
+int ` + prefix + `_parse_value(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_value *out, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_tokens(lexemes, count, reducer, user, out, error);
+}
+
+int ` + prefix + `_parse_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_recovering_tokens(lexemes, count, result, error);
+}
+
+int ` + prefix + `_parse_value_recovering(const ` + prefix + `_lexeme *lexemes, size_t count, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {
+    return ` + prefix + `_parse_value_recovering_tokens(lexemes, count, reducer, user, result, error);
 }
 
 int ` + prefix + `_parse_value_recovering_lexeme_source(` + prefix + `_lexeme_source *source, ` + prefix + `_reduce_fn reducer, void *user, ` + prefix + `_parse_result *result, ` + prefix + `_error *error) {

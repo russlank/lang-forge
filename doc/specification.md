@@ -8,7 +8,7 @@ Last updated: `2026-07-01`
 
 Owner: `Project maintainers`
 
-Scope: `Current combined .lf format and supported legacy migration syntax`
+Scope: `Current combined .lf format and supported split-file import syntax`
 
 ## Combined `.lf`
 
@@ -293,7 +293,7 @@ Prefer grammar files that teach their own structure:
 - keep named right-hand-side labels in the same positions across target
   variants;
 - use `%empty` for intentional empty alternatives;
-- keep action hooks small and target-tagged;
+- keep semantic action labels small and target-specific;
 - put substantial semantic behavior in ordinary target-language reducer code.
 
 For example, keep target variants shaped like this and let only the target
@@ -353,5 +353,5 @@ The current migration support is intentionally narrow but useful:
 - Lex action blocks containing `YACC_Name` infer `token(Name)`.
 - `LEX_Skip` or `AReturn := False` infer `skip`.
 - Quoted `%%`, escaped punctuation, escaped colons, block-comment delimiters
-  inside regex literals, and selected legacy byte ranges are handled for
+  inside regex literals, and selected byte-oriented ranges are handled for
   curated source-only fixtures.

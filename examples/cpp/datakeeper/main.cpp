@@ -40,7 +40,7 @@ static void write_text_file(const std::string& path, std::string_view text) {
 static dks::Lexeme lexeme_arg(const dks::Reduction& ctx, std::size_t index, std::string_view name) {
     // Boxed reducers still receive std::any values. Keep casts in small helpers
     // whose names mirror RHS labels; typed mode validates those labels before
-    // delegating to this compatibility implementation.
+    // delegating to this boxed implementation.
     if (index >= ctx.values.size()) {
         throw std::runtime_error("rule " + std::to_string(ctx.rule) + " missing lexeme argument " + std::string(name));
     }

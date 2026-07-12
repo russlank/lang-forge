@@ -215,8 +215,8 @@ type inputFlags struct {
 func addInputFlags(fs *flag.FlagSet) *inputFlags {
 	input := &inputFlags{}
 	fs.StringVar(&input.specFile, "spec", "", "combined .lf specification")
-	fs.StringVar(&input.lexFile, "lex", "", "legacy/split lex file")
-	fs.StringVar(&input.yaccFile, "yacc", "", "legacy/split yacc file")
+	fs.StringVar(&input.lexFile, "lex", "", "split lex file")
+	fs.StringVar(&input.yaccFile, "yacc", "", "split yacc file")
 	return input
 }
 

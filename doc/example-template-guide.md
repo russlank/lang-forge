@@ -56,7 +56,7 @@ semantic action IDs to AST construction, lowers that AST to stack-machine
 instructions, runs a mock VM, and writes a report.
 
 The mini-compiler templates intentionally show the current recommended
-LangForge style rather than a legacy boxed-only style. Each grammar declares
+LangForge style rather than a boxed-only style. Each grammar declares
 target-specific semantic types, labels meaningful RHS symbols, and lets
 generated typed reducer contexts validate the reducer boundary.
 
@@ -338,14 +338,14 @@ Each target implements the same semantic contract with target-native names:
 The parser facades then convert the generated final value into the domain root:
 
 ```text
-generated scanner/source
+generated scanner/lexeme source
   -> generated parser with typed reducer map
   -> model.Document / Ast.Document / dsl_document / library_dsl::Document
   -> application API result
 ```
 
 Use this pattern when the parser is part of a larger application. Keep
-compatibility token-list parsing only for tests, debugging token streams, or
+token-list parsing only for tests, debugging token streams, or
 adapters that already own a token collection.
 
 ## Spec-To-Code Checklist
@@ -375,7 +375,7 @@ A good starter project usually has:
 
 Projects can declare `%semantic <target> type` entries and use generated typed
 contexts/adapters. Keep boxed reducer paths only when they are useful for
-compatibility or migration, and keep any remaining casts in one helper layer
+boxed reducer coverage or migration, and keep any remaining casts in one helper layer
 with descriptive grammar-role names.
 
 ## Shared Testdata

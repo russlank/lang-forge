@@ -17,7 +17,7 @@ changes are easier to review than positional `object?` casts.
 
 The demo uses the generated reader/stream scanner APIs for the production path:
 `Scanner.FromStream` reads `input.calc` on demand, and
-`Parser.ParseWithReducerFromLexemeSource` pulls tokens from that scanner. The
+`Parser.ParseWithReducer(scanner, reducers)` pulls lexemes from that scanner. The
 assertion suite also exercises `Scanner.FromTextReader`, one-character read
 buffers, reader failures, and buffered-lexeme limits. The collection APIs remain
 available for debugging:

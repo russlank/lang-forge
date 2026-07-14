@@ -98,8 +98,8 @@ Important validation:
 Useful commands:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
+go run ./cmd/lang-forge validate \
   --lex testdata/ucdt/calc/calc.l \
   --yacc testdata/ucdt/calc/calc.y
 ```
@@ -403,10 +403,10 @@ Read in this order:
 At each stage, run one focused test package:
 
 ```sh
-/usr/local/go/bin/go test -count=1 ./internal/spec
-/usr/local/go/bin/go test -count=1 ./internal/lex
-/usr/local/go/bin/go test -count=1 ./internal/parse
-/usr/local/go/bin/go test -count=1 ./internal/codegen/golang
+go test -count=1 ./internal/spec
+go test -count=1 ./internal/lex
+go test -count=1 ./internal/parse
+go test -count=1 ./internal/codegen/golang
 ```
 
 ## Best-Practice Checklist

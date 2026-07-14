@@ -23,9 +23,9 @@ Required for the main CLI:
 - Git for repository-aware checks such as `make examples-cleanliness`.
 - A POSIX-like shell for the provided Makefile and script targets.
 
-The Makefile defaults to `/usr/local/go/bin/go` because that is the toolchain
-location in the current development workspace. Override it when Go is on your
-`PATH` or installed elsewhere:
+The Makefile defaults to `go`, so a normal installation only needs the Go
+toolchain on `PATH`. Override `GO` when the executable has a different name or
+is installed in a custom location:
 
 ```sh
 make GO=go test

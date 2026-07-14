@@ -359,7 +359,7 @@ Curated copies of the Pascal
 Run:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --lex testdata/ucdt/calc/calc.l \
   --yacc testdata/ucdt/calc/calc.y
 ```

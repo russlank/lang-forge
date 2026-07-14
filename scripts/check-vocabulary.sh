@@ -80,8 +80,8 @@ check_no_matches() {
 }
 
 check_no_matches \
-    "superseded token-source or ParseFromSource-style names; use LexemeSource and target-specific source-based APIs" \
-    'TokenSource|ParseFromSource|ParseValueFromSource|ParseWithReducerFromSource|ParseRecoveringFromSource' \
+    "superseded token-source or source-style parse names; use LexemeSource and target-specific source-based APIs" \
+    'Token''Source|Parse''FromSource|ParseValue''FromSource|ParseWithReducer''FromSource|ParseRecovering''FromSource' \
     README.md doc examples skills internal scripts Makefile
 
 check_no_matches \

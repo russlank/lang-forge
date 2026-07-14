@@ -37,8 +37,8 @@ LangForge currently demonstrates:
 Start with the calculator:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
-/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec examples/go/calc/calc.lf --format text
+go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
+go run ./cmd/lang-forge inspect --spec examples/go/calc/calc.lf --format text
 make -C examples/go/calc run
 ```
 
@@ -84,7 +84,7 @@ generated tables as black boxes.
 Generate machine-readable inspection output:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge inspect \
+go run ./cmd/lang-forge inspect \
   --spec examples/go/calc/calc.lf \
   --format json > /tmp/calc.inspect.json
 ```
@@ -187,7 +187,7 @@ Read [UCDT Reference](ucdt-reference.md), then validate a split
 fixture:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --lex testdata/ucdt/draw/draw.l \
   --yacc testdata/ucdt/draw/draw.y
 ```

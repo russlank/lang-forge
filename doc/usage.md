@@ -17,14 +17,14 @@ also needs .NET `10.0` and GCC or another C11 compiler. See
 [Requirements](requirements.md) for the full matrix.
 
 ```sh
-/usr/local/go/bin/go test ./...
-/usr/local/go/bin/go build -trimpath -o dist/lang-forge ./cmd/lang-forge
+go test ./...
+go build -trimpath -o dist/lang-forge ./cmd/lang-forge
 ```
 
 ```sh
 make ci
 make build
-make dist VERSION=0.1.0
+make dist VERSION=0.1.0-rc.1
 make docker-smoke
 make examples-run
 make vocabulary-check
@@ -74,7 +74,7 @@ unavailable.
 From this source checkout:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
+go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
 ```
 
 From a local build:
@@ -231,7 +231,7 @@ and LR(1)-not-SLR example.
 Then verify the generated package:
 
 ```sh
-/usr/local/go/bin/go test ./examples/go/calc/generated
+go test ./examples/go/calc/generated
 ```
 
 If `%package` is supplied for Go generation, it must already be a valid

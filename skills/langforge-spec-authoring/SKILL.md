@@ -31,14 +31,14 @@ affect ambiguity, token priority, split-file import behavior, or scanner encodin
 6. Validate with the source runner first:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec path/to/spec.lf
+go run ./cmd/lang-forge validate --spec path/to/spec.lf
 ```
 
 7. Inspect table shape when a grammar change is surprising:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format text
-/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format json
+go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format text
+go run ./cmd/lang-forge inspect --spec path/to/spec.lf --format json
 ```
 
 8. If generating target output, write it to the example/tool-local generated
@@ -70,12 +70,12 @@ affect ambiguity, token priority, split-file import behavior, or scanner encodin
 For a spec-only change, run at least:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec path/to/spec.lf
-/usr/local/go/bin/go test -count=1 ./...
+go run ./cmd/lang-forge validate --spec path/to/spec.lf
+go test -count=1 ./...
 ```
 
 For a migration fixture, run:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --lex path/to/file.l --yacc path/to/file.y
+go run ./cmd/lang-forge validate --lex path/to/file.l --yacc path/to/file.y
 ```

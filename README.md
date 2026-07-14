@@ -62,8 +62,8 @@ parser facade and CMake build.
 A grammar rule can label right-hand-side values:
 
 ```lf
-%semantic go Expr float64
-%semantic go Term float64
+%semantic go type Expr float64
+%semantic go type Term float64
 
 Expr
   : left=Expr Plus right=Term {go: add}
@@ -142,8 +142,8 @@ Run a reusable library-style template:
 make -C examples/templates/go/library-dsl test
 ```
 
-If `go` is not on your `PATH`, use the full path to your Go toolchain. The
-current development workspace uses `/usr/local/go/bin/go`.
+If `go` is not on your `PATH`, pass the toolchain path as a Make override, for
+example `make GO=/path/to/go build`.
 
 ## Choose Your Starting Point
 
@@ -353,12 +353,13 @@ make examples-testdata
 make examples-templates
 make examples-benchmarks
 make examples-benchmarks-report
-make dist VERSION=0.1.0
+make dist VERSION=0.1.0-rc.1
 make docker-build
 make docker-smoke
 ```
 
 See [Build, pipeline, and Docker](doc/build-release.md) and
+[Release checklist](doc/release-checklist.md) plus
 [Invocation and layout patterns](doc/invocation-and-layouts.md) for CI,
 release artifacts, Docker usage, Makefile patterns, and multi-parser project
 layouts.
@@ -372,6 +373,7 @@ layouts.
 - [Architecture](doc/architecture.md)
 - [Tool improvement roadmap](doc/tool-improvement-roadmap.md)
 - [Build, pipeline, and Docker](doc/build-release.md)
+- [Release checklist](doc/release-checklist.md)
 - [Scanner encoding architecture](doc/encoding.md)
 - [Usage](doc/usage.md)
 - [Invocation and layout patterns](doc/invocation-and-layouts.md)

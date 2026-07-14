@@ -46,7 +46,7 @@ make test
 The Makefile runs LangForge from source by default:
 
 ```sh
-/usr/local/go/bin/go run ../../../cmd/lang-forge
+go run ../../../cmd/lang-forge
 ```
 
 After `make build` at the repository root, the example can use the standalone

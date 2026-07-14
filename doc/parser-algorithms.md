@@ -399,13 +399,13 @@ The same grammar is checked in under
 implemented modes:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/lr1-not-slr-lalr.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/lr1-not-slr-ielr.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/lr1-not-slr-canonical.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/lr1-not-slr-slr.lf
 ```
 
@@ -415,7 +415,7 @@ parser conflict exit, which is the expected demonstration.
 For inspection:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge inspect \
+go run ./cmd/lang-forge inspect \
   --spec examples/parser-algorithms/lr1-not-slr-canonical.lf \
   --format json > /tmp/lr1-not-slr.inspect.json
 ```
@@ -478,11 +478,11 @@ validate the grammar.
 Try it:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/mysterious-conflict-lalr.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/mysterious-conflict-ielr.lf
-/usr/local/go/bin/go run ./cmd/lang-forge validate \
+go run ./cmd/lang-forge validate \
   --spec examples/parser-algorithms/mysterious-conflict-canonical.lf
 ```
 
@@ -541,10 +541,10 @@ For new work:
 Recommended loop:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec grammar.lf
-/usr/local/go/bin/go run ./cmd/lang-forge inspect --spec grammar.lf --format text
-/usr/local/go/bin/go run ./cmd/lang-forge generate --spec grammar.lf --target go --out generated
-/usr/local/go/bin/go test ./...
+go run ./cmd/lang-forge validate --spec grammar.lf
+go run ./cmd/lang-forge inspect --spec grammar.lf --format text
+go run ./cmd/lang-forge generate --spec grammar.lf --target go --out generated
+go test ./...
 ```
 
 For real projects, package that loop in a Makefile. The included examples show

@@ -116,7 +116,7 @@ The generated parser APIs are source-first and collection-aware:
 Validate split inputs with:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --lex file.l --yacc file.y
+go run ./cmd/lang-forge validate --lex file.l --yacc file.y
 ```
 
 Current split-input support:

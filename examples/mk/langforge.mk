@@ -5,7 +5,7 @@
 # lines identical across runnable demos and copyable templates.
 
 REPO_ROOT ?= ../../..
-GO ?= /usr/local/go/bin/go
+GO ?= go
 LANG_FORGE ?= $(GO) run $(REPO_ROOT)/cmd/lang-forge
 LANG_FORGE_VERBOSITY ?= 1
 LANG_FORGE_FLAGS ?= --verbosity $(LANG_FORGE_VERBOSITY)

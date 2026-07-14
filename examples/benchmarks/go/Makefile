@@ -1,4 +1,4 @@
-GO ?= /usr/local/go/bin/go
+GO ?= go
 BENCH_TIME ?= 1s
 BENCH_COUNT ?= 1
 BENCH_PATTERN ?= .

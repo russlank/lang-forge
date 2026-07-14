@@ -25,6 +25,11 @@ as `g++` or `clang++`.
 See [Requirements](requirements.md) for the complete local and CI toolchain
 matrix.
 
+Before tagging a release candidate, run the repository-local checks in
+[Release Checklist](release-checklist.md). That checklist is documentation only:
+it separates local verification from maintainer-operated tag and publishing
+steps.
+
 ## License
 
 LangForge is licensed under the MIT license.

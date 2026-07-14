@@ -1,4 +1,4 @@
-GO ?= /usr/local/go/bin/go
+GO ?= go
 DOTNET ?= dotnet
 CC ?= gcc
 CXX ?= g++

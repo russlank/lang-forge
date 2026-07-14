@@ -23,7 +23,7 @@ command is a source checkout, a standalone binary, or a Docker image.
 During LangForge development, running from source is convenient:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
+go run ./cmd/lang-forge validate --spec examples/go/calc/calc.lf
 ```
 
 After building a local binary, use the binary directly:
@@ -132,7 +132,7 @@ The same Makefile can use different LangForge providers:
 ```sh
 make LANG_FORGE=lang-forge generate
 make LANG_FORGE=./dist/lang-forge generate
-make LANG_FORGE='/usr/local/go/bin/go run ../../../cmd/lang-forge' generate
+make LANG_FORGE='go run ../../../cmd/lang-forge' generate
 make LANG_FORGE_VERBOSITY=0 test
 make LANG_FORGE_VERBOSITY=2 generate
 ```

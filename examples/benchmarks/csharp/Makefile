@@ -1,4 +1,4 @@
-GO ?= /usr/local/go/bin/go
+GO ?= go
 DOTNET ?= dotnet
 LANG_FORGE_VERBOSITY ?= 0
 PROJECT := LangForge.Examples.Benchmarks.CSharp.csproj

@@ -48,7 +48,7 @@ Example Makefiles should expose:
 Default variables:
 
 ```make
-GO ?= /usr/local/go/bin/go
+GO ?= go
 LANG_FORGE ?= $(GO) run ../../../cmd/lang-forge
 LANG_FORGE_VERBOSITY ?= 1
 LF_TARGET ?= go

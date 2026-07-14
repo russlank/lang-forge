@@ -99,9 +99,9 @@ source text
 ```
 
 The preferred production path is pull-based and lazy: a generated scanner feeds
-tokens to the generated parser as the parser asks for them. Collection-based
-token APIs are still available for debugging, teaching, tests, and token-stream
-inspection.
+lexemes to the generated parser as the parser asks for them. Collection-based
+token/lexeme APIs are still available for debugging, teaching, tests, and
+token-stream inspection.
 
 ## Highlights
 
@@ -147,28 +147,28 @@ example `make GO=/path/to/go build`.
 
 ## Choose Your Starting Point
 
-| Goal | Start here |
-|---|---|
-| Learn the basics | [examples/go/calc](examples/go/calc) |
-| Build a small compiler pipeline | [examples/templates/go/mini-compiler](examples/templates/go/mini-compiler) |
-| Build a reusable DSL library | [examples/templates/go/library-dsl](examples/templates/go/library-dsl) |
-| Build a layered C# compiler facade | [examples/templates/csharp/layered-compiler](examples/templates/csharp/layered-compiler) |
-| Build a layered C++ compiler facade | [examples/templates/cpp/layered-compiler](examples/templates/cpp/layered-compiler) |
-| See parser recovery | [examples/go/parser-recovery](examples/go/parser-recovery) |
-| See a renderer-style language | [examples/go/draw](examples/go/draw) |
-| Compare target languages | [examples](examples) |
-| Understand automata and generated tables | [doc/automata-and-tables.md](doc/automata-and-tables.md) |
-| Understand generated semantics | [doc/generated-code-and-semantics.md](doc/generated-code-and-semantics.md) |
-| Understand handwritten integration | [doc/handwritten-integration-guide.md](doc/handwritten-integration-guide.md) |
+| Goal                                     | Start here                                                                               |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Learn the basics                         | [examples/go/calc](examples/go/calc)                                                     |
+| Build a small compiler pipeline          | [examples/templates/go/mini-compiler](examples/templates/go/mini-compiler)               |
+| Build a reusable DSL library             | [examples/templates/go/library-dsl](examples/templates/go/library-dsl)                   |
+| Build a layered C# compiler facade       | [examples/templates/csharp/layered-compiler](examples/templates/csharp/layered-compiler) |
+| Build a layered C++ compiler facade      | [examples/templates/cpp/layered-compiler](examples/templates/cpp/layered-compiler)       |
+| See parser recovery                      | [examples/go/parser-recovery](examples/go/parser-recovery)                               |
+| See a renderer-style language            | [examples/go/draw](examples/go/draw)                                                     |
+| Compare target languages                 | [examples](examples)                                                                     |
+| Understand automata and generated tables | [doc/automata-and-tables.md](doc/automata-and-tables.md)                                 |
+| Understand generated semantics           | [doc/generated-code-and-semantics.md](doc/generated-code-and-semantics.md)               |
+| Understand handwritten integration       | [doc/handwritten-integration-guide.md](doc/handwritten-integration-guide.md)             |
 
 ## Generated Targets
 
-| Target | Generated output | Semantic API | Notes |
-|---|---|---|---|
-| Go | `tokens.go`, `scanner.go`, `parser.go` | typed reducer contexts, reducer maps | primary workflow and richest examples |
-| C# | `Tokens.g.cs`, `Scanner.g.cs`, `Parser.g.cs` | typed reducer contexts, action enums | nullable-aware `.g.cs` output |
-| C | `tokens.h`, `scanner.h`/`.c`, `parser.h`/`.c`, `parser_typed.h` | typed reducer structs, function pointers | reentrant APIs and explicit ownership |
-| C++ | `tokens.hpp`, `scanner.hpp`/`.cpp`, `parser.hpp`/`.cpp`, `parser_typed.hpp` | typed adapters and reducer maps | C++17 output |
+| Target | Generated output                                                            | Semantic API                             | Notes                                 |
+| ------ | --------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------- |
+| Go     | `tokens.go`, `scanner.go`, `parser.go`                                      | typed reducer contexts, reducer maps     | primary workflow and richest examples |
+| C#     | `Tokens.g.cs`, `Scanner.g.cs`, `Parser.g.cs`                                | typed reducer contexts, action enums     | nullable-aware `.g.cs` output         |
+| C      | `tokens.h`, `scanner.h`/`.c`, `parser.h`/`.c`, `parser_typed.h`             | typed reducer structs, function pointers | reentrant APIs and explicit ownership |
+| C++    | `tokens.hpp`, `scanner.hpp`/`.cpp`, `parser.hpp`/`.cpp`, `parser_typed.hpp` | typed adapters and reducer maps          | C++17 output                          |
 
 All targets also write deterministic manifest files, including
 `langforge.actions.json`, so examples and downstream projects can verify the
@@ -276,12 +276,12 @@ target-specific notes.
 
 The main demos exist in Go, C#, C, and C++:
 
-| Example | Go | C# | C | C++ |
-|---|---|---|---|---|
-| Calculator | `make -C examples/go/calc run` | `make -C examples/csharp/calc run` | `make -C examples/c/calc run` | `make -C examples/cpp/calc run` |
-| DataKeeper DSL | `make -C examples/go/datakeeper run` | `make -C examples/csharp/datakeeper run` | `make -C examples/c/datakeeper run` | `make -C examples/cpp/datakeeper run` |
-| DRAW renderer | `make -C examples/go/draw run` | `make -C examples/csharp/draw run` | `make -C examples/c/draw run` | `make -C examples/cpp/draw run` |
-| Vehicle report | `make -C examples/go/vehicle-report run` | `make -C examples/csharp/vehicle-report run` | `make -C examples/c/vehicle-report run` | `make -C examples/cpp/vehicle-report run` |
+| Example         | Go                                        | C#                                            | C                                        | C++                                        |
+| --------------- | ----------------------------------------- | --------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
+| Calculator      | `make -C examples/go/calc run`            | `make -C examples/csharp/calc run`            | `make -C examples/c/calc run`            | `make -C examples/cpp/calc run`            |
+| DataKeeper DSL  | `make -C examples/go/datakeeper run`      | `make -C examples/csharp/datakeeper run`      | `make -C examples/c/datakeeper run`      | `make -C examples/cpp/datakeeper run`      |
+| DRAW renderer   | `make -C examples/go/draw run`            | `make -C examples/csharp/draw run`            | `make -C examples/c/draw run`            | `make -C examples/cpp/draw run`            |
+| Vehicle report  | `make -C examples/go/vehicle-report run`  | `make -C examples/csharp/vehicle-report run`  | `make -C examples/c/vehicle-report run`  | `make -C examples/cpp/vehicle-report run`  |
 | Parser recovery | `make -C examples/go/parser-recovery run` | `make -C examples/csharp/parser-recovery run` | `make -C examples/c/parser-recovery run` | `make -C examples/cpp/parser-recovery run` |
 
 Example Makefiles run LangForge from source by default with

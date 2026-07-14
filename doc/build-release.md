@@ -178,7 +178,7 @@ lang-forge validate --spec examples/go/calc/calc.lf
 
 The container image uses a multi-stage build:
 
-- `golang:1.26.4-alpine` builds a static Linux binary;
+- `golang:1.26.5-alpine` builds a static Linux binary;
 - `alpine:3.20` runs the final CLI image.
 
 The image entrypoint is:

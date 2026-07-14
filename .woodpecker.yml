@@ -1,6 +1,6 @@
 variables:
-  - &go_image 'golang:1.26.4-alpine'
-  - &alpine_image 'alpine:3.20'
+  - &go_image "golang:1.26.5-alpine"
+  - &alpine_image "alpine:3.20"
 
 steps:
   fmt:
@@ -27,7 +27,7 @@ steps:
   test:
     image: *go_image
     environment:
-      CGO_ENABLED: '1'
+      CGO_ENABLED: "1"
     commands:
       - apk add --no-cache gcc g++ musl-dev make git dotnet10-sdk
       - go version
